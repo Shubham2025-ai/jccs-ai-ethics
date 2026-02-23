@@ -1,0 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: #080810;
+  color: #e2e8f0;
+  font-family: 'Space Grotesk', sans-serif;
+  min-height: 100vh;
+}
+
+/* Animated background grid */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(108,99,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(108,99,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root { position: relative; z-index: 1; }
+
+.glass {
+  background: rgba(255,255,255,0.04);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.score-ring { filter: drop-shadow(0 0 20px #6C63FF88); }
+
+.risk-low    { color: #00B894; }
+.risk-medium { color: #FDCB6E; }
+.risk-high   { color: #E17055; }
+.risk-critical { color: #E94560; }
+.passed { color: #00B894; }
+.failed { color: #E94560; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #080810; }
+::-webkit-scrollbar-thumb { background: #6C63FF44; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #6C63FF88; }
+
+/* Mono for hashes */
+.font-mono { font-family: 'JetBrains Mono', monospace; }

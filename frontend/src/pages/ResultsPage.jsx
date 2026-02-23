@@ -1,0 +1,603 @@
+import { useEffect, useState } from 'react'
+import { useParams, Link } from 'react-router-dom'
+import { getAudit } from '../utils/api'
+import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer,
+         BarChart, Bar, XAxis, YAxis, Tooltip, Cell, CartesianGrid } from 'recharts'
+import { CheckCircle, XCircle, AlertTriangle, Shield, ChevronLeft, Loader,
+         Download, Copy, Check } from 'lucide-react'
+
+const RISK_COLORS = { low: '#00B894', medium: '#FDCB6E', high: '#E17055', critical: '#E94560' }
+const SCORE_COLOR = (s) => s >= 80 ? '#00B894' : s >= 60 ? '#FDCB6E' : s >= 40 ? '#E17055' : '#E94560'
+const STANDARDS = { EU_AI_ACT: 'EU AI Act 2026', DPDP: 'India DPDP Act', ISO_42001: 'ISO/IEC 42001' }
+
+function ScoreRing({ score }) {
+  const r = 70, c = 2 * Math.PI * r
+  const offset = c - (score / 100) * c
+  const color = SCORE_COLOR(score)
+  return (
+    <div className="flex flex-col items-center">
+      <svg width="180" height="180" className="score-ring">
+        <circle cx="90" cy="90" r={r} fill="none" stroke="#ffffff10" strokeWidth="12" />
+        <circle cx="90" cy="90" r={r} fill="none" stroke={color} strokeWidth="12"
+          strokeDasharray={c} strokeDashoffset={offset}
+          strokeLinecap="round" transform="rotate(-90 90 90)"
+          style={{ transition: 'stroke-dashoffset 1.2s ease' }} />
+        <text x="90" y="85" textAnchor="middle" fill="white" fontSize="32" fontWeight="bold">{score}</text>
+        <text x="90" y="108" textAnchor="middle" fill="#9ca3af" fontSize="13">/100</text>
+      </svg>
+      <p className="text-sm text-gray-400 -mt-2">Ethics Score</p>
+    </div>
+  )
+}
+
+function FairnessCard({ r }) {
+  return (
+    <div className={`glass rounded-xl p-4 border ${r.passed ? 'border-green-500/20' : 'border-red-500/20'}`}>
+      <div className="flex items-start justify-between mb-2">
+        <h4 className="font-medium text-white text-sm">{r.dimension_label}</h4>
+        {r.passed ? <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                  : <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />}
+      </div>
+      <div className="flex items-end gap-2">
+        <span className="text-2xl font-bold" style={{ color: SCORE_COLOR(r.score) }}>{r.score}</span>
+        <span className="text-gray-500 text-sm mb-1">/100</span>
+      </div>
+      <div className="w-full bg-white/5 rounded-full h-1.5 mt-2">
+        <div className="h-1.5 rounded-full transition-all duration-700"
+          style={{ width: `${r.score}%`, background: SCORE_COLOR(r.score) }} />
+      </div>
+      {r.metric_value !== null && r.metric_value !== undefined && (
+        <p className="text-xs text-gray-500 mt-2">
+          Disparity: <span className="text-gray-300">{(r.metric_value * 100).toFixed(1)}%</span>
+          {' '}· Threshold: {(r.threshold * 100).toFixed(0)}%
+        </p>
+      )}
+      {r.sensitive_attribute && (
+        <p className="text-xs text-gray-500 mt-1">Sensitive: <span className="text-purple-400">{r.sensitive_attribute}</span></p>
+      )}
+    </div>
+  )
+}
+
+function generatePDF(data, id) {
+  const { audit, fairness_results, shap_results, explanations, remediations, compliance_checks } = data
+  const score = Math.round(audit.overall_score || 0)
+  const riskColor = RISK_COLORS[audit.risk_level] || '#E94560'
+  const scoreColor = SCORE_COLOR(score)
+  const passed = fairness_results?.filter(r => r.passed).length || 0
+  const failed = fairness_results?.filter(r => !r.passed).length || 0
+  const stdNames = { EU_AI_ACT: 'EU AI Act 2026', DPDP: 'India DPDP Act', ISO_42001: 'ISO/IEC 42001' }
+  const compByStd = {}
+  compliance_checks?.forEach(c => {
+    if (!compByStd[c.standard]) compByStd[c.standard] = []
+    compByStd[c.standard].push(c)
+  })
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>JCCS Report — ${audit.run_name}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;color:#1a1a2e;font-size:13px}
+.page{max-width:900px;margin:0 auto;padding:40px}
+.header{display:flex;justify-content:space-between;border-bottom:3px solid #6C63FF;padding-bottom:20px;margin-bottom:28px}
+.logo{font-size:20px;font-weight:800}.logo span{color:#6C63FF}
+.meta{text-align:right;font-size:11px;color:#666}
+h1{font-size:26px;font-weight:800;margin-bottom:6px}
+.subtitle{color:#666;font-size:12px;margin-bottom:24px}
+.scores{display:flex;gap:16px;margin-bottom:28px}
+.score-main{flex:1;background:#F0EFFF;border:2px solid #6C63FF22;border-radius:12px;padding:20px;text-align:center}
+.score-big{font-size:56px;font-weight:800;color:${scoreColor};line-height:1}
+.score-lbl{font-size:12px;color:#666;margin-top:4px}
+.risk-badge{display:inline-block;padding:4px 14px;border-radius:20px;font-weight:700;font-size:12px;text-transform:uppercase;background:${riskColor}22;color:${riskColor};margin-top:8px}
+.stat{flex:1;border:1px solid #eee;border-radius:12px;padding:16px;text-align:center}
+.stat .n{font-size:28px;font-weight:800}.stat .l{font-size:11px;color:#666;margin-top:2px}
+.sec{margin-bottom:24px}
+.sec-title{font-size:13px;font-weight:700;color:#6C63FF;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #6C63FF22}
+.summary{background:#F0EFFF;border-left:4px solid #6C63FF;border-radius:0 8px 8px 0;padding:14px;font-size:12px;line-height:1.7;color:#333}
+.fg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.fc{border:1px solid #eee;border-radius:10px;padding:12px}
+.fc.pass{border-color:#00B89444;background:#00B89408}
+.fc.fail{border-color:#E9456044;background:#E9456008}
+.fc-lbl{font-weight:600;font-size:11px;margin-bottom:4px}
+.fc-score{font-size:22px;font-weight:800}
+.fc-bar{height:5px;border-radius:3px;background:#eee;margin:5px 0}
+.fc-fill{height:100%;border-radius:3px}
+.fc-meta{font-size:10px;color:#999}
+.pb{display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px}
+.pb.pass{background:#00B89422;color:#00B894}.pb.fail{background:#E9456022;color:#E94560}
+.sr{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.sn{font-size:12px;width:130px;flex-shrink:0;font-weight:500}
+.sb{flex:1;height:14px;border-radius:4px;background:#eee;overflow:hidden}
+.sf{height:100%;border-radius:4px}
+.sv{font-size:11px;color:#666;width:48px;text-align:right}
+.cb{margin-bottom:14px}
+.ch{display:flex;justify-content:space-between;font-weight:700;font-size:12px;margin-bottom:7px}
+.ci{display:flex;align-items:flex-start;gap:7px;margin-bottom:4px;font-size:12px;color:#444}
+.ck{width:14px;height:14px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;margin-top:1px}
+.ck.pass{background:#00B89422;color:#00B894}.ck.fail{background:#E9456022;color:#E94560}
+.rc{border:1px solid #eee;border-radius:10px;padding:12px;margin-bottom:8px}
+.rh{display:flex;justify-content:space-between;margin-bottom:5px}
+.rdim{font-weight:700;font-size:12px;text-transform:capitalize}
+.rpb{font-size:10px;font-weight:700;text-transform:uppercase;padding:2px 7px;border-radius:8px}
+.rh-h{background:#E9456022;color:#E94560}.rh-m{background:#FDCB6E22;color:#F9A825}.rh-l{background:#00B89422;color:#00B894}
+.rt{font-size:12px;color:#555;line-height:1.6;margin-bottom:6px}
+.rs{display:flex;gap:14px;font-size:11px;color:#888}
+.hash{background:#f5f5f5;border-radius:8px;padding:10px;font-family:monospace;font-size:10px;color:#666;word-break:break-all}
+.footer{margin-top:36px;padding-top:14px;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:10px;color:#aaa}
+@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body><div class="page">
+<div class="header">
+  <div><div class="logo">🛡 <span>JCCS</span> Jedi Code Compliance System</div>
+  <div style="font-size:11px;color:#888;margin-top:3px">AI Ethics Auditing Platform · Star Wars Hackathon 2026 · PS9</div></div>
+  <div class="meta"><div style="font-weight:700;font-size:13px;color:#1a1a2e">COMPLIANCE AUDIT REPORT</div>
+  <div>Audit ID: #${id}</div><div>Generated: ${new Date().toLocaleString()}</div>
+  <div>Status: <span style="color:#00B894;font-weight:600">COMPLETED</span></div></div>
+</div>
+<h1>${audit.run_name}</h1>
+<div class="subtitle">${audit.file_name} · ${audit.row_count?.toLocaleString() || 0} rows · ${new Date(audit.created_at).toLocaleDateString('en-IN',{year:'numeric',month:'long',day:'numeric'})}</div>
+<div class="scores">
+  <div class="score-main"><div class="score-big">${score}</div><div class="score-lbl">Ethics Score / 100</div>
+  <div><span class="risk-badge">${(audit.risk_level||'unknown').toUpperCase()} RISK</span></div></div>
+  <div class="stat"><div class="n" style="color:#00B894">${passed}</div><div class="l">Passed</div></div>
+  <div class="stat"><div class="n" style="color:#E94560">${failed}</div><div class="l">Failed</div></div>
+  <div class="stat"><div class="n" style="color:#6C63FF">6</div><div class="l">Tested</div></div>
+</div>
+${explanations?.summary ? `<div class="sec"><div class="sec-title">AI Analysis Summary</div><div class="summary">${explanations.summary}</div></div>` : ''}
+<div class="sec"><div class="sec-title">Fairness Dimensions</div><div class="fg">
+${fairness_results?.map(r => {
+  const c = SCORE_COLOR(r.score)
+  return `<div class="fc ${r.passed?'pass':'fail'}">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+    <div class="fc-lbl">${r.dimension_label}</div>
+    <span class="pb ${r.passed?'pass':'fail'}">${r.passed?'PASS':'FAIL'}</span>
+  </div>
+  <div class="fc-score" style="color:${c}">${r.score}</div>
+  <div class="fc-bar"><div class="fc-fill" style="width:${r.score}%;background:${c}"></div></div>
+  ${r.metric_value!=null?`<div class="fc-meta">Disparity: ${(r.metric_value*100).toFixed(1)}% · Threshold: ${(r.threshold*100).toFixed(0)}%</div>`:''}
+</div>`}).join('')||''}
+</div></div>
+${shap_results?.length > 0 ? `<div class="sec"><div class="sec-title">SHAP Feature Importance (Top 8)</div>
+${shap_results.slice(0,8).map((s,i) => {
+  const maxV = shap_results[0]?.shap_importance || 1
+  const pct = Math.min(100,(s.shap_importance/maxV)*100)
+  const c = i===0?'#E94560':i<=2?'#FDCB6E':'#6C63FF'
+  return `<div class="sr"><div class="sn">${s.feature_name}</div><div class="sb"><div class="sf" style="width:${pct}%;background:${c}"></div></div><div class="sv">${(s.shap_importance*100).toFixed(2)}%</div></div>`
+}).join('')}
+<p style="font-size:11px;color:#999;margin-top:6px">Red = highest impact. These features most influence model decisions.</p></div>` : ''}
+<div class="sec"><div class="sec-title">Regulatory Compliance</div>
+${Object.entries(compByStd).map(([std,checks]) => {
+  const p = checks.filter(c=>c.passed).length
+  return `<div class="cb"><div class="ch"><span>${stdNames[std]||std}</span><span style="color:${p===checks.length?'#00B894':'#E94560'}">${p}/${checks.length} requirements</span></div>
+${checks.map(c=>`<div class="ci"><span class="ck ${c.passed?'pass':'fail'}">${c.passed?'✓':'✗'}</span><span>${c.requirement}</span></div>`).join('')}
+</div>`}).join('')}
+</div>
+${remediations?.length > 0 ? `<div class="sec"><div class="sec-title">Remediation Recommendations</div>
+${remediations.slice(0,5).map(r=>`<div class="rc">
+<div class="rh"><span class="rdim">${(r.dimension||'').replace(/_/g,' ')}</span>
+<span class="rpb rh-${r.priority[0]}">${r.priority}</span></div>
+<div class="rt">${r.suggestion}</div>
+<div class="rs"><span>📉 Bias reduction: ~${r.estimated_bias_reduction}%</span><span>⚡ Accuracy loss: ~${r.estimated_accuracy_loss}%</span></div>
+</div>`).join('')}</div>` : ''}
+<div class="sec"><div class="sec-title">Immutable Audit Trail (SHA-256)</div>
+<div class="hash">${audit.hash_sha256||'Computing...'}</div>
+<p style="font-size:11px;color:#999;margin-top:6px">This hash uniquely identifies the dataset. Any modification would produce a different hash.</p>
+</div>
+<div class="footer"><span>JCCS · Jedi Code Compliance System · Star Wars Hackathon 2026 · PS9</span><span>Audit #${id} · ${new Date().toLocaleDateString()}</span></div>
+</div></body></html>`
+
+  const win = window.open('', '_blank')
+  win.document.write(html)
+  win.document.close()
+  setTimeout(() => win.print(), 600)
+}
+
+export default function ResultsPage() {
+  const { id } = useParams()
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('overview')
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await getAudit(id)
+        setData(res.data)
+      } catch (e) { console.error(e) }
+      finally { setLoading(false) }
+    }
+    load()
+  }, [id])
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    })
+  }
+
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-96">
+      <div className="flex flex-col items-center gap-3">
+        <Loader className="w-10 h-10 animate-spin" style={{ color: '#6C63FF' }} />
+        <p className="text-gray-400">Loading audit results...</p>
+      </div>
+    </div>
+  )
+
+  if (!data) return <div className="text-center text-gray-400 py-20">Audit not found.</div>
+
+  const { audit, fairness_results, shap_results, explanations, remediations, compliance_checks } = data
+  const score = Math.round(audit.overall_score || 0)
+
+  const radarData = fairness_results?.map(r => ({
+    subject: r.dimension_label.replace(' Fairness','').replace('Demographic ','Demo.').replace('Counterfactual','Counter.').replace('Individual ','Indiv.'),
+    score: r.score, fullMark: 100
+  })) || []
+
+  const shapData = (shap_results || []).slice(0, 10).map(s => ({
+    name: s.feature_name,
+    value: parseFloat((s.shap_importance * 100).toFixed(2))
+  }))
+
+  const limeData = (data.lime_results || []).slice(0, 8).map(l => ({
+    name: l.feature_name,
+    value: parseFloat((l.lime_importance * 100).toFixed(1)),
+    explanation: l.explanation
+  }))
+
+  const complianceByStandard = {}
+  compliance_checks?.forEach(c => {
+    if (!complianceByStandard[c.standard]) complianceByStandard[c.standard] = []
+    complianceByStandard[c.standard].push(c)
+  })
+
+  const tabs = ['overview', 'fairness', 'explainability', 'compliance', 'remediation']
+  const riskColor = RISK_COLORS[audit.risk_level] || '#E94560'
+
+  return (
+    <div className="space-y-6 py-4">
+      {/* Header */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <Link to="/history" className="text-gray-400 hover:text-white transition-colors">
+          <ChevronLeft className="w-5 h-5" />
+        </Link>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-bold text-white truncate">{audit.run_name}</h1>
+          <p className="text-gray-400 text-sm">{audit.file_name} · {audit.row_count?.toLocaleString()} rows · {new Date(audit.created_at).toLocaleDateString()}</p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={handleShare}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all hover:scale-105"
+            style={{ background: 'rgba(108,99,255,0.15)', color: '#a78bfa', border: '1px solid rgba(108,99,255,0.3)' }}>
+            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            {copied ? 'Copied!' : 'Share Link'}
+          </button>
+          <button onClick={() => generatePDF(data, id)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all hover:scale-105"
+            style={{ background: 'linear-gradient(135deg, #6C63FF, #8B5CF6)', boxShadow: '0 0 20px rgba(108,99,255,0.3)' }}>
+            <Download className="w-4 h-4" />
+            Export PDF
+          </button>
+          <div className="px-3 py-1 rounded-full text-xs font-bold uppercase"
+            style={{ background: riskColor + '22', color: riskColor }}>
+            {audit.risk_level} risk
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 glass rounded-xl p-1 w-fit">
+        {tabs.map(tab => (
+          <button key={tab} onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
+              activeTab === tab ? 'bg-[#6C63FF] text-white' : 'text-gray-400 hover:text-white'
+            }`}>{tab}</button>
+        ))}
+      </div>
+
+      {/* OVERVIEW */}
+      {activeTab === 'overview' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Score */}
+            <div className="glass rounded-2xl p-6 flex flex-col items-center gap-2">
+              <ScoreRing score={score} />
+              <div className="flex gap-6 mt-1 text-center">
+                <div>
+                  <div className="text-xl font-bold text-green-400">{fairness_results?.filter(r => r.passed).length || 0}</div>
+                  <div className="text-xs text-gray-500">Passed</div>
+                </div>
+                <div className="w-px bg-white/10" />
+                <div>
+                  <div className="text-xl font-bold text-red-400">{fairness_results?.filter(r => !r.passed).length || 0}</div>
+                  <div className="text-xs text-gray-500">Failed</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Radar Chart */}
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-semibold text-white text-sm mb-2">Fairness Radar</h3>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart data={radarData} margin={{ top: 5, right: 20, bottom: 5, left: 20 }}>
+                    <PolarGrid stroke="#ffffff15" />
+                    <PolarAngleAxis dataKey="subject" tick={{ fill: '#9ca3af', fontSize: 10 }} />
+                    <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: '#6b7280', fontSize: 8 }} tickCount={4} />
+                    <Radar name="Score" dataKey="score" stroke="#6C63FF" fill="#6C63FF" fillOpacity={0.3} strokeWidth={2} />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Summary */}
+            <div className="glass rounded-2xl p-5 flex flex-col gap-3">
+              <h3 className="font-semibold text-white text-sm flex items-center gap-2">
+                <Shield className="w-4 h-4" style={{ color: '#6C63FF' }} /> AI Analysis Summary
+              </h3>
+              <p className="text-gray-300 text-xs leading-relaxed flex-1 overflow-y-auto max-h-36">
+                {explanations?.summary && explanations.summary !== 'None'
+                  ? explanations.summary
+                  : audit.status === 'completed'
+                    ? 'Add GROQ_API_KEY to your .env file to enable AI-powered plain-language analysis.'
+                    : 'Analysis in progress...'}
+              </p>
+              <div className="pt-2 border-t border-white/5 space-y-1">
+                <p className="text-xs text-gray-600 font-mono break-all">SHA-256: {audit.hash_sha256?.slice(0, 32)}...</p>
+                {audit.blockchain_tx && (
+                  <p className="text-xs font-mono" style={{ color: '#00B894' }}>
+                    ⛓ {audit.blockchain_tx.split('|')[0]} · {audit.blockchain_tx.split('|')[1]}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Fairness Snapshot Bar */}
+          <div>
+            <h3 className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wider">All 6 Fairness Dimensions</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {fairness_results?.map(r => (
+                <div key={r.dimension} className={`glass rounded-xl p-3 text-center border ${r.passed ? 'border-green-500/20' : 'border-red-500/20'}`}>
+                  <div className="text-xl font-black" style={{ color: SCORE_COLOR(r.score) }}>{r.score}</div>
+                  <div className="text-xs text-gray-500 mt-0.5 leading-tight">{r.dimension_label.split(' ')[0]}</div>
+                  <div className={`text-xs font-bold mt-1 ${r.passed ? 'text-green-400' : 'text-red-400'}`}>
+                    {r.passed ? '✓ PASS' : '✗ FAIL'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FAIRNESS */}
+      {activeTab === 'fairness' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {fairness_results?.map(r => <FairnessCard key={r.dimension} r={r} />)}
+          </div>
+          {explanations?.bias_findings?.length > 0 && (
+            <div className="glass rounded-xl p-5 border border-red-500/20">
+              <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-yellow-400" /> AI Bias Findings
+              </h3>
+              <div className="space-y-3">
+                {explanations.bias_findings.map((f, i) => (
+                  <p key={i} className="text-gray-300 text-sm leading-relaxed border-l-2 pl-3" style={{ borderColor: '#E94560' }}>{f}</p>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* EXPLAINABILITY */}
+      {activeTab === 'explainability' && (
+        <div className="space-y-6">
+
+          {/* SHAP Section */}
+          <div className="glass rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#6C63FF22', color: '#a78bfa' }}>SHAP</span>
+              <h3 className="font-semibold text-white">Global Feature Importance</h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">Which features most influence the model's decisions overall? (TreeExplainer — model-level view)</p>
+            {shapData.length > 0 ? (
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={shapData} layout="vertical" margin={{ left: 90 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" />
+                    <XAxis type="number" tick={{ fill: '#9ca3af', fontSize: 11 }} />
+                    <YAxis type="category" dataKey="name" tick={{ fill: '#9ca3af', fontSize: 11 }} width={90} />
+                    <Tooltip contentStyle={{ background: '#1A1A2E', border: '1px solid #6C63FF44', borderRadius: 8 }}
+                      labelStyle={{ color: 'white', fontWeight: 'bold' }}
+                      formatter={(val) => [`${val}%`, 'SHAP Importance']} />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                      {shapData.map((_, i) => (
+                        <Cell key={i} fill={i === 0 ? '#E94560' : i <= 2 ? '#FDCB6E' : '#6C63FF'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : <p className="text-gray-500 text-sm py-8 text-center">No numeric feature columns detected.</p>}
+          </div>
+
+          {/* LIME Section */}
+          <div className="glass rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#E9456022', color: '#E94560' }}>LIME</span>
+              <h3 className="font-semibold text-white">Local Decision Explanations</h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">Why was THIS specific individual accepted or rejected? (Perturbation-based — individual-level view)</p>
+            {limeData.length > 0 ? (
+              <div className="space-y-3">
+                {limeData.map((item, i) => (
+                  <div key={i} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-300 font-medium">{item.name}</span>
+                      <span className="text-xs font-bold" style={{ color: i === 0 ? '#E94560' : i <= 2 ? '#FDCB6E' : '#6C63FF' }}>
+                        {item.value.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-white/5 rounded-full h-2">
+                      <div className="h-2 rounded-full transition-all duration-700"
+                        style={{ width: `${item.value}%`, background: i === 0 ? '#E94560' : i <= 2 ? '#FDCB6E' : '#6C63FF' }} />
+                    </div>
+                    {item.explanation && (
+                      <p className="text-xs text-gray-500 leading-relaxed">{item.explanation}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : <p className="text-gray-500 text-sm py-4 text-center">Run a new audit to see LIME results.</p>}
+          </div>
+
+          {/* Comparison callout */}
+          <div className="glass rounded-xl p-4 border border-[#6C63FF]/20">
+            <p className="text-xs text-gray-400 leading-relaxed">
+              <span className="text-purple-400 font-bold">SHAP</span> tells you which features matter most across all predictions (global view).{' '}
+              <span className="text-red-400 font-bold">LIME</span> tells you why a specific individual got the decision they did (local view).{' '}
+              Together they satisfy both GDPR right-to-explanation and PS9 official success criteria.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* COMPLIANCE */}
+      {activeTab === 'compliance' && (
+        <div className="space-y-4">
+          {Object.entries(complianceByStandard).map(([standard, checks]) => {
+            const passed = checks.filter(c => c.passed).length
+            const pct = Math.round((passed / checks.length) * 100)
+            return (
+              <div key={standard} className="glass rounded-2xl p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-white">{STANDARDS[standard] || standard}</h3>
+                  <div className="flex items-center gap-3">
+                    <div className="w-24 bg-white/5 rounded-full h-2">
+                      <div className="h-2 rounded-full" style={{ width: `${pct}%`, background: pct === 100 ? '#00B894' : pct >= 50 ? '#FDCB6E' : '#E94560' }} />
+                    </div>
+                    <span className={`text-sm font-bold ${passed === checks.length ? 'text-green-400' : 'text-yellow-400'}`}>{passed}/{checks.length}</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {checks.map((c, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      {c.passed ? <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
+                                : <XCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />}
+                      <p className="text-sm text-gray-300">{c.requirement}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+          <div className="glass rounded-xl p-4 border border-[#6C63FF]/20 text-center text-xs text-gray-400">
+            Mapped to <span className="text-purple-400">EU AI Act 2026</span> Art. 10,13,14,15 ·{' '}
+            <span className="text-green-400">India DPDP Act</span> Sec. 4,11,16 ·{' '}
+            <span className="text-yellow-400">ISO/IEC 42001</span> Cl. 6.1.2, 8.4, 9.1
+          </div>
+
+          {/* Blockchain Certificate */}
+          {audit.blockchain_tx && (() => {
+            const parts = (audit.blockchain_tx || '').split('|')
+            const provider = parts[0] || 'JCCS'
+            const network  = parts[1] || 'SHA256-ChainedProof'
+            const certId   = parts[2] || ''
+            const anchored = parts[3] || ''
+            const isReal   = provider === 'OriginStamp'
+            return (
+              <div className="glass rounded-xl p-5 border border-green-500/30">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-white flex items-center gap-2 text-sm">
+                    <span>⛓</span> Blockchain Audit Certificate
+                  </h3>
+                  <span className={`text-xs font-bold px-2 py-1 rounded-full ${isReal ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                    {isReal ? '🌐 BITCOIN ANCHORED' : '🔐 CRYPTOGRAPHIC PROOF'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mb-4 text-xs">
+                  <div className="glass rounded-lg p-3">
+                    <div className="text-gray-500 mb-1">Provider</div>
+                    <div className="text-green-400 font-bold font-mono">{provider}</div>
+                  </div>
+                  <div className="glass rounded-lg p-3">
+                    <div className="text-gray-500 mb-1">Network</div>
+                    <div className="text-white font-mono">{network}</div>
+                  </div>
+                  <div className="glass rounded-lg p-3">
+                    <div className="text-gray-500 mb-1">Certificate ID</div>
+                    <div className="text-white font-mono break-all">{certId.slice(0,20)}...</div>
+                  </div>
+                  <div className="glass rounded-lg p-3">
+                    <div className="text-gray-500 mb-1">Anchored At</div>
+                    <div className="text-white font-mono">{anchored}</div>
+                  </div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-3 mb-3">
+                  <div className="text-xs text-gray-500 mb-1">SHA-256 Dataset Hash</div>
+                  <div className="text-xs text-gray-300 font-mono break-all leading-relaxed">{audit.hash_sha256}</div>
+                </div>
+                {isReal && (
+                  <a href={`https://app.originstamp.com/verify/${audit.hash_sha256}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-xs text-green-400 hover:text-green-300 transition-colors">
+                    🔗 Verify on Bitcoin blockchain →
+                  </a>
+                )}
+                <p className="text-xs text-gray-500 mt-3 leading-relaxed">
+                  This hash uniquely fingerprints your dataset. Any modification produces a completely different hash — making tampering instantly detectable. Meets EU AI Act Article 12 audit trail requirements.
+                </p>
+              </div>
+            )
+          })()}
+        </div>
+      )}
+
+      {/* REMEDIATION */}
+      {activeTab === 'remediation' && (
+        <div className="space-y-4">
+          {explanations?.remediation_plan && (
+            <div className="glass rounded-2xl p-5 border border-[#6C63FF]/20">
+              <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
+                <Shield className="w-4 h-4" style={{ color: '#6C63FF' }} /> AI Remediation Plan
+              </h3>
+              <p className="text-gray-300 text-sm leading-relaxed">{explanations.remediation_plan}</p>
+            </div>
+          )}
+          {remediations?.length > 0 ? (
+            <div className="space-y-3">
+              {remediations.map((r, i) => (
+                <div key={i} className={`glass rounded-xl p-5 border ${
+                  r.priority === 'high' ? 'border-red-500/30' : r.priority === 'medium' ? 'border-yellow-500/30' : 'border-green-500/30'
+                }`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold text-white capitalize">{r.dimension?.replace(/_/g, ' ')}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full uppercase font-bold ${
+                      r.priority === 'high' ? 'bg-red-500/20 text-red-400' :
+                      r.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-green-500/20 text-green-400'
+                    }`}>{r.priority} priority</span>
+                  </div>
+                  <p className="text-gray-300 text-sm leading-relaxed mb-3">{r.suggestion}</p>
+                  <div className="flex gap-4 text-xs">
+                    <span className="text-green-400">📉 Bias reduction: ~{r.estimated_bias_reduction}%</span>
+                    <span className="text-yellow-400">⚡ Accuracy loss: ~{r.estimated_accuracy_loss}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="glass rounded-xl p-8 text-center">
+              <CheckCircle className="w-10 h-10 text-green-400 mx-auto mb-3" />
+              <p className="text-white font-medium">No remediations needed!</p>
+              <p className="text-gray-400 text-sm">All fairness dimensions passed their thresholds.</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
