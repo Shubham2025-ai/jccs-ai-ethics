@@ -4,9 +4,10 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
 
 # SQLite needs connect_args for thread safety; MySQL does not
-if settings.USE_SQLITE:
+db_url = settings.get_database_url()
+if "sqlite" in db_url:
     engine = create_engine(
-        settings.DATABASE_URL,
+        db_url,
         connect_args={"check_same_thread": False},  # Required for SQLite
         pool_pre_ping=True,
         echo=settings.DEBUG
@@ -19,7 +20,7 @@ if settings.USE_SQLITE:
         cursor.close()
 else:
     engine = create_engine(
-        settings.DATABASE_URL,
+        db_url,
         pool_pre_ping=True,
         pool_recycle=3600,
         echo=settings.DEBUG
