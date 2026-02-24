@@ -1,3 +1,4 @@
+🌐 Live Demo: https://jccs-ai-ethics.vercel.app
 # JCCS — Jedi Code Compliance System
 ## Complete Setup Guide (Windows)
 
