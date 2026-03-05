@@ -1,9 +1,84 @@
 import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDropzone } from 'react-dropzone'
-import { Upload, FileText, CheckCircle, Loader, Info } from 'lucide-react'
+import { Upload, FileText, CheckCircle, Loader, Info, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { uploadAudit, getAudit } from '../utils/api'
+
+const STEPS = [
+  { label: 'Uploading file', icon: '📤', detail: 'Sending CSV to server...' },
+  { label: 'Detecting columns', icon: '🔍', detail: 'Auto-detecting label, prediction & sensitive attributes...' },
+  { label: 'Running fairness analysis', icon: '⚖️', detail: 'Running 6 dimensions in parallel with Fairlearn + AIF360...' },
+  { label: 'Computing SHAP values', icon: '🧠', detail: 'TreeExplainer building global feature attribution...' },
+  { label: 'Running LIME analysis', icon: '🔬', detail: 'Perturbation-based local explanations for individual decisions...' },
+  { label: 'Generating AI summary', icon: '✍️', detail: 'Groq + Llama 3 writing plain-English findings...' },
+  { label: 'Mapping compliance', icon: '📋', detail: 'Mapping results to EU AI Act, DPDP, ISO 42001...' },
+  { label: 'Anchoring blockchain', icon: '⛓️', detail: 'SHA-256 hash being committed to immutable audit trail...' },
+  { label: 'Finalising report', icon: '✅', detail: 'Almost done — building your compliance certificate...' },
+]
+
+function LoadingScreen({ statusMsg, progress }) {
+  const stepIndex = Math.min(Math.floor((progress / 100) * STEPS.length), STEPS.length - 1)
+  const currentStep = STEPS[stepIndex]
+
+  return (
+    <div className="max-w-lg mx-auto py-16 text-center space-y-8">
+      {/* Animated ring */}
+      <div className="relative w-32 h-32 mx-auto">
+        <svg className="w-full h-full -rotate-90" viewBox="0 0 128 128">
+          <circle cx="64" cy="64" r="54" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
+          <circle cx="64" cy="64" r="54" fill="none" strokeWidth="8"
+            stroke="url(#grad)" strokeLinecap="round"
+            strokeDasharray={2 * Math.PI * 54}
+            strokeDashoffset={2 * Math.PI * 54 * (1 - progress / 100)}
+            style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+          />
+          <defs>
+            <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#6C63FF" />
+              <stop offset="100%" stopColor="#E94560" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-3xl">{currentStep.icon}</span>
+          <span className="text-white font-black text-lg">{Math.round(progress)}%</span>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <h2 className="text-2xl font-black text-white">{currentStep.label}</h2>
+        <p className="text-gray-400 text-sm">{currentStep.detail}</p>
+      </div>
+
+      {/* Step progress dots */}
+      <div className="flex items-center justify-center gap-2 flex-wrap px-4">
+        {STEPS.map((s, i) => (
+          <div key={i} className="flex items-center gap-1">
+            <div className={`w-2 h-2 rounded-full transition-all duration-500 ${
+              i < stepIndex ? 'bg-green-400 scale-100' :
+              i === stepIndex ? 'scale-125' : 'bg-white/10'
+            }`}
+              style={i === stepIndex ? { background: '#6C63FF', boxShadow: '0 0 8px #6C63FF' } : {}}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Step list */}
+      <div className="glass rounded-2xl p-4 text-left space-y-2">
+        {STEPS.map((s, i) => (
+          <div key={i} className={`flex items-center gap-3 text-sm transition-all ${
+            i < stepIndex ? 'opacity-40' : i === stepIndex ? 'opacity-100' : 'opacity-20'
+          }`}>
+            <span className="text-base">{i < stepIndex ? '✅' : i === stepIndex ? <Loader className="w-4 h-4 animate-spin inline" style={{ color: '#6C63FF' }} /> : '○'}</span>
+            <span className={i === stepIndex ? 'text-white font-semibold' : 'text-gray-400'}>{s.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function UploadPage() {
   const navigate = useNavigate()
@@ -31,8 +106,8 @@ export default function UploadPage() {
     if (!runName.trim()) return toast.error('Please enter a run name')
 
     setLoading(true)
-    setProgress(0)
-    setStatusMsg('Uploading file...')
+    setProgress(5)
+    setStatusMsg('Uploading...')
 
     const formData = new FormData()
     formData.append('file', file)
@@ -40,84 +115,101 @@ export default function UploadPage() {
     formData.append('model_type', modelType)
 
     try {
-      const res = await uploadAudit(formData, setProgress)
+      const res = await uploadAudit(formData, (p) => setProgress(Math.max(5, p * 0.2)))
       const auditId = res.data.audit_id
       toast.success('Audit started!')
-      setStatusMsg('Running bias analysis...')
+      setProgress(20)
 
       let attempts = 0
       const poll = setInterval(async () => {
         attempts++
+        const newProgress = Math.min(95, 20 + attempts * 8)
+        setProgress(newProgress)
         try {
           const { data } = await getAudit(auditId)
           if (data.audit.status === 'completed') {
             clearInterval(poll)
+            setProgress(100)
             toast.success('Analysis complete!')
-            navigate(`/results/${auditId}`)
+            setTimeout(() => navigate(`/results/${auditId}`), 500)
           } else if (data.audit.status === 'failed') {
             clearInterval(poll)
             toast.error('Analysis failed. Check your CSV format.')
             setLoading(false)
-          } else {
-            const msgs = ['Running fairness dimensions...', 'Computing SHAP values...', 'Generating AI explanations...', 'Checking compliance...', 'Almost done...']
-            setStatusMsg(msgs[Math.min(Math.floor(attempts / 4), msgs.length - 1)])
           }
         } catch {}
         if (attempts > 90) { clearInterval(poll); setLoading(false) }
       }, 2000)
-
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Upload failed')
       setLoading(false)
     }
   }
 
+  if (loading) return <LoadingScreen statusMsg={statusMsg} progress={progress} />
+
   return (
     <div className="max-w-2xl mx-auto space-y-6 py-8">
       <div>
         <h1 className="text-4xl font-black text-white mb-2">New Bias Audit</h1>
-        <p className="text-gray-400">Upload your AI model's predictions CSV. We'll analyze bias across 6 fairness dimensions.</p>
+        <p className="text-gray-400 text-sm">Upload your AI model's predictions CSV. We'll analyze bias across 6 fairness dimensions in under 60 seconds.</p>
       </div>
 
-      {/* CSV Format Guide */}
-      <div className="rounded-2xl p-4 border" style={{ background: 'rgba(108,99,255,0.08)', borderColor: 'rgba(108,99,255,0.25)' }}>
-        <h3 className="font-bold text-white mb-2 text-sm flex items-center gap-2">
-          <Info className="w-4 h-4" style={{ color: '#6C63FF' }} /> Required CSV Format
+      {/* Format Guide */}
+      <div className="rounded-2xl p-5 border" style={{ background: 'rgba(108,99,255,0.06)', borderColor: 'rgba(108,99,255,0.22)' }}>
+        <h3 className="font-bold text-white mb-3 text-sm flex items-center gap-2">
+          <Info className="w-4 h-4" style={{ color: '#6C63FF' }} /> Expected CSV Format
         </h3>
-        <div className="font-mono text-xs rounded-xl p-3 overflow-x-auto" style={{ background: 'rgba(0,0,0,0.3)' }}>
-          <div style={{ color: '#00B894' }}>actual, predicted, gender, age, income, credit_score</div>
-          <div className="text-gray-400">1, 1, Male, 34, 50000, 720</div>
-          <div className="text-gray-400">0, 1, Female, 28, 45000, 680</div>
+        <div className="font-mono text-xs rounded-xl p-4 overflow-x-auto mb-3" style={{ background: 'rgba(0,0,0,0.4)' }}>
+          <div style={{ color: '#a78bfa' }}># Column headers (any domain works)</div>
+          <div style={{ color: '#00B894' }}>actual, predicted, gender, age, race, income</div>
+          <div className="text-gray-500">1, 1, Male, 34, White, 55000</div>
+          <div className="text-gray-500">0, 1, Female, 28, Black, 42000</div>
+          <div className="text-gray-500">1, 0, Male, 45, Hispanic, 61000</div>
         </div>
-        <p className="text-xs text-gray-500 mt-2">
-          <span className="text-gray-300">actual/label</span> = ground truth &nbsp;·&nbsp;
-          <span className="text-gray-300">predicted/pred</span> = model output &nbsp;·&nbsp;
-          <span className="text-gray-300">gender/age/race</span> = sensitive attributes
-        </p>
+        <div className="grid grid-cols-3 gap-3 text-xs">
+          {[
+            { key: 'actual / label', val: 'Ground truth outcome', color: '#00B894' },
+            { key: 'predicted / pred', val: 'Model output / score', color: '#6C63FF' },
+            { key: 'gender / age / race', val: 'Sensitive attributes', color: '#FDCB6E' },
+          ].map(({ key, val, color }) => (
+            <div key={key} className="rounded-lg p-2 text-center" style={{ background: 'rgba(0,0,0,0.3)' }}>
+              <div className="font-mono font-bold mb-0.5" style={{ color }}>{key}</div>
+              <div className="text-gray-500">{val}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Dropzone */}
         <div {...getRootProps()} className={`rounded-2xl p-12 text-center cursor-pointer transition-all border-2 border-dashed ${
           isDragActive ? 'border-[#6C63FF] bg-[#6C63FF]/10' :
-          file ? 'border-green-500/50 bg-green-500/5' :
-          'border-white/10 hover:border-[#6C63FF]/40 hover:bg-[#6C63FF]/5'
+          file ? 'border-green-500/40 bg-green-500/5' :
+          'border-white/8 hover:border-[#6C63FF]/35 hover:bg-[#6C63FF]/4'
         }`}>
           <input {...getInputProps()} />
           {file ? (
             <div className="flex flex-col items-center gap-3">
               <CheckCircle className="w-12 h-12 text-green-400" />
-              <p className="text-white font-bold">{file.name}</p>
-              <p className="text-gray-400 text-sm">{(file.size / 1024).toFixed(1)} KB — Click to change</p>
+              <div>
+                <p className="text-white font-bold text-lg">{file.name}</p>
+                <p className="text-gray-500 text-sm">{(file.size / 1024).toFixed(1)} KB</p>
+              </div>
+              <button type="button" onClick={(e) => { e.stopPropagation(); setFile(null) }}
+                className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-400 transition-colors">
+                <X className="w-3 h-3" /> Remove file
+              </button>
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(108,99,255,0.15)' }}>
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+                style={{ background: isDragActive ? 'rgba(108,99,255,0.25)' : 'rgba(108,99,255,0.12)' }}>
                 <Upload className="w-8 h-8" style={{ color: '#6C63FF' }} />
               </div>
               <div>
-                <p className="text-white font-bold text-lg">Drop your CSV here</p>
-                <p className="text-gray-500 text-sm">or click to browse · Max 50MB</p>
+                <p className="text-white font-bold text-lg">{isDragActive ? 'Drop it!' : 'Drop your CSV here'}</p>
+                <p className="text-gray-500 text-sm mt-1">or click to browse · Max 50MB</p>
               </div>
             </div>
           )}
@@ -127,7 +219,7 @@ export default function UploadPage() {
         <div>
           <label className="block text-sm font-semibold text-gray-300 mb-2">Audit Name</label>
           <input type="text" value={runName} onChange={e => setRunName(e.target.value)}
-            placeholder="e.g. Hiring Model v2 — Feb 2026"
+            placeholder="e.g. Hiring Model v2 — COMPAS Analysis"
             className="w-full rounded-xl px-4 py-3 text-white placeholder-gray-600 outline-none transition-all"
             style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
             onFocus={e => e.target.style.borderColor = '#6C63FF'}
@@ -138,27 +230,31 @@ export default function UploadPage() {
         {/* Model Type */}
         <div>
           <label className="block text-sm font-semibold text-gray-300 mb-2">Model Type</label>
-          <select value={modelType} onChange={e => setModelType(e.target.value)}
-            className="w-full rounded-xl px-4 py-3 text-white outline-none"
-            style={{ background: '#1A1A2E', border: '1px solid rgba(255,255,255,0.1)' }}>
-            <option value="classification">Classification — Hiring, Loan Approval, Recidivism</option>
-            <option value="regression">Regression — Salary Prediction, Risk Scoring</option>
-            <option value="ranking">Ranking — Search Results, Recommendations</option>
-          </select>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { value: 'classification', label: 'Classification', desc: 'Hiring, Loans, Recidivism', icon: '🎯' },
+              { value: 'regression', label: 'Regression', desc: 'Salary, Risk Scoring', icon: '📈' },
+              { value: 'ranking', label: 'Ranking', desc: 'Search, Recommendations', icon: '🏆' },
+            ].map(({ value, label, desc, icon }) => (
+              <button key={value} type="button" onClick={() => setModelType(value)}
+                className={`rounded-xl p-3 text-left transition-all border ${
+                  modelType === value
+                    ? 'border-[#6C63FF] bg-[#6C63FF]/10 text-white'
+                    : 'border-white/8 bg-white/3 text-gray-400 hover:border-white/20'
+                }`}>
+                <div className="text-lg mb-1">{icon}</div>
+                <div className="font-bold text-sm">{label}</div>
+                <div className="text-xs opacity-60 mt-0.5">{desc}</div>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Submit */}
-        <button type="submit" disabled={loading || !file}
-          className="w-full py-4 rounded-2xl font-black text-white transition-all disabled:opacity-40 flex items-center justify-center gap-2 text-lg"
-          style={{ background: loading ? '#6C63FF88' : 'linear-gradient(135deg, #6C63FF, #8B5CF6)', boxShadow: loading ? 'none' : '0 0 30px rgba(108,99,255,0.3)' }}>
-          {loading ? (
-            <>
-              <Loader className="w-5 h-5 animate-spin" />
-              {statusMsg}
-            </>
-          ) : (
-            <><FileText className="w-5 h-5" /> Run Bias Audit</>
-          )}
+        <button type="submit" disabled={!file || !runName.trim()}
+          className="w-full py-4 rounded-2xl font-black text-white text-lg transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed hover:scale-[1.01]"
+          style={{ background: 'linear-gradient(135deg, #6C63FF, #8B5CF6)', boxShadow: (!file || !runName.trim()) ? 'none' : '0 0 30px rgba(108,99,255,0.35)' }}>
+          <FileText className="w-5 h-5" /> Run Bias Audit
         </button>
       </form>
     </div>
