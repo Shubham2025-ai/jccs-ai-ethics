@@ -55,17 +55,25 @@ def detect_columns(df: pd.DataFrame) -> Dict:
     result = {"label": None, "prediction": None, "sensitive": [], "mode": "classification"}
 
     # ── Keyword banks (domain-agnostic) ──────────────────────────────────────
-    label_keywords = [
-        "actual", "label", "true", "ground_truth", "target", "y_true",
-        "outcome", "approved", "hired", "decision", "result", "class",
+    # Strong keywords: safe to match as substring
+    label_keywords_strong = [
+        "actual", "label", "y_true", "ground_truth", "two_year_recid", "recid",
+        "outcome", "approved", "hired", "decision",
         "default", "churn", "survived", "survival", "fraud", "diagnosed",
         "admitted", "granted", "accepted", "rejected", "purchased", "converted",
-        "passed", "failed", "positive", "negative", "status", "response"
+        "passed", "failed", "response", "target"
     ]
-    pred_keywords = [
-        "pred", "predict", "forecast", "output", "y_pred", "score",
-        "probability", "proba", "estimate", "inference", "recommend",
-        "rank", "rating", "risk_score", "propensity", "likelihood"
+    # Weak keywords: only match if col equals keyword exactly or has underscore boundary
+    label_keywords_weak = [
+        "true", "result", "class", "positive", "negative", "status"
+    ]
+    pred_keywords_strong = [
+        "pred", "predict", "forecast", "y_pred", "decile_score",
+        "probability", "proba", "propensity", "likelihood", "risk_score",
+        "score_text", "inference", "recommend"
+    ]
+    pred_keywords_weak = [
+        "score", "output", "rank", "rating", "estimate"
     ]
     # Comprehensive sensitive attribute keywords across all domains
     sensitive_keywords = [
@@ -74,35 +82,54 @@ def detect_columns(df: pd.DataFrame) -> Dict:
         "race", "ethnicity", "color", "caste", "tribe",
         "age", "birth", "senior", "young",
         "religion", "faith", "belief",
-        "nationality", "country", "citizen", "immigrant",
+        "nationality", "citizen", "immigrant",
         "disability", "handicap", "impair",
         "marital", "married", "single", "divorced",
         # Socioeconomic
-        "income", "salary", "wage", "wealth", "poverty", "class",
-        "education", "degree", "school", "literacy",
-        "occupation", "job", "employ", "unemploy",
+        "income", "salary", "wage", "wealth", "poverty",
+        "degree", "school", "literacy",
+        "occupation", "employ", "unemploy",
         # Geographic (proxy discrimination)
         "zip", "postal", "pincode", "postcode",
-        "region", "district", "zone", "area", "neighbourhood", "neighborhood",
-        "city", "urban", "rural", "suburb",
-        "state", "province", "county",
+        "region", "district", "zone", "neighbourhood", "neighborhood",
+        "urban", "rural", "suburb",
+        "province", "county",
         "proximity", "ocean", "location",
         # Healthcare
         "insurance", "insured", "coverage",
         # Language
         "language", "tongue", "speak",
+        # Criminal justice
+        "recid", "criminal", "offense", "charge",
     ]
 
-    # ── Pass 1: Exact keyword matching ───────────────────────────────────────
+    def _weak_match(col, keyword):
+        """Match only at word boundaries for ambiguous keywords."""
+        return (col == keyword or
+                col.endswith('_' + keyword) or
+                col.startswith(keyword + '_') or
+                ('_' + keyword + '_') in col)
+
+    # ── Pass 1a: STRONG keyword scan across ALL columns first ───────────────
+    # Ensures 'actual_income_over50k' beats 'marital_status' (weak 'status')
     for i, col in enumerate(cols_lower):
         orig = df.columns[i]
-        if any(k in col for k in label_keywords) and not result["label"]:
+        if any(k in col for k in label_keywords_strong) and not result["label"]:
             result["label"] = orig
-        elif any(k in col for k in pred_keywords) and not result["prediction"]:
+        if any(k in col for k in pred_keywords_strong) and not result["prediction"]:
             result["prediction"] = orig
         if any(k in col for k in sensitive_keywords):
             if orig not in result["sensitive"]:
                 result["sensitive"].append(orig)
+
+    # ── Pass 1b: WEAK keyword scan — only if strong scan missed ─────────────
+    if not result["label"] or not result["prediction"]:
+        for i, col in enumerate(cols_lower):
+            orig = df.columns[i]
+            if not result["label"] and any(_weak_match(col, k) for k in label_keywords_weak):
+                result["label"] = orig
+            if not result["prediction"] and any(_weak_match(col, k) for k in pred_keywords_weak):
+                result["prediction"] = orig
 
     # ── Pass 2: Heuristic column profiling ───────────────────────────────────
     num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
