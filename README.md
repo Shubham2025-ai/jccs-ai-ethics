@@ -1,202 +1,204 @@
-🌐 Live Demo: https://jccs-ai-ethics.vercel.app
-# JCCS — Jedi Code Compliance System
-## Complete Setup Guide (Windows)
+# 🛡 JCCS — Jedi Code Compliance System
+### AI Ethics Auditing Platform | Star Wars Hackathon 2026 | PS9
+
+> **"The Crash-Test Dummy for AI Systems"**
+> Upload any AI model's predictions → Get a certified ethics scorecard in under 60 seconds → No coding required.
 
 ---
 
-## 📁 Project Structure
+## 🌐 Live Demo
 
-```
-jccs/
-├── backend/                  ← FastAPI + Python
-│   ├── app/
-│   │   ├── main.py           ← Entry point
-│   │   ├── core/
-│   │   │   ├── config.py     ← Settings (.env reader)
-│   │   │   └── database.py   ← MySQL connection
-│   │   ├── models/
-│   │   │   └── models.py     ← Database tables
-│   │   ├── services/
-│   │   │   ├── bias_engine.py   ← 6 fairness dimensions + SHAP
-│   │   │   ├── claude_service.py← Claude AI explanations
-│   │   │   └── audit_service.py ← Orchestrates everything
-│   │   └── api/
-│   │       └── audit.py      ← REST API endpoints
-│   ├── requirements.txt
-│   └── .env                  ← YOUR CREDENTIALS GO HERE
-│
-├── frontend/                 ← React + Vite
-│   ├── src/
-│   │   ├── App.jsx
-│   │   ├── pages/
-│   │   │   ├── HomePage.jsx
-│   │   │   ├── UploadPage.jsx
-│   │   │   ├── ResultsPage.jsx
-│   │   │   └── HistoryPage.jsx
-│   │   ├── components/
-│   │   │   └── dashboard/Navbar.jsx
-│   │   └── utils/api.js
-│   └── package.json
-│
-└── database/
-    └── schema.sql            ← Run this in MySQL first
-```
+| | Link |
+|---|---|
+| 🚀 **Frontend** | https://jccs-ai-ethics.vercel.app |
+| ⚙️ **Backend API** | https://jccs-ai-ethics.onrender.com |
+| 📖 **API Docs** | https://jccs-ai-ethics.onrender.com/docs |
+| 💻 **GitHub** | https://github.com/Shubham2025-ai/jccs-ai-ethics |
+
+> ⚠️ Backend runs on Render free tier — first request may take 50 seconds to wake up. Visit `/health` first before demo.
 
 ---
 
-## 🚀 STEP 1 — Setup MySQL Database
+## 🏆 Problem Statement
+**PS9 — Ethical Score & Explainability Framework for AI Applications**
 
-Open MySQL Workbench or Command Prompt:
-
-```sql
--- Option A: MySQL Workbench
--- Open schema.sql and click Run (lightning bolt icon)
-
--- Option B: Command Prompt
-mysql -u root -p
--- Enter your password, then:
-source C:\path\to\jccs\database\schema.sql
-```
+70% of AI systems carry hidden bias (MIT study). Hiring algorithms reject qualified candidates. Loan AIs discriminate by zip code. COMPAS recidivism scores flagged Black defendants 2× unfairly. Apple Card gave men 20× higher credit limits. **No standard tool exists to catch this before deployment — until now.**
 
 ---
 
-## 🐍 STEP 2 — Setup Backend
+## ✅ PS9 Success Criteria — 100% Covered
 
-Open Command Prompt or PowerShell in the `backend/` folder:
+| Criteria | Required | JCCS | Implementation |
+|---|---|---|---|
+| Test AI across ethical dimensions | 5+ | ✅ **6** | Fairlearn + AIF360 |
+| SHAP explainability | ✅ | ✅ Done | TreeExplainer — global feature importance |
+| LIME explainability | ✅ | ✅ Done | Perturbation-based — individual decisions |
+| Automated bias detection | ✅ | ✅ Done | 6 fairness algorithms in parallel |
+| Remediation suggestions | ✅ | ✅ Done | AI-generated action plan per dimension |
+| Compliance certification | ✅ | ✅ Done | EU AI Act + India DPDP + ISO 42001 |
 
+---
+
+## 🎯 Key Features
+
+**Universal CSV Support** — Works with any domain: hiring, loans, healthcare, criminal justice, education — no configuration needed. Auto-detects label, prediction, and sensitive attribute columns.
+
+**6 Fairness Dimensions** — Demographic Parity, Equal Opportunity, Calibration, Individual Fairness, Counterfactual Fairness, Model Transparency
+
+**Dual Explainability** — SHAP (global — which features matter most overall) + LIME (local — why was THIS specific person rejected)
+
+**AI Plain-Language Explanations** — Groq/Llama 3 converts complex bias metrics into plain English for executives and regulators
+
+**Regulatory Compliance Mapping** — EU AI Act 2026 (Articles 10, 13, 14, 15) · India DPDP Act (Sections 4, 11, 16) · ISO/IEC 42001 (Clauses 6.1.2, 8.4, 9.1)
+
+**Blockchain Audit Trail** — SHA-256 cryptographic proof + optional OriginStamp Bitcoin anchoring. Tamper-proof and verifiable.
+
+**One-Click PDF Export** — Full compliance certificate ready for regulators
+
+---
+
+## 🏗 Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React.js + Vite + Tailwind CSS + Recharts |
+| Backend | FastAPI (Python 3.11) |
+| Bias Analysis | Microsoft Fairlearn + IBM AI Fairness 360 |
+| Explainability | SHAP (TreeExplainer) + LIME (Perturbation-based) |
+| AI Narratives | Groq API (Llama 3 — Free Tier) |
+| Database | PostgreSQL (Render) |
+| Blockchain | SHA-256 Cryptographic Proof + OriginStamp (Bitcoin) |
+| Deployment | Render (Backend) + Vercel (Frontend) |
+
+---
+
+## 📂 Real-World Demo Datasets
+
+| Dataset | Domain | Bias Pattern |
+|---|---|---|
+| `compas_recidivism.csv` | Criminal Justice | Black defendants flagged 2× more (ProPublica 2016) |
+| `german_credit.csv` | Finance | Women + foreigners denied credit at higher rates |
+| `adult_income.csv` | Employment | Women predicted lower income (UCI Census) |
+| `healthcare_diagnosis.csv` | Healthcare | Women's pain undertreated, minorities misdiagnosed |
+| `hiring_bias_demo.csv` | Hiring | Gender + age bias in candidate selection |
+
+---
+
+## 🚀 Local Setup
+
+### Prerequisites
+- Python 3.11+
+- Node.js 18+
+- PostgreSQL or SQLite (auto-fallback)
+
+### 1. Clone
 ```bash
-# Create virtual environment
+git clone https://github.com/Shubham2025-ai/jccs-ai-ethics.git
+cd jccs-ai-ethics
+```
+
+### 2. Backend
+```bash
+cd backend
 python -m venv venv
-
-# Activate it (Windows CMD)
-venv\Scripts\activate
-
-# Activate it (PowerShell)
-venv\Scripts\Activate.ps1
-
-# Install all packages
+venv\Scripts\activate        # Windows
+source venv/bin/activate     # Mac/Linux
 pip install -r requirements.txt
-
-# ⚠️ NOTE: Some packages (aif360, shap) take 3-5 minutes to install
 ```
 
-### Edit your .env file:
-Open `backend/.env` and fill in:
-```
-DB_PASSWORD=your_actual_mysql_password
+### 3. Configure `.env`
+```env
+# Option A: PostgreSQL
+DATABASE_URL=postgresql://user:password@localhost/jccs_db
+
+# Option B: SQLite (no setup needed)
+USE_SQLITE=true
+
 GROQ_API_KEY=gsk_your_groq_key_here
+FRONTEND_URL=http://localhost:3000
 ```
+Get free Groq key at: https://console.groq.com
 
-Get your FREE Groq API key from: https://console.groq.com (no credit card needed)
-
-### Start the backend:
+### 4. Start Backend
 ```bash
-# Make sure venv is active, then:
 uvicorn app.main:app --reload --port 8000
-
-# You should see:
-# ✅ MySQL tables initialized
-# ✅ MySQL connection successful
-# 🚀 Uvicorn running on http://127.0.0.1:8000
 ```
 
-### Test backend is working:
-Open browser → http://localhost:8000
-You should see: `{"app": "JCCS...", "status": "running"}`
-
-API docs: http://localhost:8000/docs
-
----
-
-## ⚛️ STEP 3 — Setup Frontend
-
-Open a NEW Command Prompt in the `frontend/` folder:
-
+### 5. Frontend
 ```bash
-# Install packages
+cd frontend
 npm install
-
-# Start development server
 npm run dev
-
-# You should see:
-# Local: http://localhost:3000
 ```
 
-Open browser → http://localhost:3000 🎉
+Open http://localhost:3000 🎉
 
 ---
 
-## 📊 STEP 4 — Test with Sample CSV
+## 📊 Quick Demo
 
-Create a file called `test_data.csv` with this content:
-
-```csv
-actual,predicted,gender,age,income,credit_score,loan_amount
-1,1,Male,34,60000,720,50000
-0,1,Female,28,45000,680,40000
-1,0,Female,45,70000,740,60000
-1,1,Male,52,80000,760,80000
-0,0,Female,31,38000,650,30000
-1,1,Male,29,55000,710,45000
-0,1,Female,36,42000,665,35000
-1,1,Male,48,90000,780,90000
-1,0,Female,27,35000,630,25000
-0,0,Male,55,65000,695,55000
-1,1,Male,41,75000,750,70000
-0,1,Female,24,30000,610,20000
-```
-
-1. Go to http://localhost:3000/upload
-2. Drag `test_data.csv` onto the upload area
-3. Name it "Loan Model Test"
-4. Click "Run Bias Audit"
-5. Wait ~15-30 seconds
-6. See your full bias report! 🎉
-
----
-
-## 🔧 Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| MySQL connection failed | Check DB_PASSWORD in .env matches your MySQL password |
-| `ModuleNotFoundError` | Make sure venv is activated before running uvicorn |
-| Frontend can't reach backend | Make sure backend is running on port 8000 |
-| SHAP install fails | Run `pip install shap --no-build-isolation` |
-| aif360 install fails | Run `pip install aif360 --no-deps` then install deps manually |
-| PowerShell Activate error | Run: `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` |
+1. Go to https://jccs-ai-ethics.vercel.app
+2. Click **New Audit**
+3. Upload `compas_recidivism.csv`
+4. Watch 6 fairness dimensions run in real time
+5. Explore all 5 tabs — Overview, Fairness, Explainability, Compliance, Remediation
+6. Export PDF compliance certificate
+7. Check blockchain certificate in Compliance tab
 
 ---
 
 ## 🌐 API Endpoints
 
-| Method | URL | Description |
-|--------|-----|-------------|
-| POST | /audit/upload | Upload CSV and start audit |
-| GET | /audit/{id} | Get audit results |
-| GET | /audits/list | List all audits |
-| DELETE | /audit/{id} | Delete audit |
-| GET | /health | Check server + DB status |
-| GET | /docs | Swagger API documentation |
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/audit/upload` | Upload CSV, start audit |
+| GET | `/audit/{id}` | Get full results |
+| GET | `/audit/{id}/verify` | Verify blockchain certificate |
+| GET | `/audits/list` | List all audits |
+| GET | `/health` | Health check + DB status |
+| GET | `/docs` | Swagger API docs |
 
 ---
 
-## 💡 How to Demo for Judges
+## 🎯 SDG Alignment
 
-1. Open http://localhost:3000 — show the clean dark UI
-2. Upload test_data.csv — show the drag-drop
-3. Wait for analysis — explain what's happening behind the scenes
-4. Show Results → Overview tab (Ethics Scorecard ring)
-5. Switch to Fairness tab — show each dimension's pass/fail
-6. Switch to Explainability — SHAP bar chart
-7. Switch to Compliance — EU AI Act, DPDP, ISO checkmarks
-8. Switch to Remediation — AI-generated action plan
-9. Point out SHA-256 hash — the blockchain audit trail
+| SDG | Connection |
+|---|---|
+| **SDG 16** — Peace, Justice & Strong Institutions | Blockchain audit trail enforces AI accountability |
+| **SDG 8** — Decent Work & Economic Growth | Detects hiring bias, protects fair employment |
+| **SDG 9** — Industry, Innovation & Infrastructure | Provides missing safety infrastructure for AI deployment |
+| **SDG 10** — Reduced Inequalities | Catches racial, gender, age discrimination in AI systems |
 
-**Talking points:**
-- "6 fairness dimensions analyzed in under 60 seconds"
-- "No Python knowledge required — compliance officers can use this"
-- "Claude AI converts complex SHAP values into plain English"
-- "Immutable audit trail — results cannot be tampered with"
-- "Maps directly to EU AI Act 2026 compliance requirements"
+---
+
+## 🧠 How JCCS Works Internally
+
+```
+CSV Upload
+    ↓
+Auto Column Detection (two-pass strong/weak keyword matching)
+    ↓
+6 Fairness Dimensions (parallel)
+├── Demographic Parity        → Microsoft Fairlearn
+├── Equal Opportunity         → Microsoft Fairlearn
+├── Calibration               → IBM AIF360
+├── Individual Fairness       → Cosine similarity
+├── Counterfactual Fairness   → Group prediction flip rate
+└── Model Transparency        → SHAP TreeExplainer
+    ↓
+Explainability
+├── SHAP  → Global feature importance
+└── LIME  → Local perturbation analysis (custom implementation ~80 lines)
+    ↓
+AI Summary → Groq API (Llama 3)
+    ↓
+Compliance Mapping → EU AI Act · DPDP · ISO 42001
+    ↓
+Blockchain Anchoring → SHA-256 + OriginStamp
+    ↓
+PDF Certificate Export
+```
+
+---
+
+*Star Wars Hackathon 2026 · PS9 · Built for responsible AI* 🛡
