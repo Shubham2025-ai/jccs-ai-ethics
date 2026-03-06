@@ -23,7 +23,7 @@ export default function Navbar() {
               style={{ background: 'linear-gradient(135deg, #6C63FF, #E94560)' }} />
           </div>
           <div>
-            <div className="font-display font-black text-white text-base leading-none tracking-wide">JCCS</div>
+            <div className="font-black text-white text-base leading-none tracking-wide">JCCS</div>
             <div className="text-[10px] text-gray-500 hidden sm:block leading-none mt-0.5 tracking-widest uppercase">Jedi Code Compliance</div>
           </div>
         </Link>

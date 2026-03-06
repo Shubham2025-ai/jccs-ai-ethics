@@ -58,7 +58,7 @@ export default function HomePage() {
           </div>
 
           {/* Headline */}
-          <h1 className="font-display text-[clamp(3rem,10vw,7rem)] font-black leading-[0.95] tracking-tight mb-8 text-white">
+          <h1 className="text-[clamp(3rem,10vw,7rem)] font-black leading-[0.95] tracking-tight mb-8 text-white">
             Audit Your AI<br />
             <span className="gradient-text">Before It Harms</span><br />
             <span className="text-[clamp(1.5rem,4vw,3rem)] text-gray-400 font-semibold">Someone</span>
@@ -91,7 +91,7 @@ export default function HomePage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-2xl mx-auto">
             {stats.map(({ n, label }) => (
               <div key={label} className="glass rounded-2xl py-4 px-3 text-center card-hover border border-white/5">
-                <div className="font-display text-3xl font-black text-white mb-0.5"
+                <div className="text-3xl font-black text-white mb-0.5"
                   style={{ background: 'linear-gradient(135deg, #6C63FF, #a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                   {n}
                 </div>
@@ -146,7 +146,7 @@ export default function HomePage() {
                   style={{ background: '#E94560' }} />
                 <div className="text-3xl mb-4">{icon}</div>
                 <div className="flex items-end justify-between mb-2">
-                  <span className="font-display font-black text-white text-xl">{co}</span>
+                  <span className="font-black text-white text-xl">{co}</span>
                   <span className="text-xs text-gray-600">{year}</span>
                 </div>
                 <p className="text-gray-300 text-sm mb-3 leading-relaxed">{what}</p>
@@ -167,7 +167,7 @@ export default function HomePage() {
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
             <div className="text-xs font-bold text-[#6C63FF] uppercase tracking-widest mb-3">Simple as 1-2-3</div>
-            <h2 className="font-display text-4xl md:text-5xl font-black text-white">How It Works</h2>
+            <h2 className="text-4xl md:text-5xl font-black text-white">How It Works</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
@@ -182,7 +182,7 @@ export default function HomePage() {
                 <div className="absolute top-0 right-0 font-display text-8xl font-black opacity-[0.03] leading-none select-none">{n}</div>
                 <div className="text-4xl mb-5">{emoji}</div>
                 <div className="text-xs font-black text-gray-600 tracking-widest uppercase mb-2">{n}</div>
-                <h3 className="font-display font-black text-white text-xl mb-3">{title}</h3>
+                <h3 className="font-black text-white text-xl mb-3">{title}</h3>
                 <p className="text-gray-400 text-sm leading-relaxed">{desc}</p>
               </div>
             ))}
@@ -197,7 +197,7 @@ export default function HomePage() {
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
             <div className="text-xs font-bold text-[#6C63FF] uppercase tracking-widest mb-3">Full Coverage</div>
-            <h2 className="font-display text-4xl md:text-5xl font-black text-white">What We Audit</h2>
+            <h2 className="text-4xl md:text-5xl font-black text-white">What We Audit</h2>
             <p className="text-gray-500 mt-3">6 dimensions of algorithmic fairness — all automated</p>
           </div>
 
@@ -210,7 +210,7 @@ export default function HomePage() {
                   style={{ background: color + '18', boxShadow: `0 0 20px ${color}20` }}>
                   <Icon className="w-5 h-5" style={{ color }} />
                 </div>
-                <h3 className="font-display font-black text-white text-lg mb-2">{title}</h3>
+                <h3 className="font-black text-white text-lg mb-2">{title}</h3>
                 <p className="text-sm text-gray-400 leading-relaxed">{desc}</p>
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left"
                   style={{ background: `linear-gradient(90deg, ${color}, transparent)` }} />
@@ -230,7 +230,7 @@ export default function HomePage() {
               style={{ background: 'radial-gradient(ellipse at top right, rgba(108,99,255,0.06), transparent 60%)' }} />
             <div className="text-center mb-10">
               <div className="text-xs font-bold text-[#6C63FF] uppercase tracking-widest mb-3">Regulatory Ready</div>
-              <h2 className="font-display text-3xl md:text-4xl font-black text-white">3 Frameworks. 1 Upload.</h2>
+              <h2 className="text-3xl md:text-4xl font-black text-white">3 Frameworks. 1 Upload.</h2>
               <p className="text-gray-500 text-sm mt-3">Every audit is automatically mapped to all three standards</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -242,7 +242,7 @@ export default function HomePage() {
                 <div key={name} className="rounded-2xl p-5 card-hover"
                   style={{ background: color + '08', border: `1px solid ${color}20` }}>
                   <div className="text-2xl mb-3">{flag}</div>
-                  <div className="font-display font-black text-white text-base mb-1">{name}</div>
+                  <div className="font-black text-white text-base mb-1">{name}</div>
                   <div className="text-xs font-bold mb-2" style={{ color }}>{articles}</div>
                   <div className="text-xs text-gray-500">{desc}</div>
                 </div>
@@ -259,7 +259,7 @@ export default function HomePage() {
         <div className="absolute inset-0 pointer-events-none"
           style={{ background: 'radial-gradient(ellipse at center, rgba(108,99,255,0.07), transparent 70%)' }} />
         <div className="relative max-w-2xl mx-auto">
-          <h2 className="font-display text-4xl md:text-6xl font-black text-white mb-6 leading-tight">
+          <h2 className="text-4xl md:text-6xl font-black text-white mb-6 leading-tight">
             Is your AI<br /><span className="gradient-text">actually fair?</span>
           </h2>
           <p className="text-gray-400 text-lg mb-10">Find out in 60 seconds. Free. No code. No signup.</p>
