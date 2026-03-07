@@ -93,7 +93,7 @@ h1{font-size:22px;font-weight:800;margin-bottom:4px}
 .stat .n{font-size:28px;font-weight:800}.stat .l{font-size:11px;color:#666;margin-top:2px}
 .sec{margin-bottom:14px}
 .sec-title{font-size:13px;font-weight:700;color:#6C63FF;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #6C63FF22}
-.summary{background:#F0EFFF;border-left:4px solid #6C63FF;border-radius:0 8px 8px 0;padding:10px 12px;font-size:11.5px;line-height:1.6;color:#333}
+.summary{background:#F0EFFF;border-left:4px solid #6C63FF;border-radius:0 8px 8px 0;padding:8px 12px;font-size:11px;line-height:1.5;color:#333}
 .fg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}
 .fc{border:1px solid #eee;border-radius:8px;padding:8px 10px}
 .fc.pass{border-color:#00B89444;background:#00B89408}
@@ -142,7 +142,7 @@ h1{font-size:22px;font-weight:800;margin-bottom:4px}
   <div class="stat"><div class="n" style="color:#E94560">${failed}</div><div class="l">Failed</div></div>
   <div class="stat"><div class="n" style="color:#6C63FF">6</div><div class="l">Tested</div></div>
 </div>
-${explanations?.summary ? `<div class="sec"><div class="sec-title">AI Analysis Summary</div><div class="summary">${explanations.summary}</div></div>` : ''}
+${explanations?.summary ? `<div class="sec"><div class="sec-title">AI Analysis Summary</div><div class="summary">${explanations.summary.split(" ").slice(0,80).join(" ")}${explanations.summary.split(" ").length > 80 ? "..." : ""}</div></div>` : ''}
 <div class="sec"><div class="sec-title">Fairness Dimensions</div><div class="fg">
 ${fairness_results?.map(r => {
   const c = SCORE_COLOR(r.score)
@@ -280,8 +280,11 @@ export default function ResultsPage() {
             {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             {copied ? 'Copied!' : 'Share Link'}
           </button>
-          <button onClick={() => generatePDF(data, id)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all hover:scale-105"
+          <button
+            onClick={() => generatePDF(data, id)}
+            disabled={!data || data?.audit?.status !== 'completed'}
+            title={!data || data?.audit?.status !== 'completed' ? 'Audit still processing...' : 'Export PDF report'}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
             style={{ background: 'linear-gradient(135deg, #6C63FF, #8B5CF6)', boxShadow: '0 0 20px rgba(108,99,255,0.3)' }}>
             <Download className="w-4 h-4" />
             Export PDF
@@ -424,6 +427,33 @@ export default function ResultsPage() {
       {/* EXPLAINABILITY */}
       {activeTab === 'explainability' && (
         <div className="space-y-6">
+
+          {/* Plain English Intro Banner */}
+          <div className="rounded-2xl p-4 flex flex-col sm:flex-row gap-4"
+            style={{ background: 'linear-gradient(135deg, rgba(108,99,255,0.12), rgba(233,69,96,0.08))', border: '1px solid rgba(108,99,255,0.2)' }}>
+            <div className="flex-1">
+              <p className="text-white font-bold text-sm mb-1">🔍 Why did the model make these decisions?</p>
+              <p className="text-gray-400 text-xs leading-relaxed">
+                This tab shows which data features (like age, education, income) had the most influence on the AI model's predictions.
+                A high percentage means that feature strongly affected outcomes — which can reveal hidden bias.
+              </p>
+            </div>
+            {/* Color Legend */}
+            <div className="flex sm:flex-col gap-3 justify-center flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: '#E94560' }} />
+                <span className="text-xs text-gray-400">#1 highest impact</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: '#FDCB6E' }} />
+                <span className="text-xs text-gray-400">#2–3 high impact</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: '#6C63FF' }} />
+                <span className="text-xs text-gray-400">lower impact</span>
+              </div>
+            </div>
+          </div>
 
           {/* SHAP Section */}
           <div className="glass rounded-2xl p-5">
