@@ -368,7 +368,7 @@ def run_counterfactual_fairness(df: pd.DataFrame, y_pred, sensitive_col_name: st
         else:
             flip_rate = 0
 
-        score = max(0, 100 - flip_rate * 150)
+        score = max(8.0, 100 - flip_rate * 100)  # floor at 8, gentler curve
 
         return {
             "dimension": "counterfactual_fairness",
@@ -423,7 +423,7 @@ def run_transparency(df: pd.DataFrame, feature_cols: List[str], y_pred) -> Dict:
                 "dimension": "transparency",
                 "dimension_label": "Model Transparency",
                 "score": round(score, 2),
-                "passed": score >= 60,
+                "passed": score >= 65,
                 "metric_value": round(top_feature_coverage, 4),
                 "threshold": 0.6,
                 "details": {"feature_importance": feature_importance, "top3_coverage": round(top_feature_coverage, 4)}

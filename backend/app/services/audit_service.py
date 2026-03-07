@@ -11,7 +11,7 @@ from typing import Dict, Any
 from sklearn.preprocessing import LabelEncoder
 
 from app.models.models import AuditRun, FairnessResult, ShapResult, LimeResult, AiExplanation, Remediation, ComplianceCheck
-from app.services import bias_engine, claude_service, blockchain_service
+from app.services import bias_engine, groq_service, blockchain_service
 
 
 def sanitize(obj):
@@ -190,7 +190,7 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
         failed_dims = [r["dimension_label"] for r in fairness_results if not r["passed"]]
 
         try:
-            summary = claude_service.generate_summary_explanation(fairness_results, overall_score, risk_level, run_name)
+            summary = groq_service.generate_summary_explanation(fairness_results, overall_score, risk_level, run_name)
         except Exception as e:
             summary = None
 
@@ -210,7 +210,7 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
                 )
 
         try:
-            remediation_plan = claude_service.generate_remediation_explanation(remediations)
+            remediation_plan = groq_service.generate_remediation_explanation(remediations)
         except Exception as e:
             remediation_plan = None
 
@@ -230,7 +230,7 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
             for r in fairness_results:
                 if not r["passed"]:
                     try:
-                        finding = claude_service.generate_bias_finding(r, sensitive_attr)
+                        finding = groq_service.generate_bias_finding(r, sensitive_attr)
                         bias_findings.append(f"[{r['dimension_label']}] {finding}")
                     except:
                         bias_findings.append(
