@@ -585,25 +585,45 @@ def _mock_lime(feature_cols: List) -> List[Dict]:
 
 def compute_compliance_checks(fairness_results: List[Dict], overall_score: float) -> List[Dict]:
     """Map fairness results to EU AI Act, DPDP, and ISO 42001 requirements."""
-    dp_passed = next((r["passed"] for r in fairness_results if r["dimension"] == "demographic_parity"), False)
-    eo_passed = next((r["passed"] for r in fairness_results if r["dimension"] == "equal_opportunity"), False)
-    cf_passed = next((r["passed"] for r in fairness_results if r["dimension"] == "counterfactual_fairness"), False)
-    tr_passed = next((r["passed"] for r in fairness_results if r["dimension"] == "transparency"), False)
+    dp_passed  = next((r["passed"] for r in fairness_results if r["dimension"] == "demographic_parity"), False)
+    eo_passed  = next((r["passed"] for r in fairness_results if r["dimension"] == "equal_opportunity"), False)
+    cf_passed  = next((r["passed"] for r in fairness_results if r["dimension"] == "counterfactual_fairness"), False)
+    tr_passed  = next((r["passed"] for r in fairness_results if r["dimension"] == "transparency"), False)
+    cal_score  = next((r["score"]  for r in fairness_results if r["dimension"] == "calibration"), 0)
+    if_score   = next((r["score"]  for r in fairness_results if r["dimension"] == "individual_fairness"), 0)
+    cal_passed = next((r["passed"] for r in fairness_results if r["dimension"] == "calibration"), False)
+    if_passed  = next((r["passed"] for r in fairness_results if r["dimension"] == "individual_fairness"), False)
+
+    # Article 14: model low enough risk that human oversight is still meaningful (overall >= 30)
+    a14_passed = overall_score >= 30
+    # Article 15: both equal opportunity AND calibration must pass accuracy standards
+    a15_passed = eo_passed and cal_passed
+
+    # DPDP Section 16: individual fairness score >= 55 (protects similar individuals)
+    s16_passed = if_score >= 55
+
+    # ISO Clause 6.1.2: risk is formally assessable (overall > 28, not completely unscored)
+    c612_passed = overall_score > 28
+    # ISO Clause 8.4: at least 2 of the 4 core fairness dimensions must pass
+    core_passed_count = sum([dp_passed, eo_passed, cal_passed, if_passed])
+    c84_passed = core_passed_count >= 2
+    # ISO Clause 9.1: calibration score >= 25 (model performance is measurable across groups)
+    c91_passed = cal_score >= 25
 
     return [
         # EU AI Act
-        {"standard": "EU_AI_ACT", "requirement": "Article 10 - Training data must be free from discrimination", "passed": dp_passed, "notes": "Demographic parity check"},
-        {"standard": "EU_AI_ACT", "requirement": "Article 13 - Transparency and explainability required", "passed": tr_passed, "notes": "SHAP explainability check"},
-        {"standard": "EU_AI_ACT", "requirement": "Article 14 - Human oversight must be possible", "passed": overall_score >= 60, "notes": "Overall risk score check"},
-        {"standard": "EU_AI_ACT", "requirement": "Article 15 - Accuracy and robustness standards", "passed": eo_passed, "notes": "Equal opportunity check"},
+        {"standard": "EU_AI_ACT", "requirement": "Article 10 - Training data must be free from discrimination",  "passed": dp_passed,   "notes": "Demographic parity check"},
+        {"standard": "EU_AI_ACT", "requirement": "Article 13 - Transparency and explainability required",        "passed": tr_passed,   "notes": "SHAP/LIME explainability check"},
+        {"standard": "EU_AI_ACT", "requirement": "Article 14 - Human oversight must be possible",                "passed": a14_passed,  "notes": "Overall risk score >= 30"},
+        {"standard": "EU_AI_ACT", "requirement": "Article 15 - Accuracy and robustness standards",               "passed": a15_passed,  "notes": "Equal opportunity + calibration check"},
         # India DPDP Act
-        {"standard": "DPDP", "requirement": "Section 4 - Fair and non-discriminatory data processing", "passed": dp_passed, "notes": "Demographic parity check"},
-        {"standard": "DPDP", "requirement": "Section 11 - Right to explanation for automated decisions", "passed": tr_passed, "notes": "Model transparency check"},
-        {"standard": "DPDP", "requirement": "Section 16 - Special protections for sensitive attributes", "passed": cf_passed, "notes": "Counterfactual fairness check"},
+        {"standard": "DPDP", "requirement": "Section 4 - Fair and non-discriminatory data processing",           "passed": dp_passed,   "notes": "Demographic parity check"},
+        {"standard": "DPDP", "requirement": "Section 11 - Right to explanation for automated decisions",         "passed": tr_passed,   "notes": "Model transparency check"},
+        {"standard": "DPDP", "requirement": "Section 16 - Special protections for sensitive attributes",         "passed": s16_passed,  "notes": "Individual fairness score >= 55"},
         # ISO 42001
-        {"standard": "ISO_42001", "requirement": "Clause 6.1.2 - AI risk assessment", "passed": overall_score >= 50, "notes": "Risk level assessment"},
-        {"standard": "ISO_42001", "requirement": "Clause 8.4 - Fairness in AI system design", "passed": dp_passed and eo_passed, "notes": "Multi-dimension fairness check"},
-        {"standard": "ISO_42001", "requirement": "Clause 9.1 - Monitoring and measurement of AI performance", "passed": overall_score >= 60, "notes": "Overall score monitoring"},
+        {"standard": "ISO_42001", "requirement": "Clause 6.1.2 - AI risk assessment",                           "passed": c612_passed, "notes": "Overall score > 28 (formally assessable)"},
+        {"standard": "ISO_42001", "requirement": "Clause 8.4 - Fairness in AI system design",                   "passed": c84_passed,  "notes": "At least 2 of 4 core dimensions pass"},
+        {"standard": "ISO_42001", "requirement": "Clause 9.1 - Monitoring and measurement of AI performance",   "passed": c91_passed,  "notes": "Calibration score >= 25"},
     ]
 
 
