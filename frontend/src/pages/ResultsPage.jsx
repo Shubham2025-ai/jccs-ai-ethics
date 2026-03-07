@@ -151,9 +151,9 @@ ${fairness_results?.map(r => {
     <div class="fc-lbl">${r.dimension_label}</div>
     <span class="pb ${r.passed?'pass':'fail'}">${r.passed?'PASS':'FAIL'}</span>
   </div>
-  <div class="fc-score" style="color:${c}">${r.score}</div>
+  <div class="fc-score" style="color:${c}">${Math.round(r.score)}</div>
   <div class="fc-bar"><div class="fc-fill" style="width:${r.score}%;background:${c}"></div></div>
-  ${r.metric_value!=null?`<div class="fc-meta">Disparity: ${(r.metric_value*100).toFixed(1)}% · Threshold: ${(r.threshold*100).toFixed(0)}%</div>`:''}
+  ${r.metric_value!=null?`<div class="fc-meta">Disparity: ${Math.abs(r.metric_value*100).toFixed(1)}% · Threshold: ${(r.threshold*100).toFixed(0)}%</div>`:''}
 </div>`}).join('')||''}
 </div></div>
 ${shap_results?.length > 0 ? `<div class="sec"><div class="sec-title">SHAP Feature Importance (Top 8)</div>
@@ -164,6 +164,12 @@ ${shap_results.slice(0,8).map((s,i) => {
   return `<div class="sr"><div class="sn">${s.feature_name}</div><div class="sb"><div class="sf" style="width:${pct}%;background:${c}"></div></div><div class="sv">${(s.shap_importance*100).toFixed(2)}%</div></div>`
 }).join('')}
 <p style="font-size:11px;color:#999;margin-top:6px">Red = highest impact. These features most influence model decisions.</p></div>` : ''}
+${data.lime_results?.length > 0 ? `<div class="sec"><div class="sec-title">LIME Local Explanations (Top 6)</div>
+${data.lime_results.slice(0,6).map((l,i) => {
+  const c = i===0?'#E94560':i<=2?'#FDCB6E':'#6C63FF'
+  return `<div class="sr"><div class="sn">${l.feature_name}</div><div class="sb"><div class="sf" style="width:${Math.min(100,l.lime_importance*100).toFixed(0)}%;background:${c}"></div></div><div class="sv">${(l.lime_importance*100).toFixed(1)}%</div></div>`
+}).join('')}
+<p style="font-size:11px;color:#999;margin-top:6px">LIME explains individual decisions — why a specific person was approved or rejected.</p></div>` : ''}
 <div class="sec"><div class="sec-title">Regulatory Compliance</div>
 ${Object.entries(compByStd).map(([std,checks]) => {
   const p = checks.filter(c=>c.passed).length
@@ -287,12 +293,24 @@ export default function ResultsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 glass rounded-xl p-1 w-fit">
-        {tabs.map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
-              activeTab === tab ? 'bg-[#6C63FF] text-white' : 'text-gray-400 hover:text-white'
-            }`}>{tab}</button>
+      <div className="flex gap-0.5 glass rounded-xl p-1 w-fit overflow-x-auto">
+        {[
+          { key: 'overview', label: 'Overview', icon: '📊' },
+          { key: 'fairness', label: 'Fairness', icon: '⚖️' },
+          { key: 'explainability', label: 'Explainability', icon: '🧠' },
+          { key: 'compliance', label: 'Compliance', icon: '📋' },
+          { key: 'remediation', label: 'Remediation', icon: '🔧' },
+        ].map(({ key, label, icon }) => (
+          <button key={key} onClick={() => setActiveTab(key)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
+              activeTab === key
+                ? 'text-white shadow-lg'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+            }`}
+            style={activeTab === key ? { background: 'linear-gradient(135deg, #6C63FF, #8B5CF6)' } : {}}>
+            <span className="text-base leading-none">{icon}</span>
+            <span className="hidden sm:inline">{label}</span>
+          </button>
         ))}
       </div>
 
@@ -354,16 +372,25 @@ export default function ResultsPage() {
             </div>
           </div>
 
-          {/* Fairness Snapshot Bar */}
+          {/* Fairness Snapshot */}
           <div>
-            <h3 className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wider">All 6 Fairness Dimensions</h3>
+            <h3 className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wider flex items-center gap-2">
+              All 6 Fairness Dimensions
+              <span className="text-green-400">{fairness_results?.filter(r=>r.passed).length || 0} passed</span>
+              <span className="text-gray-600">·</span>
+              <span className="text-red-400">{fairness_results?.filter(r=>!r.passed).length || 0} failed</span>
+            </h3>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               {fairness_results?.map(r => (
-                <div key={r.dimension} className={`glass rounded-xl p-3 text-center border ${r.passed ? 'border-green-500/20' : 'border-red-500/20'}`}>
-                  <div className="text-xl font-black" style={{ color: SCORE_COLOR(r.score) }}>{r.score}</div>
-                  <div className="text-xs text-gray-500 mt-0.5 leading-tight">{r.dimension_label.split(' ')[0]}</div>
-                  <div className={`text-xs font-bold mt-1 ${r.passed ? 'text-green-400' : 'text-red-400'}`}>
+                <div key={r.dimension}
+                  className={`rounded-xl p-3 text-center border transition-all hover:scale-105 cursor-default ${r.passed ? 'border-green-500/25 bg-green-500/5' : 'border-red-500/25 bg-red-500/5'}`}>
+                  <div className="text-2xl font-black leading-none mb-1" style={{ color: SCORE_COLOR(r.score) }}>{r.score}</div>
+                  <div className="text-xs text-gray-400 leading-tight mb-1.5">{r.dimension_label.replace(' Fairness','').replace('Model ','')}</div>
+                  <div className={`text-xs font-black ${r.passed ? 'text-green-400' : 'text-red-400'}`}>
                     {r.passed ? '✓ PASS' : '✗ FAIL'}
+                  </div>
+                  <div className="mt-2 h-1 rounded-full bg-white/5 overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${r.score}%`, background: SCORE_COLOR(r.score) }} />
                   </div>
                 </div>
               ))}

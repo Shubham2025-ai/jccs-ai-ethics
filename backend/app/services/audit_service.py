@@ -111,8 +111,12 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
         internal_cols = {c for c in df.columns if c.startswith("__")}
         exclude = {label_col, pred_col} | set(sensitive_cols) | internal_cols
         feature_cols = [c for c in df.columns if c not in exclude]
-        # Keep only numeric feature cols
-        feature_cols = [c for c in feature_cols if df[c].dtype != object and str(df[c].dtype) != "category"]
+        # Encode any remaining categorical feature columns so SHAP/LIME can use them
+        for fc in feature_cols:
+            if df[fc].dtype == object or str(df[fc].dtype) == "category":
+                df[fc] = _safe_encode(df[fc])
+        # Now keep all (they are all numeric after encoding)
+        feature_cols = [c for c in feature_cols if c in df.select_dtypes(include=[np.number]).columns]
 
         print(f"   Features:   {feature_cols[:6]}{'...' if len(feature_cols)>6 else ''}")
 
