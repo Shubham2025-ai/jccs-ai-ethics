@@ -94,10 +94,6 @@ function LiveBiasPreview() {
         style={{ background: 'linear-gradient(135deg,#6C63FF,#8B5CF6)', boxShadow: '0 6px 18px rgba(108,99,255,0.5)', fontSize: '10px' }}>
         ✓ Blockchain Certified
       </div>
-      <div className="absolute -bottom-2 -left-2 px-2.5 py-1 rounded-full text-xs font-black text-white whitespace-nowrap"
-        style={{ background: 'linear-gradient(135deg,#E94560,#E17055)', boxShadow: '0 6px 18px rgba(233,69,96,0.4)', fontSize: '10px' }}>
-        5 Violations Found
-      </div>
     </div>
   )
 }
@@ -108,7 +104,7 @@ export default function HomePage() {
     <div>
 
       {/* ══ HERO ═══════════════════════════════════════════════════ */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center px-4 py-6 overflow-hidden">
+      <section className="relative min-h-screen flex flex-col items-center justify-center px-4 pt-2 pb-4 overflow-hidden">
 
         {/* BG */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -127,20 +123,20 @@ export default function HomePage() {
 
             {/* Left */}
             <div className="text-center lg:text-left stagger">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold tracking-widest uppercase mb-5"
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold tracking-widest uppercase mb-4"
                 style={{ background: 'rgba(108,99,255,0.1)', color: '#a78bfa', border: '1px solid rgba(108,99,255,0.2)' }}>
                 <span className="live-dot w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
                 Star Wars Hackathon 2026 · PS9 · AI Ethics
               </div>
 
-              <h1 className="font-black leading-[0.92] tracking-tight mb-4 text-white"
-                style={{ fontSize: 'clamp(2rem, 4.5vw, 3.8rem)' }}>
+              <h1 className="font-black leading-[0.95] tracking-tight mb-3 text-white"
+                style={{ fontSize: 'clamp(2rem, 4.2vw, 3.5rem)' }}>
                 Audit Your AI<br />
                 <span className="gradient-text">Before It Harms</span><br />
                 <span style={{ fontSize: 'clamp(1.4rem,3.5vw,2.8rem)', color: '#6b7280', fontWeight: 600 }}>Someone</span>
               </h1>
 
-              <p className="text-gray-400 text-base leading-relaxed mb-6 max-w-xl mx-auto lg:mx-0">
+              <p className="text-gray-400 text-sm leading-relaxed mb-5 max-w-xl mx-auto lg:mx-0">
                 Upload any AI model's predictions as a CSV.
                 Detect bias across <span className="text-white font-semibold">6 fairness dimensions</span>.
                 Get a blockchain-certified report in{' '}
