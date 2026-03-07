@@ -195,7 +195,7 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
         print(f"🏆 Score: {overall_score}/100 | Risk: {risk_level}")
 
         compliance_checks = bias_engine.compute_compliance_checks(fairness_results, overall_score)
-        remediations      = bias_engine.generate_remediations(fairness_results)
+        remediations      = bias_engine.generate_remediations(fairness_results, run_name)
 
         # ── STEP 9: AI explanations (Groq) ───────────────────────────────────
         print("🤖 AI explanations...")

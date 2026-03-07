@@ -607,54 +607,96 @@ def compute_compliance_checks(fairness_results: List[Dict], overall_score: float
     ]
 
 
-def generate_remediations(fairness_results: List[Dict]) -> List[Dict]:
-    """Generate actionable remediation suggestions for failed dimensions."""
+def _detect_domain(run_name: str) -> str:
+    """Detect domain from dataset name for context-specific remediations."""
+    name = run_name.lower()
+    if any(k in name for k in ["health", "medical", "diagnos", "patient", "clinical"]):
+        return "healthcare"
+    if any(k in name for k in ["credit", "loan", "bank", "financ", "german"]):
+        return "credit"
+    if any(k in name for k in ["compas", "recid", "criminal", "justice", "arrest", "prison"]):
+        return "criminal"
+    if any(k in name for k in ["hire", "hiring", "recruit", "employ", "job", "resume"]):
+        return "hiring"
+    if any(k in name for k in ["income", "adult", "wage", "salary"]):
+        return "income"
+    return "general"
+
+
+# Domain-specific remediation text per fairness dimension
+_REMEDIATIONS = {
+    "demographic_parity": {
+        "healthcare": "Re-balance training data by oversampling underrepresented patient groups (e.g., minority races, female patients). Apply Fairlearn's ExponentiatedGradient with DemographicParity constraint to ensure equal diagnosis rates across demographic groups.",
+        "credit":     "Apply reweighing to assign higher sample weights to underrepresented borrower groups during training. Use Fairlearn's ExponentiatedGradient with DemographicParity constraint to ensure equal credit approval rates across age and gender groups.",
+        "criminal":   "Audit training data for racial overrepresentation in labeled recidivism cases. Apply reweighing or adversarial debiasing to ensure equal risk score distributions across racial groups — this directly addresses the COMPAS-style disparity.",
+        "hiring":     "Audit job description language and historical hiring data for gender/race bias. Apply reweighing so underrepresented groups receive equal consideration. Use Fairlearn's DemographicParity constraint during model retraining.",
+        "income":     "Rebalance training data across gender and race groups using reweighing. Apply Fairlearn's ExponentiatedGradient with DemographicParity to ensure income predictions are not influenced by protected attributes.",
+        "general":    "Apply reweighing technique: assign higher sample weights to underrepresented groups during model training. Alternatively use Fairlearn's ExponentiatedGradient with DemographicParity constraint.",
+    },
+    "equal_opportunity": {
+        "healthcare": "Adjust diagnosis thresholds separately per demographic group to equalize true positive rates. A model that misses disease in female or minority patients at higher rates causes direct patient harm — use Fairlearn's ThresholdOptimizer with EqualizedOdds.",
+        "credit":     "Apply per-group threshold optimization so creditworthy applicants from all demographics are approved at equal rates. Use Fairlearn's ThresholdOptimizer with EqualizedOdds to eliminate the disparity in loan approvals.",
+        "criminal":   "Recalibrate risk score thresholds per racial group to equalize true positive rates. The current model flags minority defendants as high-risk at a disproportionately higher rate — a direct violation of equal treatment principles.",
+        "hiring":     "Apply threshold optimization per gender/race group so qualified candidates are shortlisted at equal rates. Use Fairlearn's ThresholdOptimizer to eliminate the disparity where qualified minority applicants are being rejected.",
+        "income":     "Apply per-group threshold optimization to ensure income predictions above threshold are equally accurate across gender and race. Adjust the decision boundary using Fairlearn's ThresholdOptimizer with EqualizedOdds constraint.",
+        "general":    "Apply threshold optimization: adjust decision threshold separately per group to equalize true positive rates. Use Fairlearn's ThresholdOptimizer with EqualizedOdds constraint.",
+    },
+    "calibration": {
+        "healthcare": "Apply Platt scaling or isotonic regression per demographic group to calibrate predicted probabilities. Miscalibrated diagnosis probabilities in healthcare can lead to incorrect treatment decisions — calibrate separately for each patient subgroup.",
+        "credit":     "Apply isotonic regression or Platt scaling per borrower demographic to ensure predicted default probabilities are equally accurate. Miscalibration means the model is over-confident for some groups and under-confident for others.",
+        "criminal":   "Recalibrate risk scores per racial group using isotonic regression. The current model's predicted recidivism probabilities do not accurately reflect actual reoffending rates equally across groups — a known COMPAS flaw.",
+        "hiring":     "Calibrate predicted hire probability separately per demographic group using Platt scaling. A model that is overconfident about rejecting minority candidates will perpetuate systemic hiring bias even if threshold is adjusted.",
+        "income":     "Apply Platt scaling separately per gender and race group to ensure income prediction probabilities are equally well-calibrated. Miscalibration means the model systematically underestimates income for certain demographic groups.",
+        "general":    "Apply Platt scaling or isotonic regression separately per demographic group to calibrate predicted probabilities. Ensure equal calibration error across groups.",
+    },
+    "counterfactual_fairness": {
+        "healthcare": "Identify and remove proxy features (e.g., zip code, insurance type) that correlate with race or gender. Apply causal graph analysis to ensure diagnosis predictions do not change when only protected attributes are altered.",
+        "credit":     "Remove proxy variables (e.g., postal code, employer type) that correlate with protected attributes. Use causal fairness analysis to ensure credit decisions would remain the same if only the applicant's gender or age were different.",
+        "criminal":   "Eliminate proxy features (e.g., neighborhood, school attended) that encode racial information. Apply causal intervention testing — the recidivism prediction should not change when race is counterfactually altered in the input.",
+        "hiring":     "Remove resume features (e.g., university name, location, extracurriculars) that serve as proxies for race or gender. Apply causal graph analysis to ensure hiring decisions are based purely on job-relevant qualifications.",
+        "income":     "Remove or reduce weight of proxy features (e.g., occupation, native country) that correlate with protected attributes. Apply causal analysis to ensure income predictions do not change when gender or race are counterfactually swapped.",
+        "general":    "Remove or reduce weight of proxy features (e.g., zip code, last name) that correlate with sensitive attributes. Apply causal graph analysis to identify and eliminate indirect discrimination paths.",
+    },
+    "individual_fairness": {
+        "healthcare": "Add a fairness regularization term to ensure similar patients receive similar diagnoses regardless of protected attributes. Define clinical similarity using verified medical features only — exclude race, gender, and insurance type from the similarity metric.",
+        "credit":     "Implement a similarity metric based on financial profile (income, credit history, debt ratio) — not demographics. Add fairness regularization to penalize cases where two applicants with identical financials receive different credit decisions.",
+        "criminal":   "Define defendant similarity based on offense type and prior record only — not race or zip code. Add regularization to penalize inconsistent risk scores for defendants with identical criminal histories but different demographics.",
+        "hiring":     "Define candidate similarity based purely on skills, experience, and qualifications. Add fairness regularization to penalize cases where candidates with identical CVs receive different hiring outcomes based on name or demographic signals.",
+        "income":     "Add a fairness regularization term to penalize inconsistent income predictions for individuals with identical work profiles. Define similarity using years of experience, education, and occupation — exclude gender, race, and native country.",
+        "general":    "Add a fairness regularization term to penalize inconsistent predictions for similar individuals. Use metric learning to define a task-specific similarity metric.",
+    },
+}
+
+
+def generate_remediations(fairness_results: List[Dict], run_name: str = "") -> List[Dict]:
+    """Generate domain-specific actionable remediation suggestions for failed dimensions."""
+    domain = _detect_domain(run_name)
     remediations = []
+
+    _meta = {
+        "demographic_parity":    {"bias_reduction": 60.0, "accuracy_loss": 1.5, "priority": "high"},
+        "equal_opportunity":     {"bias_reduction": 55.0, "accuracy_loss": 2.0, "priority": "high"},
+        "calibration":           {"bias_reduction": 45.0, "accuracy_loss": 0.5, "priority": "medium"},
+        "counterfactual_fairness":{"bias_reduction": 50.0,"accuracy_loss": 3.0, "priority": "high"},
+        "individual_fairness":   {"bias_reduction": 40.0, "accuracy_loss": 2.5, "priority": "medium"},
+    }
+
     for r in fairness_results:
         if not r["passed"]:
             dim = r["dimension"]
-            score = r["score"]
-
-            if dim == "demographic_parity":
-                remediations.append({
-                    "dimension": dim,
-                    "suggestion": "Apply reweighing technique: assign higher sample weights to underrepresented groups during model training. Alternatively use Fairlearn's ExponentiatedGradient with DemographicParity constraint.",
-                    "estimated_bias_reduction": 60.0,
-                    "estimated_accuracy_loss": 1.5,
-                    "priority": "high"
-                })
-            elif dim == "equal_opportunity":
-                remediations.append({
-                    "dimension": dim,
-                    "suggestion": "Apply threshold optimization: adjust decision threshold separately per group to equalize true positive rates. Use Fairlearn's ThresholdOptimizer with EqualizedOdds constraint.",
-                    "estimated_bias_reduction": 55.0,
-                    "estimated_accuracy_loss": 2.0,
-                    "priority": "high"
-                })
-            elif dim == "calibration":
-                remediations.append({
-                    "dimension": dim,
-                    "suggestion": "Apply Platt scaling or isotonic regression separately per demographic group to calibrate predicted probabilities. Ensure equal calibration error across groups.",
-                    "estimated_bias_reduction": 45.0,
-                    "estimated_accuracy_loss": 0.5,
-                    "priority": "medium"
-                })
-            elif dim == "counterfactual_fairness":
-                remediations.append({
-                    "dimension": dim,
-                    "suggestion": "Remove or reduce weight of proxy features (e.g., zip code, last name) that correlate with sensitive attributes. Apply causal graph analysis to identify and eliminate indirect discrimination paths.",
-                    "estimated_bias_reduction": 50.0,
-                    "estimated_accuracy_loss": 3.0,
-                    "priority": "high"
-                })
-            elif dim == "individual_fairness":
-                remediations.append({
-                    "dimension": dim,
-                    "suggestion": "Add a fairness regularization term to penalize inconsistent predictions for similar individuals. Use metric learning to define a task-specific similarity metric.",
-                    "estimated_bias_reduction": 40.0,
-                    "estimated_accuracy_loss": 2.5,
-                    "priority": "medium"
-                })
+            if dim not in _meta:
+                continue
+            meta = _meta[dim]
+            suggestions = _REMEDIATIONS.get(dim, {})
+            suggestion_text = suggestions.get(domain, suggestions.get("general", ""))
+            remediations.append({
+                "dimension": dim,
+                "suggestion": suggestion_text,
+                "estimated_bias_reduction": meta["bias_reduction"],
+                "estimated_accuracy_loss": meta["accuracy_loss"],
+                "priority": meta["priority"],
+                "domain": domain,
+            })
     return remediations
 
 
