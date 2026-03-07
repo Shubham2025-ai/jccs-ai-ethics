@@ -121,7 +121,25 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
 
         # ── STEP 4: Feature columns (for SHAP/LIME) ──────────────────────────
         internal_cols = {c for c in df.columns if c.startswith("__")}
-        exclude = {label_col, pred_col} | set(sensitive_cols) | internal_cols
+
+        # Also exclude any column that looks like a prediction/label/score col
+        # to prevent leakage into SHAP/LIME features (e.g. COMPAS "predicted" col)
+        _leak_keywords = [
+            "predicted", "predict_", "_predict",   # prediction columns
+            "recid", "decile_score", "risk_score",  # COMPAS-specific
+            "proba", "probability",                 # probability outputs
+            "y_pred", "y_true",                     # sklearn convention
+            "approved", "hired", "diagnosed",       # domain outcome cols
+        ]
+        leak_cols = {
+            c for c in df.columns
+            if c not in {label_col, pred_col}   # already handled
+            and any(k in c.lower() for k in _leak_keywords)
+        }
+
+        exclude = {label_col, pred_col} | set(sensitive_cols) | internal_cols | leak_cols
+        if leak_cols:
+            print(f"   Excluded leak cols: {leak_cols}")
         feature_cols = [c for c in df.columns if c not in exclude]
         # Encode any remaining categorical feature columns so SHAP/LIME can use them
         for fc in feature_cols:
