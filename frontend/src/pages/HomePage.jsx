@@ -104,7 +104,7 @@ export default function HomePage() {
     <div>
 
       {/* ══ HERO ═══════════════════════════════════════════════════ */}
-      <section className="relative flex flex-col items-center justify-center px-6 pb-4 overflow-hidden" style={{ minHeight: "calc(100vh - 72px)", paddingTop: "0" }}>
+      <section className="relative flex flex-col items-center justify-start px-6 pt-10 pb-6 overflow-hidden">
 
         {/* BG */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
