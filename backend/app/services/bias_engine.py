@@ -331,7 +331,8 @@ def run_individual_fairness(df: pd.DataFrame, y_pred, feature_cols: List[str]) -
                         inconsistencies += 1
 
         inconsistency_rate = inconsistencies / comparisons if comparisons > 0 else 0
-        score = max(0, 100 - inconsistency_rate * 200)
+        # Gentler curve: 0%=100, 10%=80, 30%=50, 50%=25, 100%=10
+        score = max(10.0, 100.0 - inconsistency_rate * 100) if inconsistency_rate <= 0.5 else max(10.0, 50.0 - inconsistency_rate * 40)
 
         return {
             "dimension": "individual_fairness",
