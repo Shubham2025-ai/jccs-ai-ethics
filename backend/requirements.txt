@@ -10,12 +10,8 @@ scikit-learn==1.4.2
 fairlearn==0.10.0
 aif360==0.6.1
 shap==0.45.1
-lime==0.2.0.1
-groq==0.9.0
-pillow==10.3.0
+groq>=0.11.0
 httpx==0.27.0
 pydantic==2.7.1
 pydantic-settings==2.2.1
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
 psycopg2-binary==2.9.9

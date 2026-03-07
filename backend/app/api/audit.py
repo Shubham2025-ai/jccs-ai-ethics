@@ -67,8 +67,9 @@ async def upload_and_audit(
 
     # Run audit synchronously in a fresh session
     import threading
-    thread = threading.Thread(target=run_audit_sync, args=(audit_id, df, run_name))
+    thread = threading.Thread(target=run_audit_sync, args=(audit_id, df, run_name), daemon=True)
     thread.start()
+    # Don't block request — audit runs in background, client polls /audit/{id}
 
     return {
         "message": "Audit started successfully",
