@@ -10,22 +10,55 @@ const RISK_COLORS = { low: '#00B894', medium: '#FDCB6E', high: '#E17055', critic
 const SCORE_COLOR = (s) => s >= 80 ? '#00B894' : s >= 60 ? '#FDCB6E' : s >= 40 ? '#E17055' : '#E94560'
 const STANDARDS = { EU_AI_ACT: 'EU AI Act 2026', DPDP: 'India DPDP Act', ISO_42001: 'ISO/IEC 42001' }
 
-function ScoreRing({ score }) {
-  const r = 70, c = 2 * Math.PI * r
-  const offset = c - (score / 100) * c
+function ScoreRing({ score, riskLevel }) {
+  const [animated, setAnimated] = useState(0)
+  useEffect(() => {
+    const t = setTimeout(() => setAnimated(score), 100)
+    return () => clearTimeout(t)
+  }, [score])
+
+  const r = 74, c = 2 * Math.PI * r
+  const offset = c - (animated / 100) * c
   const color = SCORE_COLOR(score)
+  const riskLabel = { critical: 'CRITICAL RISK', high: 'HIGH RISK', medium: 'MEDIUM RISK', low: 'LOW RISK' }
+  const riskIcon  = { critical: '🔴', high: '🟠', medium: '🟡', low: '🟢' }
+
   return (
-    <div className="flex flex-col items-center">
-      <svg width="180" height="180" className="score-ring">
-        <circle cx="90" cy="90" r={r} fill="none" stroke="#ffffff10" strokeWidth="12" />
-        <circle cx="90" cy="90" r={r} fill="none" stroke={color} strokeWidth="12"
-          strokeDasharray={c} strokeDashoffset={offset}
-          strokeLinecap="round" transform="rotate(-90 90 90)"
-          style={{ transition: 'stroke-dashoffset 1.2s ease' }} />
-        <text x="90" y="85" textAnchor="middle" fill="white" fontSize="32" fontWeight="bold">{score}</text>
-        <text x="90" y="108" textAnchor="middle" fill="#9ca3af" fontSize="13">/100</text>
-      </svg>
-      <p className="text-sm text-gray-400 -mt-2">Ethics Score</p>
+    <div className="flex flex-col items-center gap-3">
+      {/* Outer glow ring */}
+      <div className="relative" style={{ filter: `drop-shadow(0 0 18px ${color}55)` }}>
+        <svg width="200" height="200">
+          {/* Track */}
+          <circle cx="100" cy="100" r={r} fill="none" stroke="#ffffff08" strokeWidth="14" />
+          {/* Tick marks */}
+          {[...Array(20)].map((_, i) => {
+            const angle = (i / 20) * 2 * Math.PI - Math.PI / 2
+            const x1 = 100 + (r - 8) * Math.cos(angle)
+            const y1 = 100 + (r - 8) * Math.sin(angle)
+            const x2 = 100 + (r + 2) * Math.cos(angle)
+            const y2 = 100 + (r + 2) * Math.sin(angle)
+            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#ffffff15" strokeWidth="1.5" />
+          })}
+          {/* Progress arc */}
+          <circle cx="100" cy="100" r={r} fill="none" stroke={color} strokeWidth="14"
+            strokeDasharray={c} strokeDashoffset={offset}
+            strokeLinecap="round" transform="rotate(-90 100 100)"
+            style={{ transition: 'stroke-dashoffset 1.4s cubic-bezier(0.4,0,0.2,1)' }} />
+          {/* Score number */}
+          <text x="100" y="90" textAnchor="middle" fill="white" fontSize="38" fontWeight="900"
+            style={{ fontFamily: 'inherit' }}>{score}</text>
+          <text x="100" y="112" textAnchor="middle" fill="#6b7280" fontSize="13">/100</text>
+          <text x="100" y="130" textAnchor="middle" fill={color} fontSize="11" fontWeight="700">
+            ETHICS SCORE
+          </text>
+        </svg>
+      </div>
+      {/* Risk badge below ring */}
+      <div className="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-black tracking-wider uppercase"
+        style={{ background: color + '18', border: `1px solid ${color}44`, color }}>
+        <span>{riskIcon[riskLevel] || '🔴'}</span>
+        {riskLabel[riskLevel] || 'CRITICAL RISK'}
+      </div>
     </div>
   )
 }
@@ -324,7 +357,7 @@ export default function ResultsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Score */}
             <div className="glass rounded-2xl p-6 flex flex-col items-center gap-2">
-              <ScoreRing score={score} />
+              <ScoreRing score={score} riskLevel={audit.risk_level} />
               <div className="flex gap-6 mt-1 text-center">
                 <div>
                   <div className="text-xl font-bold text-green-400">{fairness_results?.filter(r => r.passed).length || 0}</div>
