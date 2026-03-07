@@ -121,14 +121,37 @@ export default function UploadPage() {
       setProgress(20)
 
       let attempts = 0
+
+      // Status messages shown at different progress stages
+      const statusMessages = [
+        { at: 20, msg: 'Parsing CSV and detecting columns...' },
+        { at: 30, msg: 'Detecting sensitive attributes...' },
+        { at: 40, msg: 'Running demographic parity analysis...' },
+        { at: 50, msg: 'Computing equal opportunity & calibration...' },
+        { at: 58, msg: 'Running counterfactual fairness tests...' },
+        { at: 65, msg: 'Running SHAP feature importance...' },
+        { at: 72, msg: 'Running LIME local explanations...' },
+        { at: 78, msg: 'Mapping regulatory compliance...' },
+        { at: 83, msg: 'Generating AI ethics summary...' },
+        { at: 88, msg: 'Anchoring to blockchain...' },
+        { at: 91, msg: 'Finalizing audit report...' },
+      ]
+
       const poll = setInterval(async () => {
         attempts++
-        const newProgress = Math.min(95, 20 + attempts * 8)
+        // Smooth exponential easing — never freezes, always moving
+        const newProgress = Math.min(92, 20 + 72 * (1 - Math.exp(-attempts / 18)))
         setProgress(newProgress)
+
+        // Update status message based on current progress
+        const currentMsg = statusMessages.filter(s => newProgress >= s.at).pop()
+        if (currentMsg) setStatusMsg(currentMsg.msg)
+
         try {
           const { data } = await getAudit(auditId)
           if (data.audit.status === 'completed') {
             clearInterval(poll)
+            setStatusMsg('Audit complete!')
             setProgress(100)
             toast.success('Analysis complete!')
             setTimeout(() => navigate(`/results/${auditId}`), 500)
@@ -138,7 +161,12 @@ export default function UploadPage() {
             setLoading(false)
           }
         } catch {}
-        if (attempts > 90) { clearInterval(poll); setLoading(false) }
+        // Timeout after 3 minutes (90 attempts × 2s)
+        if (attempts > 90) {
+          clearInterval(poll)
+          toast.error('Audit timed out. Please try again.')
+          setLoading(false)
+        }
       }, 2000)
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Upload failed')
