@@ -1,231 +1,373 @@
 import { Link } from 'react-router-dom'
-import { Shield, BarChart2, FileCheck, Zap, Globe, ArrowRight, CheckCircle, Lock } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
+import { Shield, Upload, BarChart2, FileCheck, Zap, Lock, Eye, ArrowRight, AlertTriangle, ChevronRight } from 'lucide-react'
 
 const features = [
-  { icon: BarChart2, title: 'Demographic Parity', desc: 'Detects if positive outcomes are equally distributed across gender, age, race, and other protected attributes.', tag: 'Fairlearn' },
-  { icon: Shield, title: 'Counterfactual Fairness', desc: 'Would the outcome change if only the demographic attribute were different? Causal analysis reveals hidden discrimination.', tag: 'Custom Engine' },
-  { icon: Zap, title: 'SHAP + LIME Explainability', desc: 'Global feature attribution via SHAP TreeExplainer. Individual decision explanation via LIME perturbation analysis.', tag: 'XAI' },
-  { icon: FileCheck, title: 'Compliance Mapping', desc: 'Auto-mapped to EU AI Act 2026 Articles 10–15, India DPDP Sections 4/11/16, and ISO/IEC 42001.', tag: 'Regulatory' },
-  { icon: Globe, title: 'AI Plain Language', desc: 'Groq + Llama 3 converts complex bias metrics into executive-readable findings any stakeholder can understand.', tag: 'Groq API' },
-  { icon: Lock, title: 'Blockchain Audit Trail', desc: 'SHA-256 immutable hash anchored via OriginStamp. Your audit certificate cannot be altered post-generation.', tag: 'Blockchain' },
-]
-
-const useCases = [
-  { label: 'Hiring AI', icon: '👥' },
-  { label: 'Loan Approval', icon: '🏦' },
-  { label: 'Healthcare Triage', icon: '🏥' },
-  { label: 'Recidivism Prediction', icon: '⚖️' },
-  { label: 'Credit Scoring', icon: '💳' },
-  { label: 'Insurance Pricing', icon: '📊' },
+  { icon: BarChart2, title: 'Demographic Parity',     desc: 'Equal prediction rates across gender, age, and race.',              color: '#6C63FF', tag: 'Core' },
+  { icon: Eye,       title: 'Equal Opportunity',       desc: 'Equal true positive rates — no group is denied what they deserve.', color: '#00B894', tag: 'Core' },
+  { icon: Shield,    title: 'Counterfactual Fairness', desc: 'Would outcomes change if only demographics were different?',        color: '#E94560', tag: 'Advanced' },
+  { icon: Zap,       title: 'SHAP + LIME',             desc: 'Global & local XAI explanations for every single prediction.',      color: '#FDCB6E', tag: 'XAI' },
+  { icon: FileCheck, title: 'Regulatory Compliance',   desc: 'EU AI Act · India DPDP Act · ISO 42001 auto-mapped.',              color: '#3B82F6', tag: 'Legal' },
+  { icon: Lock,      title: 'Blockchain Certificate',  desc: 'SHA-256 tamper-proof audit trail anchored to Bitcoin.',            color: '#8B5CF6', tag: 'Trust' },
 ]
 
 const realCases = [
-  { org: 'Amazon', year: '2018', desc: 'Hiring AI systematically downgraded women applicants for 4 years before discovery', impact: '75% of rejected were women' },
-  { org: 'COMPAS', year: '2016', desc: 'Recidivism tool flagged Black defendants as high-risk at 2× the rate of white defendants', impact: 'Used in US courts nationwide' },
-  { org: 'Apple Card', year: '2019', desc: 'Credit algorithm offered men up to 20× higher limits than women with same financial profiles', impact: 'Federal investigation launched' },
+  { co: 'Amazon',     year: '2018', what: 'Hiring AI penalised resumes containing the word "women"', impact: '4 years undetected',  color: '#E94560', icon: '🏢' },
+  { co: 'COMPAS',     year: '2016', what: 'Flagged Black defendants as high-risk 2× more than white', impact: 'Still used in courts', color: '#E17055', icon: '⚖️' },
+  { co: 'Apple Card', year: '2019', what: 'Men received credit limits up to 20× higher than women',  impact: 'Federal probe opened', color: '#FDCB6E', icon: '💳' },
 ]
 
-function AnimatedCounter({ target }) {
-  const [count, setCount] = useState(0)
-  const num = parseInt(target)
-  useEffect(() => {
-    if (isNaN(num)) return
-    let start = 0
-    const step = Math.max(1, Math.floor(num / 60))
-    const timer = setInterval(() => {
-      start += step
-      if (start >= num) { setCount(num); clearInterval(timer) }
-      else setCount(start)
-    }, 16)
-    return () => clearInterval(timer)
-  }, [num])
-  return <span>{isNaN(num) ? target : count}</span>
+const steps = [
+  { n: '01', emoji: '📁', title: 'Upload CSV',    desc: 'Drop any AI model predictions file. Zero setup — columns auto-detected across any domain.' },
+  { n: '02', emoji: '🔬', title: 'Deep Analysis', desc: '6 fairness dimensions + SHAP + LIME + Groq AI explanations — all run in parallel under 60s.' },
+  { n: '03', emoji: '🏅', title: 'Get Certified', desc: 'Download a blockchain-anchored PDF audit mapped to EU AI Act, DPDP Act, and ISO 42001.' },
+]
+
+const stats = [
+  { n: '6',    label: 'Fairness Dimensions', color: '#6C63FF' },
+  { n: '<60s', label: 'Full Analysis',       color: '#00B894' },
+  { n: '3',    label: 'Legal Frameworks',    color: '#3B82F6' },
+  { n: '0',    label: 'Code Required',       color: '#E94560' },
+]
+
+const ticker = [
+  'Hiring AI','Loan Approval','Healthcare Triage','Recidivism Scoring',
+  'Credit Risk','Insurance Pricing','University Admissions','Predictive Policing',
+  'Facial Recognition','Resume Screening','Bail Decisions','Medical Diagnosis',
+]
+
+/* ── Live bias preview card ─────────────────────────────────────── */
+function LiveBiasPreview() {
+  const dims = [
+    { label: 'Demographic Parity',  score: 19, color: '#E94560' },
+    { label: 'Equal Opportunity',   score: 10, color: '#E94560' },
+    { label: 'Calibration',         score: 27, color: '#E17055' },
+    { label: 'Individual Fairness', score: 50, color: '#FDCB6E' },
+    { label: 'Counterfactual',      score: 47, color: '#FDCB6E' },
+    { label: 'Transparency',        score: 70, color: '#00B894' },
+  ]
+  const [visible, setVisible] = useState(false)
+  useEffect(() => { const t = setTimeout(() => setVisible(true), 500); return () => clearTimeout(t) }, [])
+
+  return (
+    <div className="relative w-full max-w-sm mx-auto"
+      style={{ filter: 'drop-shadow(0 32px 80px rgba(108,99,255,0.3))' }}>
+      <div className="rounded-3xl overflow-hidden border border-white/10"
+        style={{ background: 'linear-gradient(145deg, #0d0d1a, #12121f)' }}>
+        {/* Header */}
+        <div className="px-5 pt-5 pb-4 border-b border-white/5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Live Audit Preview</span>
+            <span className="px-2 py-0.5 rounded-full text-xs font-black" style={{ background: '#E9456022', color: '#E94560' }}>CRITICAL RISK</span>
+          </div>
+          <div className="flex items-end gap-2 mb-1">
+            <span className="text-5xl font-black" style={{ color: '#E94560' }}>33</span>
+            <span className="text-gray-500 text-lg mb-1">/100</span>
+          </div>
+          <p className="text-xs text-gray-600">adult_income.csv · 1,000 rows · 7 March 2026</p>
+        </div>
+        {/* Dimensions */}
+        <div className="px-5 py-4 space-y-2.5">
+          {dims.map(({ label, score, color }, i) => (
+            <div key={label}>
+              <div className="flex justify-between mb-1">
+                <span className="text-xs text-gray-400">{label}</span>
+                <span className="text-xs font-bold" style={{ color }}>{score}</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-white/5">
+                <div className="h-1.5 rounded-full transition-all duration-1000"
+                  style={{ width: visible ? `${score}%` : '0%', background: color, transitionDelay: `${i * 100 + 600}ms` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* SHA footer */}
+        <div className="px-5 pb-5">
+          <div className="rounded-xl px-3 py-2 text-xs font-mono text-gray-600"
+            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+            SHA-256: 9cac7cd7aa37b740f65e...
+          </div>
+        </div>
+      </div>
+      {/* Floating badges */}
+      <div className="absolute -top-3 -right-4 px-3 py-1.5 rounded-full text-xs font-black text-white whitespace-nowrap"
+        style={{ background: 'linear-gradient(135deg,#6C63FF,#8B5CF6)', boxShadow: '0 8px 24px rgba(108,99,255,0.5)' }}>
+        ✓ Blockchain Certified
+      </div>
+      <div className="absolute -bottom-3 -left-4 px-3 py-1.5 rounded-full text-xs font-black text-white whitespace-nowrap"
+        style={{ background: 'linear-gradient(135deg,#E94560,#E17055)', boxShadow: '0 8px 24px rgba(233,69,96,0.4)' }}>
+        5 Violations Found
+      </div>
+    </div>
+  )
 }
 
+/* ── Main ───────────────────────────────────────────────────────── */
 export default function HomePage() {
   return (
-    <div style={{ '--accent': '#6C63FF', '--accent2': '#E94560' }} className="space-y-24 py-8">
+    <div>
 
-      {/* Hero */}
-      <div className="relative text-center space-y-8 max-w-5xl mx-auto">
-        <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[700px] h-[350px] pointer-events-none overflow-hidden" aria-hidden="true">
-          <div className="absolute top-0 left-1/4 w-80 h-80 rounded-full blur-3xl" style={{ background: 'rgba(108,99,255,0.07)' }} />
-          <div className="absolute top-10 right-1/4 w-60 h-60 rounded-full blur-3xl" style={{ background: 'rgba(233,69,96,0.05)' }} />
+      {/* ══ HERO ═══════════════════════════════════════════════════ */}
+      <section className="relative min-h-[95vh] flex flex-col items-center justify-center px-4 py-20 overflow-hidden">
+
+        {/* BG */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[700px] rounded-full opacity-[0.08] blur-[140px] animate-float"
+            style={{ background: 'radial-gradient(ellipse, #6C63FF 0%, #E94560 60%, transparent 80%)' }} />
+          <div className="absolute -top-20 -left-20 w-96 h-96 rounded-full opacity-[0.05] blur-[80px]" style={{ background: '#6C63FF' }} />
+          <div className="absolute -bottom-20 -right-20 w-96 h-96 rounded-full opacity-[0.04] blur-[80px]" style={{ background: '#E94560' }} />
+          <div className="absolute inset-0 opacity-[0.015]"
+            style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full border border-[#6C63FF]/5 animate-spin-slow" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full border border-[#E94560]/4 animate-spin-slow" style={{ animationDirection: 'reverse', animationDuration: '20s' }} />
         </div>
 
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold tracking-widest uppercase"
-          style={{ background: 'rgba(108,99,255,0.12)', color: '#a78bfa', border: '1px solid rgba(108,99,255,0.25)' }}>
-          <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" style={{ animation: 'pulse 2s infinite' }} />
-          Live · Star Wars Hackathon 2026 · PS9
+        {/* Two-column layout */}
+        <div className="relative z-10 w-full max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+
+            {/* Left */}
+            <div className="text-center lg:text-left stagger">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold tracking-widest uppercase mb-8"
+                style={{ background: 'rgba(108,99,255,0.1)', color: '#a78bfa', border: '1px solid rgba(108,99,255,0.2)' }}>
+                <span className="live-dot w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+                Star Wars Hackathon 2026 · PS9 · AI Ethics
+              </div>
+
+              <h1 className="font-black leading-[0.92] tracking-tight mb-6 text-white"
+                style={{ fontSize: 'clamp(2.8rem, 7vw, 5.5rem)' }}>
+                Audit Your AI<br />
+                <span className="gradient-text">Before It Harms</span><br />
+                <span style={{ fontSize: 'clamp(1.4rem,3.5vw,2.8rem)', color: '#6b7280', fontWeight: 600 }}>Someone</span>
+              </h1>
+
+              <p className="text-gray-400 text-lg leading-relaxed mb-8 max-w-xl mx-auto lg:mx-0">
+                Upload any AI model's predictions as a CSV.
+                Detect bias across <span className="text-white font-semibold">6 fairness dimensions</span>.
+                Get a blockchain-certified report in{' '}
+                <span className="text-white font-semibold">under 60 seconds</span>.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-10">
+                <Link to="/upload"
+                  className="group flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-black text-white text-lg transition-all hover:scale-105 btn-shimmer glow-purple">
+                  <Upload className="w-5 h-5" />
+                  Start Free Audit
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </Link>
+                <Link to="/history"
+                  className="flex items-center justify-center gap-2 px-7 py-4 rounded-2xl font-bold text-gray-300 glass-strong hover:text-white transition-all hover:scale-105">
+                  View Audit History
+                  <ChevronRight className="w-4 h-4" />
+                </Link>
+              </div>
+
+              {/* Stats */}
+              <div className="grid grid-cols-4 gap-2 max-w-sm mx-auto lg:mx-0">
+                {stats.map(({ n, label, color }) => (
+                  <div key={label} className="glass rounded-xl py-3 px-2 text-center border border-white/5">
+                    <div className="text-xl font-black mb-0.5" style={{ color }}>{n}</div>
+                    <div className="text-[9px] text-gray-500 leading-tight">{label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Right — preview card */}
+            <div className="flex justify-center lg:justify-end">
+              <LiveBiasPreview />
+            </div>
+          </div>
         </div>
 
-        <div className="space-y-2">
-          <h1 className="text-6xl md:text-7xl font-black text-white leading-none tracking-tight">
-            The Crash-Test Dummy
-          </h1>
-          <h1 className="text-6xl md:text-7xl font-black leading-none tracking-tight"
-            style={{ background: 'linear-gradient(135deg, #6C63FF 0%, #a78bfa 40%, #E94560 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            for AI Systems
-          </h1>
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 opacity-20">
+          <div className="text-xs text-gray-400 tracking-widest uppercase">Scroll</div>
+          <div className="w-px h-10 bg-gradient-to-b from-white/30 to-transparent" />
         </div>
+      </section>
 
-        <p className="text-gray-400 text-xl max-w-2xl mx-auto leading-relaxed">
-          Upload AI model predictions. Get a certified ethics scorecard in under 60 seconds.
-          Detect bias, explain every decision, ensure full regulatory compliance — zero coding required.
-        </p>
-
-        <div className="flex flex-wrap gap-2 justify-center">
-          {useCases.map(({ label, icon }) => (
-            <span key={label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-gray-300 hover:text-white transition-colors"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              {icon} {label}
+      {/* ══ TICKER ═════════════════════════════════════════════════ */}
+      <div className="border-y border-white/5 py-3 overflow-hidden" style={{ background: 'rgba(233,69,96,0.02)' }}>
+        <div className="marquee-track">
+          {[...ticker, ...ticker].map((t, i) => (
+            <span key={i} className="mx-6 text-xs font-bold text-gray-600 uppercase tracking-widest whitespace-nowrap flex items-center gap-4">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500/40 inline-block flex-shrink-0" />
+              {t}
             </span>
           ))}
         </div>
-
-        <div className="flex gap-3 justify-center flex-wrap">
-          <Link to="/upload"
-            className="group flex items-center gap-2 px-8 py-4 rounded-2xl font-bold text-white transition-all hover:scale-105"
-            style={{ background: 'linear-gradient(135deg, #6C63FF, #8B5CF6)', boxShadow: '0 0 40px rgba(108,99,255,0.35)' }}>
-            Start Free Audit
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </Link>
-          <Link to="/history" className="px-8 py-4 rounded-2xl font-bold text-gray-300 glass hover:text-white transition-all hover:scale-105">
-            View History
-          </Link>
-        </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { value: '6', label: 'Fairness Dimensions', icon: '⚖️' },
-          { value: '60', label: 'Seconds to Results', icon: '⚡', prefix: '<' },
-          { value: '3', label: 'Compliance Standards', icon: '📋' },
-          { value: '0', label: 'Lines of Code Needed', icon: '✨' },
-        ].map(({ value, label, icon, prefix }) => (
-          <div key={label} className="glass rounded-2xl p-6 text-center border border-white/5 hover:border-[#6C63FF]/30 transition-all group cursor-default">
-            <div className="text-2xl mb-2">{icon}</div>
-            <div className="text-4xl font-black mb-1 transition-transform group-hover:scale-110" style={{ color: '#6C63FF' }}>
-              {prefix && <span className="text-2xl">{prefix}</span>}
-              <AnimatedCounter target={value} />
+      {/* ══ REAL CASES ═════════════════════════════════════════════ */}
+      <section className="py-24 px-4">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-14">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest mb-5"
+              style={{ background: 'rgba(233,69,96,0.1)', color: '#f87171', border: '1px solid rgba(233,69,96,0.2)' }}>
+              <AlertTriangle className="w-3 h-3" /> Real World Failures
             </div>
-            <div className="text-xs text-gray-400">{label}</div>
+            <h2 className="text-4xl md:text-5xl font-black text-white leading-tight">
+              Unaudited AI Already<br />
+              <span style={{ color: '#E94560' }}>Caused Real Harm</span>
+            </h2>
+            <p className="text-gray-500 mt-4 max-w-lg mx-auto text-sm leading-relaxed">
+              These weren't hypothetical. They happened at scale, undetected for years. JCCS would have caught every one.
+            </p>
           </div>
-        ))}
-      </div>
 
-      {/* Real Incidents */}
-      <div className="rounded-2xl p-6 border" style={{ background: 'rgba(233,69,96,0.04)', borderColor: 'rgba(233,69,96,0.18)' }}>
-        <p className="text-xs font-black uppercase tracking-widest mb-5 flex items-center gap-2" style={{ color: '#f87171' }}>
-          <span>⚠️</span> Real AI bias incidents JCCS would have caught
-        </p>
-        <div className="grid md:grid-cols-3 gap-4">
-          {realCases.map(({ org, year, desc, impact }) => (
-            <div key={org} className="rounded-xl p-4" style={{ background: 'rgba(0,0,0,0.35)' }}>
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-black text-white">{org}</span>
-                <span className="text-xs text-gray-600">{year}</span>
-              </div>
-              <p className="text-xs text-gray-400 leading-relaxed mb-3">{desc}</p>
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(233,69,96,0.15)', color: '#f87171' }}>
-                {impact}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* How it works */}
-      <div>
-        <div className="text-center mb-12">
-          <h2 className="text-4xl font-black text-white mb-2">How It Works</h2>
-          <p className="text-gray-500 text-sm">From raw predictions to certified compliance report in three steps</p>
-        </div>
-        <div className="grid md:grid-cols-3 gap-6">
-          {[
-            { step: '01', title: 'Upload CSV', desc: 'Drag & drop your AI model predictions. Auto-detects label, prediction, and sensitive attribute columns from any domain — hiring, loans, healthcare, criminal justice.', color: '#6C63FF' },
-            { step: '02', title: 'Analyse', desc: '6 fairness dimensions run simultaneously using Fairlearn + AIF360 + SHAP + LIME. Groq AI writes plain-English findings. Takes under 60 seconds.', color: '#8B5CF6' },
-            { step: '03', title: 'Certify', desc: 'Download a PDF compliance report mapped to EU AI Act, India DPDP Act, and ISO 42001. Blockchain-anchored certificate that cannot be tampered.', color: '#E94560' },
-          ].map(({ step, title, desc, color }) => (
-            <div key={step} className="glass rounded-2xl p-7 border border-white/5 hover:border-[#6C63FF]/25 transition-all">
-              <div className="text-7xl font-black leading-none mb-5 select-none" style={{ color, opacity: 0.2 }}>{step}</div>
-              <h3 className="font-black text-white text-xl mb-3">{title}</h3>
-              <p className="text-gray-400 text-sm leading-relaxed">{desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Features */}
-      <div>
-        <div className="text-center mb-12">
-          <h2 className="text-4xl font-black text-white mb-2">What We Audit</h2>
-          <p className="text-gray-500 text-sm">6 dimensions covering every angle of algorithmic fairness</p>
-        </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {features.map(({ icon: Icon, title, desc, tag }) => (
-            <div key={title} className="glass rounded-2xl p-5 border border-white/5 hover:border-[#6C63FF]/30 transition-all group">
-              <div className="flex items-start justify-between mb-4">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform"
-                  style={{ background: 'rgba(108,99,255,0.15)' }}>
-                  <Icon className="w-5 h-5" style={{ color: '#6C63FF' }} />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {realCases.map(({ co, year, what, impact, color, icon }) => (
+              <div key={co} className="relative rounded-3xl p-6 overflow-hidden group card-hover"
+                style={{ background: `${color}06`, border: `1px solid ${color}20` }}>
+                <div className="absolute top-0 right-0 w-40 h-40 rounded-full opacity-5 blur-3xl group-hover:opacity-10 transition-opacity"
+                  style={{ background: color }} />
+                <div className="flex items-start justify-between mb-5">
+                  <span className="text-4xl">{icon}</span>
+                  <span className="text-xs font-black px-2 py-1 rounded-lg" style={{ background: color + '18', color }}>{year}</span>
                 </div>
-                <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(108,99,255,0.1)', color: '#a78bfa' }}>{tag}</span>
-              </div>
-              <h3 className="font-bold text-white mb-2">{title}</h3>
-              <p className="text-xs text-gray-400 leading-relaxed">{desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Compliance */}
-      <div className="glass rounded-2xl p-8 border border-[#6C63FF]/15">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-black text-white mb-2">Compliance Standards Covered</h2>
-          <p className="text-gray-500 text-sm">Every audit auto-generates a report certified against all three frameworks</p>
-        </div>
-        <div className="grid md:grid-cols-3 gap-4">
-          {[
-            { name: 'EU AI Act 2026', articles: 'Articles 10, 13, 14, 15', desc: 'Mandatory for high-risk AI in Europe. Non-compliance = up to €30M fine or 6% of global turnover.', color: '#3B82F6', flag: '🇪🇺' },
-            { name: 'India DPDP Act', articles: 'Sections 4, 11, 16', desc: 'Digital Personal Data Protection fairness requirements. India-specific standard for AI fairness.', color: '#10B981', flag: '🇮🇳' },
-            { name: 'ISO/IEC 42001', articles: 'Clauses 6.1.2, 8.4, 9.1', desc: 'International AI Management System standard. The global benchmark for responsible AI governance.', color: '#F59E0B', flag: '🌐' },
-          ].map(({ name, articles, desc, color, flag }) => (
-            <div key={name} className="rounded-2xl p-5" style={{ background: color + '0D', border: `1px solid ${color}28` }}>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-2xl">{flag}</span>
-                <div>
-                  <div className="font-black text-white text-sm">{name}</div>
-                  <div className="text-xs font-mono mt-0.5" style={{ color }}>{articles}</div>
+                <h3 className="font-black text-white text-lg mb-2">{co}</h3>
+                <p className="text-gray-400 text-sm mb-4 leading-relaxed">{what}</p>
+                <div className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full w-fit mb-4"
+                  style={{ background: color + '15', color }}>
+                  ⚠ {impact}
+                </div>
+                <div className="text-xs text-gray-600 flex items-center gap-1.5 pt-3 border-t border-white/5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" />
+                  JCCS detects this in &lt;60 seconds
                 </div>
               </div>
-              <p className="text-xs text-gray-400 leading-relaxed mb-3">{desc}</p>
-              <div className="flex items-center gap-1">
-                <CheckCircle className="w-3 h-3 flex-shrink-0" style={{ color }} />
-                <span className="text-xs" style={{ color }}>Auto-mapped in every report</span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══ HOW IT WORKS ═══════════════════════════════════════════ */}
+      <section className="py-24 px-4" style={{ background: 'rgba(108,99,255,0.02)' }}>
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-16">
+            <div className="text-xs font-bold text-[#6C63FF] uppercase tracking-widest mb-3">Simple as 1-2-3</div>
+            <h2 className="text-4xl md:text-5xl font-black text-white">How JCCS Works</h2>
+            <p className="text-gray-500 mt-3 text-sm">No ML expertise. No code. No configuration.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
+            <div className="hidden md:block absolute top-14 left-1/3 right-1/3 h-px"
+              style={{ background: 'linear-gradient(90deg, transparent, rgba(108,99,255,0.4), transparent)' }} />
+            {steps.map(({ n, emoji, title, desc }) => (
+              <div key={n} className="glass rounded-3xl p-7 border border-white/5 card-hover relative overflow-hidden group">
+                <div className="absolute top-0 right-0 font-black opacity-[0.04] text-[120px] leading-none select-none pointer-events-none">{n}</div>
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-3xl"
+                  style={{ background: 'radial-gradient(circle at top left, rgba(108,99,255,0.07), transparent 60%)' }} />
+                <div className="relative">
+                  <div className="text-4xl mb-5">{emoji}</div>
+                  <div className="text-xs font-black text-[#6C63FF] tracking-widest uppercase mb-2">{n}</div>
+                  <h3 className="font-black text-white text-xl mb-3">{title}</h3>
+                  <p className="text-gray-400 text-sm leading-relaxed">{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══ 6 DIMENSIONS ═══════════════════════════════════════════ */}
+      <section className="py-24 px-4">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-16">
+            <div className="text-xs font-bold text-[#6C63FF] uppercase tracking-widest mb-3">Full Coverage</div>
+            <h2 className="text-4xl md:text-5xl font-black text-white">6 Dimensions of Fairness</h2>
+            <p className="text-gray-500 mt-3 text-sm">Every audit checks all six — automatically, in parallel</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {features.map(({ icon: Icon, title, desc, color, tag }) => (
+              <div key={title} className="glass rounded-2xl p-6 border border-white/5 card-hover group relative overflow-hidden">
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                  style={{ background: `radial-gradient(circle at top left, ${color}0a, transparent 60%)` }} />
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left"
+                  style={{ background: `linear-gradient(90deg, ${color}, transparent)` }} />
+                <div className="flex items-start justify-between mb-4">
+                  <div className="w-11 h-11 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"
+                    style={{ background: color + '18', boxShadow: `0 0 20px ${color}22` }}>
+                    <Icon className="w-5 h-5" style={{ color }} />
+                  </div>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide"
+                    style={{ background: color + '15', color }}>{tag}</span>
+                </div>
+                <h3 className="font-black text-white text-base mb-2">{title}</h3>
+                <p className="text-xs text-gray-400 leading-relaxed">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══ COMPLIANCE ═════════════════════════════════════════════ */}
+      <section className="py-24 px-4" style={{ background: 'rgba(108,99,255,0.02)' }}>
+        <div className="max-w-5xl mx-auto">
+          <div className="glass rounded-3xl p-10 border border-[#6C63FF]/10 relative overflow-hidden">
+            <div className="absolute inset-0 pointer-events-none"
+              style={{ background: 'radial-gradient(ellipse at top right, rgba(108,99,255,0.07), transparent 60%)' }} />
+            <div className="relative">
+              <div className="text-center mb-10">
+                <div className="text-xs font-bold text-[#6C63FF] uppercase tracking-widest mb-3">Regulatory Ready</div>
+                <h2 className="text-3xl md:text-4xl font-black text-white">3 Frameworks. 1 Upload.</h2>
+                <p className="text-gray-500 text-sm mt-3">Every audit auto-mapped to all three standards simultaneously</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                {[
+                  { flag: '🇪🇺', name: 'EU AI Act 2026',  sub: 'Articles 10, 13, 14, 15',    desc: 'Mandatory for all high-risk AI in Europe',           color: '#3B82F6', badge: 'In force 2026' },
+                  { flag: '🇮🇳', name: 'India DPDP Act',  sub: 'Sections 4, 11, 16',          desc: 'Digital Personal Data Protection — India specific',  color: '#10B981', badge: 'Active 2025–26' },
+                  { flag: '🌐', name: 'ISO/IEC 42001',     sub: 'Clauses 6.1.2, 8.4, 9.1',    desc: 'International AI Management System standard',        color: '#F59E0B', badge: 'Global' },
+                ].map(({ flag, name, sub, desc, color, badge }) => (
+                  <div key={name} className="rounded-2xl p-5 card-hover"
+                    style={{ background: color + '08', border: `1px solid ${color}25` }}>
+                    <div className="flex items-start justify-between mb-3">
+                      <span className="text-2xl">{flag}</span>
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ background: color + '18', color }}>{badge}</span>
+                    </div>
+                    <div className="font-black text-white text-base mb-1">{name}</div>
+                    <div className="text-xs font-bold mb-2 font-mono" style={{ color }}>{sub}</div>
+                    <div className="text-xs text-gray-500 leading-relaxed">{desc}</div>
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* Final CTA */}
-      <div className="relative text-center space-y-4 py-6">
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
-          <div className="w-96 h-32 rounded-full blur-3xl" style={{ background: 'rgba(108,99,255,0.08)' }} />
+      {/* ══ FINAL CTA ══════════════════════════════════════════════ */}
+      <section className="py-28 px-4 text-center relative overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] rounded-full opacity-[0.08] blur-[100px]"
+            style={{ background: 'radial-gradient(ellipse, #6C63FF, #E94560)' }} />
         </div>
-        <h2 className="text-4xl font-black text-white relative">Ready to audit your AI?</h2>
-        <p className="text-gray-400 relative">Under 60 seconds. No account required. No coding needed.</p>
-        <div className="relative">
+        <div className="relative max-w-2xl mx-auto">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest mb-8"
+            style={{ background: 'rgba(0,184,148,0.1)', color: '#00B894', border: '1px solid rgba(0,184,148,0.2)' }}>
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            Free · No Signup · No Code Required
+          </div>
+          <h2 className="text-4xl md:text-6xl font-black text-white mb-6 leading-tight">
+            Is Your AI<br /><span className="gradient-text">Actually Fair?</span>
+          </h2>
+          <p className="text-gray-400 text-lg mb-10 leading-relaxed">
+            Find out in 60 seconds. Upload your model predictions<br className="hidden md:block" />
+            and get a court-ready bias audit report instantly.
+          </p>
           <Link to="/upload"
-            className="inline-flex items-center gap-2 px-10 py-4 rounded-2xl font-black text-white text-lg transition-all hover:scale-105"
-            style={{ background: 'linear-gradient(135deg, #6C63FF, #8B5CF6)', boxShadow: '0 0 50px rgba(108,99,255,0.35)' }}>
-            Upload CSV Now <ArrowRight className="w-5 h-5" />
+            className="inline-flex items-center gap-3 px-12 py-5 rounded-2xl font-black text-white text-xl transition-all hover:scale-105 btn-shimmer glow-purple"
+            style={{ letterSpacing: '-0.02em' }}>
+            <Upload className="w-6 h-6" />
+            Audit Your AI Now
+            <ArrowRight className="w-6 h-6" />
           </Link>
+          <p className="text-gray-600 text-xs mt-8">
+            JCCS · Jedi Code Compliance System · Star Wars Hackathon 2026 · PS9
+          </p>
         </div>
-      </div>
+      </section>
+
     </div>
   )
 }
