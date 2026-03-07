@@ -184,14 +184,12 @@ ${remediations.slice(0,5).map(r=>`<div class="rc">
 <div class="rt">${r.suggestion}</div>
 <div class="rs"><span>📉 Bias reduction: ~${r.estimated_bias_reduction}%</span><span>⚡ Accuracy loss: ~${r.estimated_accuracy_loss}%</span></div>
 </div>`).join('')}</div>` : ''}
-<div style="margin-top:14px;padding-top:12px;border-top:1px solid #eee">
-<div style="font-size:11px;font-weight:700;color:#6C63FF;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">⛓ Immutable Audit Trail (SHA-256)</div>
-<div style="background:#f5f5f5;border-radius:6px;padding:7px 10px;font-family:monospace;font-size:10px;color:#666;word-break:break-all">${audit.hash_sha256||'Computing...'}</div>
-<div style="display:flex;justify-content:space-between;margin-top:8px;font-size:10px;color:#aaa">
-<span>JCCS · Jedi Code Compliance System · Star Wars Hackathon 2026 · PS9</span>
-<span>Audit #${id} · ${new Date().toLocaleDateString()}</span>
+<div style="margin-top:10px;padding-top:8px;border-top:1px solid #eee;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+<span style="font-size:10px;font-weight:700;color:#6C63FF;white-space:nowrap">⛓ SHA-256</span>
+<span style="font-family:monospace;font-size:9.5px;color:#888;word-break:break-all;flex:1">${audit.hash_sha256||'Computing...'}</span>
+<span style="font-size:9px;color:#bbb;white-space:nowrap">Audit #${id} · ${new Date().toLocaleDateString()}</span>
 </div>
-</div>
+<div style="margin-top:4px;font-size:9px;color:#aaa;text-align:center">JCCS · Jedi Code Compliance System · Star Wars Hackathon 2026 · PS9</div>
 </div></body></html>`
 
   const win = window.open('', '_blank')
