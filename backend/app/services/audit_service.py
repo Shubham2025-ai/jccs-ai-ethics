@@ -28,12 +28,17 @@ def sanitize(obj):
 def _safe_binarize(series: pd.Series, name: str) -> np.ndarray:
     """Convert any series to binary 0/1 array — never crashes."""
     s = series.copy()
-    # Fill nulls
-    if s.dtype == object or str(s.dtype) == "category":
+    dtype_str = str(s.dtype).lower()
+    # Fill nulls — handle object, category, string, StringDtype (pandas 2.x)
+    if s.dtype == object or dtype_str in ("category", "string") or "str" in dtype_str:
         s = s.fillna(s.mode()[0] if len(s.mode()) > 0 else "unknown")
         s = LabelEncoder().fit_transform(s.astype(str))
     else:
-        s = s.fillna(s.median())
+        try:
+            s = s.fillna(s.median())
+        except TypeError:
+            s = s.fillna(s.mode()[0] if len(s.mode()) > 0 else 0)
+            s = LabelEncoder().fit_transform(s.astype(str))
         s = np.array(s, dtype=float)
 
     s = np.array(s, dtype=float)
@@ -47,10 +52,17 @@ def _safe_binarize(series: pd.Series, name: str) -> np.ndarray:
 def _safe_encode(series: pd.Series) -> pd.Series:
     """Encode categorical series to numeric — never crashes."""
     s = series.copy()
-    if s.dtype == object or str(s.dtype) == "category":
+    dtype_str = str(s.dtype).lower()
+    # Handle object, category, string, and StringDtype (pandas 2.x)
+    if s.dtype == object or dtype_str in ("category", "string") or "str" in dtype_str:
         s = s.fillna(s.mode()[0] if len(s.mode()) > 0 else "unknown")
         return pd.Series(LabelEncoder().fit_transform(s.astype(str)), index=series.index)
-    return s.fillna(s.median())
+    try:
+        return s.fillna(s.median())
+    except TypeError:
+        # Fallback for any unexpected dtype
+        s = s.fillna(s.mode()[0] if len(s.mode()) > 0 else 0)
+        return pd.Series(LabelEncoder().fit_transform(s.astype(str)), index=series.index)
 
 
 def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -> Dict[str, Any]:
