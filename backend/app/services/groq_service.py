@@ -2,6 +2,7 @@
 AI Explanation Service — Uses Groq (FREE) with Llama 3
 Get free API key at: https://console.groq.com
 """
+import re
 from groq import Groq
 from typing import List, Dict
 from app.core.config import settings
@@ -21,7 +22,13 @@ def _ask_groq(prompt: str, max_tokens: int = 400) -> str:
             max_tokens=max_tokens,
             temperature=0.5
         )
-        return response.choices[0].message.content.strip()
+        text = response.choices[0].message.content.strip()
+        # Strip markdown formatting that renders as literal text in PDF/UI
+        text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)   # **bold** → plain
+        text = re.sub(r'\*(.*?)\*', r'\1', text)         # *italic* → plain
+        text = re.sub(r'^#+\s+', '', text, flags=re.MULTILINE)   # ## headers
+        text = re.sub(r'^[-•]\s+', '', text, flags=re.MULTILINE) # bullet points
+        return text.strip()
     except Exception as e:
         return None  # Fallback handled by each function
 
@@ -53,7 +60,7 @@ Write exactly 3 short paragraphs:
 2. Key bias issues found (if any) — which groups are affected
 3. Whether this model is ready for deployment
 
-Keep it under 180 words. Be direct."""
+Keep it under 180 words. Be direct. Do not use markdown formatting like **bold** or ## headers."""
 
     result = _ask_groq(prompt, 400)
     if result:
@@ -92,7 +99,7 @@ Explain:
 2. Who is being disadvantaged
 3. Why this is a serious problem
 
-Be specific and non-technical. No jargon."""
+Be specific and non-technical. No jargon. Do not use markdown formatting."""
 
     result_text = _ask_groq(prompt, 200)
     if result_text:
@@ -128,7 +135,7 @@ Write a 3-5 sentence action plan that:
 2. Explains the approach in business terms
 3. Sets realistic expectations on accuracy vs fairness trade-offs
 
-Keep it under 130 words."""
+Keep it under 130 words. Do not use markdown formatting like **bold** or bullet points."""
 
     result = _ask_groq(prompt, 250)
     if result:
