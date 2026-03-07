@@ -50,7 +50,7 @@ function LiveBiasPreview() {
   useEffect(() => { const t = setTimeout(() => setVisible(true), 500); return () => clearTimeout(t) }, [])
 
   return (
-    <div className="relative w-full max-w-xs mx-auto"
+    <div className="relative w-full mx-auto" style={{ maxWidth: "280px" }}
       style={{ filter: 'drop-shadow(0 32px 80px rgba(108,99,255,0.3))' }}>
       <div className="rounded-3xl overflow-hidden border border-white/10"
         style={{ background: 'linear-gradient(145deg, #0d0d1a, #12121f)' }}>
@@ -67,7 +67,7 @@ function LiveBiasPreview() {
           <p className="text-xs text-gray-600">adult_income.csv · 1,000 rows · 7 March 2026</p>
         </div>
         {/* Dimensions */}
-        <div className="px-4 py-3 space-y-2">
+        <div className="px-4 py-2 space-y-1.5">
           {dims.map(({ label, score, color }, i) => (
             <div key={label}>
               <div className="flex justify-between mb-1">
@@ -104,7 +104,7 @@ export default function HomePage() {
     <div>
 
       {/* ══ HERO ═══════════════════════════════════════════════════ */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center px-4 pt-2 pb-4 overflow-hidden">
+      <section className="relative flex flex-col items-center justify-center px-4 pt-4 pb-6 overflow-hidden" style={{ minHeight: "calc(100vh - 72px)" }}>
 
         {/* BG */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -119,24 +119,24 @@ export default function HomePage() {
 
         {/* Two-column layout */}
         <div className="relative z-10 w-full max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
 
             {/* Left */}
             <div className="text-center lg:text-left stagger">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold tracking-widest uppercase mb-4"
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold tracking-widest uppercase mb-3"
                 style={{ background: 'rgba(108,99,255,0.1)', color: '#a78bfa', border: '1px solid rgba(108,99,255,0.2)' }}>
                 <span className="live-dot w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
                 Star Wars Hackathon 2026 · PS9 · AI Ethics
               </div>
 
-              <h1 className="font-black leading-[0.95] tracking-tight mb-3 text-white"
-                style={{ fontSize: 'clamp(2rem, 4.2vw, 3.5rem)' }}>
+              <h1 className="font-black leading-[0.95] tracking-tight mb-2 text-white"
+                style={{ fontSize: 'clamp(1.8rem, 3.8vw, 3.2rem)' }}>
                 Audit Your AI<br />
                 <span className="gradient-text">Before It Harms</span><br />
                 <span style={{ fontSize: 'clamp(1.4rem,3.5vw,2.8rem)', color: '#6b7280', fontWeight: 600 }}>Someone</span>
               </h1>
 
-              <p className="text-gray-400 text-sm leading-relaxed mb-5 max-w-xl mx-auto lg:mx-0">
+              <p className="text-gray-400 text-sm leading-relaxed mb-4 max-w-xl mx-auto lg:mx-0">
                 Upload any AI model's predictions as a CSV.
                 Detect bias across <span className="text-white font-semibold">6 fairness dimensions</span>.
                 Get a blockchain-certified report in{' '}
@@ -175,10 +175,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 opacity-20">
-          <div className="text-xs text-gray-400 tracking-widest uppercase">Scroll</div>
-          <div className="w-px h-10 bg-gradient-to-b from-white/30 to-transparent" />
-        </div>
+
       </section>
 
       {/* ══ TICKER ═════════════════════════════════════════════════ */}
