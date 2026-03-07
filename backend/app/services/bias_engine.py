@@ -215,9 +215,11 @@ def score_from_disparity(disparity: float) -> float:
     elif disparity <= 0.10:
         return 80.0 - (disparity - 0.05) * 400
     elif disparity <= 0.20:
-        return 60.0 - (disparity - 0.10) * 300
+        return 60.0 - (disparity - 0.10) * 200
+    elif disparity <= 0.50:
+        return max(20.0, 40.0 - (disparity - 0.20) * 60)
     else:
-        return max(0.0, 30.0 - (disparity - 0.20) * 150)
+        return max(5.0, 20.0 - (disparity - 0.50) * 20)
 
 
 def run_demographic_parity(y_true, y_pred, sensitive_col) -> Dict:
