@@ -50,7 +50,7 @@ function LiveBiasPreview() {
   useEffect(() => { const t = setTimeout(() => setVisible(true), 500); return () => clearTimeout(t) }, [])
 
   return (
-    <div className="relative w-full mx-auto" style={{ maxWidth: "280px" }}
+    <div className="relative mx-auto" style={{ width: "260px" }}
       style={{ filter: 'drop-shadow(0 32px 80px rgba(108,99,255,0.3))' }}>
       <div className="rounded-3xl overflow-hidden border border-white/10"
         style={{ background: 'linear-gradient(145deg, #0d0d1a, #12121f)' }}>
@@ -104,7 +104,7 @@ export default function HomePage() {
     <div>
 
       {/* ══ HERO ═══════════════════════════════════════════════════ */}
-      <section className="relative flex flex-col items-center justify-center px-4 pt-4 pb-6 overflow-hidden" style={{ minHeight: "calc(100vh - 72px)" }}>
+      <section className="relative flex flex-col items-center justify-center px-6 pb-4 overflow-hidden" style={{ minHeight: "calc(100vh - 72px)", paddingTop: "0" }}>
 
         {/* BG */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -169,7 +169,7 @@ export default function HomePage() {
             </div>
 
             {/* Right — preview card */}
-            <div className="flex justify-center lg:justify-end">
+            <div className="flex justify-center lg:justify-end" style={{ maxWidth: "320px", marginLeft: "auto" }}>
               <LiveBiasPreview />
             </div>
           </div>
