@@ -184,11 +184,14 @@ ${remediations.slice(0,5).map(r=>`<div class="rc">
 <div class="rt">${r.suggestion}</div>
 <div class="rs"><span>📉 Bias reduction: ~${r.estimated_bias_reduction}%</span><span>⚡ Accuracy loss: ~${r.estimated_accuracy_loss}%</span></div>
 </div>`).join('')}</div>` : ''}
-<div class="sec"><div class="sec-title">Immutable Audit Trail (SHA-256)</div>
-<div class="hash">${audit.hash_sha256||'Computing...'}</div>
-<p style="font-size:11px;color:#999;margin-top:6px">This hash uniquely identifies the dataset. Any modification would produce a different hash.</p>
+<div style="margin-top:14px;padding-top:12px;border-top:1px solid #eee">
+<div style="font-size:11px;font-weight:700;color:#6C63FF;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">⛓ Immutable Audit Trail (SHA-256)</div>
+<div style="background:#f5f5f5;border-radius:6px;padding:7px 10px;font-family:monospace;font-size:10px;color:#666;word-break:break-all">${audit.hash_sha256||'Computing...'}</div>
+<div style="display:flex;justify-content:space-between;margin-top:8px;font-size:10px;color:#aaa">
+<span>JCCS · Jedi Code Compliance System · Star Wars Hackathon 2026 · PS9</span>
+<span>Audit #${id} · ${new Date().toLocaleDateString()}</span>
 </div>
-<div class="footer"><span>JCCS · Jedi Code Compliance System · Star Wars Hackathon 2026 · PS9</span><span>Audit #${id} · ${new Date().toLocaleDateString()}</span></div>
+</div>
 </div></body></html>`
 
   const win = window.open('', '_blank')
