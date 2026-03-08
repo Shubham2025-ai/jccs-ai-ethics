@@ -4,7 +4,13 @@
 
 > *"The Force will be with you, always — but your AI model? That needs an audit."*
 
-🌐 **Live Demo:** [jccs-ai-ethics.vercel.app](https://jccs-ai-ethics.vercel.app) &nbsp;|&nbsp; 🔗 **Backend API:** [jccs-ai-ethics.onrender.com](https://jccs-ai-ethics.onrender.com/health)
+🌐 **Live Demo:** [jccs-ai-ethics.vercel.app](https://jccs-ai-ethics.vercel.app) &nbsp;|&nbsp; 🔗 **Backend API:** [jccs-ai-ethics.onrender.com](https://jccs-ai-ethics.onrender.com/health) &nbsp;|&nbsp; 🎬 **Demo Video:** [youtu.be/-OjU0iuaYBY](https://youtu.be/-OjU0iuaYBY)
+
+---
+
+## 🎬 Demo Video
+
+▶️ **[Watch 4-Minute Demo on YouTube](https://youtu.be/-OjU0iuaYBY)**
 
 ---
 
@@ -30,13 +36,13 @@ AI systems are making life-altering decisions in hiring, healthcare, criminal ju
 | Calibration | ✅ | Confidence-outcome alignment (AIF360) |
 | Privacy Preservation | ✅ | PII anonymization, no raw data stored |
 | Transparency / Interpretability | ✅ | SHAP (global) + LIME (local) XAI |
-| Show WHY model made decisions | ✅ | Per-prediction feature attribution |
+| Show WHY model made specific decisions | ✅ | Per-prediction LIME feature attribution |
 | Feature Importance Visualization | ✅ | Interactive SHAP bar + LIME charts |
 | Visual Scorecard (Pass / Fail) | ✅ | Per-criterion compliance cards |
 | Bias Instances Highlighted | ✅ | Top-3 most discriminatory features flagged |
 | Recommendations for Improvement | ✅ | Domain-specific remediation per violation |
 
-### Bonus Points — Both Achieved ⭐
+### Bonus Points — Both Achieved ⭐⭐
 
 | Bonus | Status | How |
 |---|---|---|
@@ -46,18 +52,12 @@ AI systems are making life-altering decisions in hiring, healthcare, criminal ju
 ### Beyond the Spec
 
 - **Blockchain Anchoring** — SHA-256 hash anchored to Bitcoin via OriginStamp
-- **Groq AI (LLaMA 3)** — Plain-English explanations of every bias finding
-- **3 Regulatory Frameworks** — EU AI Act, India DPDP Act, ISO/IEC 42001
+- **Groq AI (LLaMA 3 70B)** — Plain-English explanations of every bias finding
+- **3 Regulatory Frameworks** — EU AI Act 2026, India DPDP Act, ISO/IEC 42001
 - **PDF Certificate** — Downloadable court-ready audit report
 - **Counterfactual Fairness** — Would outcome change if only demographics changed?
 - **Individual Fairness** — Similar people must receive similar outcomes
 - **Multi-Model Comparison Page** — Side-by-side fairness scores, dimension bars, compliance matrix, trophy for fairest model
-
----
-
-## 🎬 Demo Video
-
-▶️ **[Watch 4-Minute Demo](#)** *(replace with YouTube/Drive link)*
 
 ---
 
@@ -261,7 +261,7 @@ jccs-ai-ethics/
 
 | | |
 |---|---|
-| **Team Name** | JCCS |
+| **Team Name** | print("WIN") |
 | **Problem Statement** | PS9 — Jedi Code Compliance System |
 | **Hackathon** | Bluebit Hackathon 4.0 by MLSC PCCOE |
 | **Track** | Ethical AI |
