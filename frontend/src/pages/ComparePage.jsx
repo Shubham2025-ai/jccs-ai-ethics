@@ -18,24 +18,75 @@ const DIM_COLOR = (score) => {
 }
 
 /* ── Autorun pipeline trigger ─────────────────────────────────────────────── */
+const DEMO_DATASETS = [
+  { name: 'adult_income.csv',        label: 'Adult Income',      url: 'https://raw.githubusercontent.com/Shubham2025-ai/jccs-ai-ethics/main/datasets/adult_income.csv' },
+  { name: 'german_credit.csv',       label: 'German Credit',     url: 'https://raw.githubusercontent.com/Shubham2025-ai/jccs-ai-ethics/main/datasets/german_credit.csv' },
+  { name: 'compas_recidivism.csv',   label: 'COMPAS',            url: 'https://raw.githubusercontent.com/Shubham2025-ai/jccs-ai-ethics/main/datasets/compas_recidivism.csv' },
+  { name: 'healthcare_diagnosis.csv',label: 'Healthcare',        url: 'https://raw.githubusercontent.com/Shubham2025-ai/jccs-ai-ethics/main/datasets/healthcare_diagnosis.csv' },
+]
+
 function AutorunCard({ onComplete }) {
-  const [state, setState] = useState('idle') // idle | running | done | error
+  const [state, setState] = useState('idle') // idle | fetching | running | done | error
   const [progress, setProgress] = useState([])
-  const [auditIds, setAuditIds] = useState([])
+  const [statusMsg, setStatusMsg] = useState('')
 
   const triggerAutorun = async () => {
-    setState('running')
-    setProgress([])
+    setState('fetching')
+    setProgress(DEMO_DATASETS.map(d => ({ dataset: d.label, status: 'fetching' })))
+    setStatusMsg('Fetching demo datasets...')
+
     try {
-      const res = await fetch(`${API}/api/audit/autorun`)
+      // Step 1: Fetch all 4 CSVs from GitHub in parallel
+      const blobs = await Promise.all(
+        DEMO_DATASETS.map(async (d) => {
+          const res = await fetch(d.url)
+          if (!res.ok) throw new Error(`Failed to fetch ${d.name}`)
+          const blob = await res.blob()
+          return new File([blob], d.name, { type: 'text/csv' })
+        })
+      )
+
+      setStatusMsg('Launching parallel audits...')
+      setProgress(DEMO_DATASETS.map(d => ({ dataset: d.label, status: 'processing' })))
+
+      // Step 2: Send all to /api/audit/batch
+      const formData = new FormData()
+      blobs.forEach(f => formData.append('files', f))
+      const res = await fetch(`${API}/api/audit/batch`, { method: 'POST', body: formData })
       const data = await res.json()
-      const ids = data.launched.map(l => l.audit_id)
-      setAuditIds(ids)
-      setProgress(data.launched.map(l => ({ ...l, status: 'processing' })))
-      pollUntilDone(ids)
+
+      setState('running')
+      pollUntilDone(data.audit_ids)
     } catch (e) {
+      console.error(e)
       setState('error')
+      setStatusMsg('Error: ' + e.message)
     }
+  }
+
+  const pollUntilDone = (ids) => {
+    let attempts = 0
+    const interval = setInterval(async () => {
+      attempts++
+      if (attempts > 120) { clearInterval(interval); setState('error'); return }
+      try {
+        const results = await Promise.all(
+          ids.map(id => fetch(`${API}/api/audit/${id}`).then(r => r.json()))
+        )
+        setProgress(results.map(r => ({
+          dataset: r.run_name,
+          status: r.status,
+          score: r.overall_score,
+          risk: r.risk_level,
+        })))
+        const allDone = results.every(r => r.status === 'completed' || r.status === 'failed')
+        if (allDone) {
+          clearInterval(interval)
+          setState('done')
+          onComplete(ids)
+        }
+      } catch (e) { /* keep polling */ }
+    }, 3000)
   }
 
   const pollUntilDone = (ids) => {
@@ -74,14 +125,17 @@ function AutorunCard({ onComplete }) {
           <p className="text-gray-500 text-xs mt-1">
             Runs all 4 demo datasets simultaneously — no upload needed
           </p>
+          {statusMsg && <p className="text-purple-400 text-xs mt-1 font-bold">{statusMsg}</p>}
         </div>
         <button
           onClick={triggerAutorun}
-          disabled={state === 'running'}
+          disabled={state === 'fetching' || state === 'running'}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-white text-sm transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ background: 'linear-gradient(135deg, #6C63FF, #8B5CF6)' }}
         >
-          {state === 'running'
+          {state === 'fetching'
+            ? <><RefreshCw className="w-4 h-4 animate-spin" /> Fetching...</>
+            : state === 'running'
             ? <><RefreshCw className="w-4 h-4 animate-spin" /> Running...</>
             : <><Zap className="w-4 h-4" /> Run Pipeline</>
           }
