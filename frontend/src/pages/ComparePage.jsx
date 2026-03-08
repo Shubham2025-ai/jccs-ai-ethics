@@ -89,32 +89,6 @@ function AutorunCard({ onComplete }) {
     }, 3000)
   }
 
-  const pollUntilDone = (ids) => {
-    let attempts = 0
-    const interval = setInterval(async () => {
-      attempts++
-      if (attempts > 120) { clearInterval(interval); setState('error'); return }
-      try {
-        const results = await Promise.all(
-          ids.map(id => fetch(`${API}/api/audit/${id}`).then(r => r.json()))
-        )
-        setProgress(results.map(r => ({
-          audit_id: r.id,
-          dataset: r.run_name,
-          status: r.status,
-          score: r.overall_score,
-          risk: r.risk_level,
-        })))
-        const allDone = results.every(r => r.status === 'completed' || r.status === 'failed')
-        if (allDone) {
-          clearInterval(interval)
-          setState('done')
-          onComplete(ids)
-        }
-      } catch (e) { /* keep polling */ }
-    }, 3000)
-  }
-
   return (
     <div className="glass rounded-3xl p-6 border border-[#6C63FF]/20 mb-6">
       <div className="flex items-center justify-between mb-4">

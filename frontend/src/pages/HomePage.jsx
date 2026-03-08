@@ -50,8 +50,7 @@ function LiveBiasPreview() {
   useEffect(() => { const t = setTimeout(() => setVisible(true), 500); return () => clearTimeout(t) }, [])
 
   return (
-    <div className="relative mx-auto" style={{ width: "260px" }}
-      style={{ filter: 'drop-shadow(0 32px 80px rgba(108,99,255,0.3))' }}>
+    <div className="relative mx-auto" style={{ width: "260px", filter: 'drop-shadow(0 32px 80px rgba(108,99,255,0.3))' }}>
       <div className="rounded-3xl overflow-hidden border border-white/10"
         style={{ background: 'linear-gradient(145deg, #0d0d1a, #12121f)' }}>
         {/* Header */}
