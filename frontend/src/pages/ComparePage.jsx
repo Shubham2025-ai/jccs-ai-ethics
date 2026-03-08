@@ -56,7 +56,7 @@ function AutorunCard({ onComplete }) {
       const data = await res.json()
 
       setState('running')
-      pollUntilDone(data.audit_ids)
+      setTimeout(() => pollUntilDone(data.audit_ids), 3000)
     } catch (e) {
       console.error(e)
       setState('error')
@@ -74,12 +74,12 @@ function AutorunCard({ onComplete }) {
           ids.map(id => fetch(`${API}/audit/${id}`).then(r => r.json()))
         )
         setProgress(results.map(r => ({
-          dataset: r.run_name,
-          status: r.status,
-          score: r.overall_score,
-          risk: r.risk_level,
+          dataset: r.audit?.run_name,
+          status: r.audit?.status,
+          score: r.audit?.overall_score,
+          risk: r.audit?.risk_level,
         })))
-        const allDone = results.every(r => r.status === 'completed' || r.status === 'failed')
+        const allDone = results.every(r => r.audit?.status === 'completed' || r.audit?.status === 'failed')
         if (allDone) {
           clearInterval(interval)
           setState('done')
