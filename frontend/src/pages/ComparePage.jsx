@@ -71,7 +71,7 @@ function AutorunCard({ onComplete }) {
       if (attempts > 120) { clearInterval(interval); setState('error'); return }
       try {
         const results = await Promise.all(
-          ids.map(id => fetch(`${API}/api/audit/${id}`).then(r => r.json()))
+          ids.map(id => fetch(`${API}/audit/${id}`).then(r => r.json()))
         )
         setProgress(results.map(r => ({
           dataset: r.run_name,
