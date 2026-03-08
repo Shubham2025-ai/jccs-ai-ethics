@@ -10,6 +10,7 @@ import os
 from app.core.config import settings
 from app.core.database import engine, Base, test_connection
 from app.api.audit import router as audit_router
+from app.routers.batch_audit import router as batch_audit_router
 
 
 @asynccontextmanager
@@ -51,6 +52,7 @@ app.add_middleware(
 
 # Register routes
 app.include_router(audit_router)
+app.include_router(batch_audit_router)
 
 
 @app.get("/")

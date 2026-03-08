@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Shield, Upload, Clock, Home } from 'lucide-react'
+import { Shield, Upload, Clock, Home, GitCompare } from 'lucide-react'
 
 export default function Navbar() {
   const { pathname } = useLocation()
@@ -7,6 +7,7 @@ export default function Navbar() {
     { to: '/', label: 'Home', icon: Home },
     { to: '/upload', label: 'New Audit', icon: Upload },
     { to: '/history', label: 'History', icon: Clock },
+    { to: '/compare', label: 'Compare', icon: GitCompare },
   ]
   return (
     <nav className="sticky top-0 z-50 border-b border-white/5"

@@ -6,6 +6,7 @@ import HomePage from './pages/HomePage'
 import UploadPage from './pages/UploadPage'
 import ResultsPage from './pages/ResultsPage'
 import HistoryPage from './pages/HistoryPage'
+import ComparePage from './pages/ComparePage'
 import { healthCheck } from './utils/api'
 
 function BackendStatus() {
@@ -63,6 +64,7 @@ export default function App() {
           <Route path="/upload"      element={<UploadPage />} />
           <Route path="/results/:id" element={<ResultsPage />} />
           <Route path="/history"     element={<HistoryPage />} />
+          <Route path="/compare"     element={<ComparePage />} />
         </Routes>
       </main>
     </div>
