@@ -16,7 +16,7 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 import pandas as pd
 
-from app.database import get_db
+from app.core.database import get_db
 from app.models.models import AuditRun
 from app.services import audit_service
 
@@ -80,7 +80,7 @@ async def batch_upload(
         audit_ids.append(audit.id)
 
         # Launch background thread
-        from app.database import SessionLocal
+        from app.core.database import SessionLocal
         t = threading.Thread(
             target=_run_in_thread,
             args=(SessionLocal, audit.id, df, run_name),
@@ -239,7 +239,7 @@ def autorun_pipeline(db: Session = Depends(get_db)):
         db.commit()
         db.refresh(audit)
 
-        from app.database import SessionLocal
+        from app.core.database import SessionLocal
         t = threading.Thread(
             target=_run_in_thread,
             args=(SessionLocal, audit.id, df, run_name),
