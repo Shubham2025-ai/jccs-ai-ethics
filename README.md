@@ -1,7 +1,5 @@
 # 🛡️ JCCS — Jedi Code Compliance System
 
-
-
 **Ethical AI Auditing Framework — Bluebit Hackathon 4.0 | PS9**
 
 > *"The Force will be with you, always — but your AI model? That needs an audit."*
@@ -38,12 +36,12 @@ AI systems are making life-altering decisions in hiring, healthcare, criminal ju
 | Bias Instances Highlighted | ✅ | Top-3 most discriminatory features flagged |
 | Recommendations for Improvement | ✅ | Domain-specific remediation per violation |
 
-### Bonus Points — Both Achieved
+### Bonus Points — Both Achieved ⭐
 
-| Bonus | Status |
-|---|---|
-| Test multiple AI models simultaneously | ✅ 4 datasets audited independently |
-| Automated testing pipeline | ✅ Upload → auto-detect → audit → report |
+| Bonus | Status | How |
+|---|---|---|
+| Test multiple AI models simultaneously | ✅ | Upload 2–10 CSVs → all audited in parallel threads simultaneously |
+| Automated testing pipeline | ✅ | Click "Run Pipeline" → auto-fetches all 4 datasets → audits all in parallel — zero manual steps |
 
 ### Beyond the Spec
 
@@ -53,6 +51,7 @@ AI systems are making life-altering decisions in hiring, healthcare, criminal ju
 - **PDF Certificate** — Downloadable court-ready audit report
 - **Counterfactual Fairness** — Would outcome change if only demographics changed?
 - **Individual Fairness** — Similar people must receive similar outcomes
+- **Multi-Model Comparison Page** — Side-by-side fairness scores, dimension bars, compliance matrix, trophy for fairest model
 
 ---
 
@@ -72,12 +71,14 @@ AI systems are making life-altering decisions in hiring, healthcare, criminal ju
 │  ├── HomePage    — Live bias preview card            │
 │  ├── UploadPage  — CSV upload + progress bar         │
 │  ├── ResultsPage — Score ring, SHAP/LIME, compliance │
-│  └── HistoryPage — Audit trail + blockchain proof    │
+│  ├── HistoryPage — Audit trail + blockchain proof    │
+│  └── ComparePage — Multi-model comparison (BONUS)   │
 ├─────────────────────────────────────────────────────┤
-│  Backend  FastAPI + Python 3.10                      │
+│  Backend  FastAPI + Python 3.11                      │
 │  ├── bias_engine.py      — 6 fairness dimensions     │
 │  ├── audit_service.py    — SHAP + LIME pipeline      │
 │  ├── groq_service.py     — AI summaries (LLaMA 3)   │
+│  ├── batch_audit.py      — Parallel multi-model audit│
 │  └── blockchain_service.py — SHA-256 + OriginStamp  │
 ├─────────────────────────────────────────────────────┤
 │  Database  PostgreSQL (prod) / SQLite (local)        │
@@ -125,7 +126,7 @@ AI systems are making life-altering decisions in hiring, healthcare, criminal ju
 
 | File | Domain | Sensitive Attributes | Rows |
 |---|---|---|---|
-| `adult_income.csv` | Income / Employment | sex, race | 1,000 |
+| `adult_income.csv` | Income / Employment | sex, race, age | 1,000 |
 | `german_credit.csv` | Credit Scoring | sex, age | 1,000 |
 | `compas_recidivism.csv` | Criminal Justice | race, sex | 1,000 |
 | `healthcare_diagnosis.csv` | Healthcare | age, gender, ethnicity | 1,000 |
@@ -163,7 +164,7 @@ npm run dev
 
 Open **http://localhost:5173**
 
-> **Note:** Backend on Render free tier takes ~50 seconds to wake. Visit `/health` first.
+> **Note:** Backend on Render free tier takes ~50 seconds to wake. Visit `/health` first before demo.
 
 ---
 
@@ -210,10 +211,13 @@ Different results per dataset proves real analysis (not hardcoded):
 | Endpoint | Method | Description |
 |---|---|---|
 | `/health` | GET | Health check / wake backend |
-| `/api/audit/upload` | POST | Upload CSV, trigger audit |
-| `/api/audit/{id}` | GET | Fetch audit results |
-| `/api/audit/history` | GET | List all past audits |
-| `/api/audit/{id}/pdf` | GET | Download PDF report |
+| `/audit/upload` | POST | Upload CSV, trigger audit |
+| `/audit/{id}` | GET | Fetch audit results |
+| `/audits/list` | GET | List all past audits |
+| `/api/audit/batch` | POST | Upload 2–10 CSVs, run all in parallel |
+| `/api/audit/batch/{id}` | GET | Poll batch progress |
+| `/api/audit/compare` | GET | Compare multiple audits side-by-side |
+| `/api/audit/autorun` | GET | Automated pipeline trigger |
 
 ---
 
@@ -224,23 +228,25 @@ jccs-ai-ethics/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py
+│   │   ├── api/
+│   │   │   └── audit.py
+│   │   ├── routers/
+│   │   │   └── batch_audit.py        ← Bonus: parallel multi-model
 │   │   ├── models/
-│   │   ├── routers/audit.py
 │   │   └── services/
 │   │       ├── audit_service.py
 │   │       ├── bias_engine.py
 │   │       ├── groq_service.py
 │   │       └── blockchain_service.py
-│   ├── database.py
 │   └── requirements.txt
 ├── frontend/
-│   ├── src/
-│   │   └── pages/
-│   │       ├── HomePage.jsx
-│   │       ├── UploadPage.jsx
-│   │       ├── ResultsPage.jsx
-│   │       └── HistoryPage.jsx
-│   └── package.json
+│   └── src/
+│       └── pages/
+│           ├── HomePage.jsx
+│           ├── UploadPage.jsx
+│           ├── ResultsPage.jsx
+│           ├── HistoryPage.jsx
+│           └── ComparePage.jsx       ← Bonus: multi-model comparison
 ├── datasets/
 │   ├── adult_income.csv
 │   ├── german_credit.csv
