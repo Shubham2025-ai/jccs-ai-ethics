@@ -308,18 +308,20 @@ export default function ResultsPage() {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button onClick={handleShare}
+            aria-label={copied ? 'Link copied to clipboard' : 'Copy share link'}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all hover:scale-105"
             style={{ background: 'rgba(108,99,255,0.15)', color: '#a78bfa', border: '1px solid rgba(108,99,255,0.3)' }}>
-            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            {copied ? <Check className="w-4 h-4" aria-hidden="true" /> : <Copy className="w-4 h-4" aria-hidden="true" />}
             {copied ? 'Copied!' : 'Share Link'}
           </button>
           <button
             onClick={() => generatePDF(data, id)}
             disabled={!data || data?.audit?.status !== 'completed'}
+            aria-label={!data || data?.audit?.status !== 'completed' ? 'Export PDF — audit still processing' : 'Export audit PDF report'}
             title={!data || data?.audit?.status !== 'completed' ? 'Audit still processing...' : 'Export PDF report'}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
             style={{ background: 'linear-gradient(135deg, #6C63FF, #8B5CF6)', boxShadow: '0 0 20px rgba(108,99,255,0.3)' }}>
-            <Download className="w-4 h-4" />
+            <Download className="w-4 h-4" aria-hidden="true" />
             Export PDF
           </button>
           <div className="px-3 py-1 rounded-full text-xs font-bold uppercase"
@@ -339,6 +341,9 @@ export default function ResultsPage() {
           { key: 'remediation', label: 'Remediation', icon: '🔧' },
         ].map(({ key, label, icon }) => (
           <button key={key} onClick={() => setActiveTab(key)}
+            aria-label={label}
+            aria-selected={activeTab === key}
+            role="tab"
             className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
               activeTab === key
                 ? 'text-white shadow-lg'
