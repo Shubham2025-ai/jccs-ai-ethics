@@ -68,11 +68,9 @@ async def batch_upload(
         # Create audit record
         audit = AuditRun(
             run_name=run_name,
-            filename=file.filename,
+            file_name=file.filename,
             row_count=len(df),
-            col_count=len(df.columns),
             status="pending",
-            created_at=datetime.utcnow(),
         )
         db.add(audit)
         db.commit()
@@ -229,11 +227,11 @@ def autorun_pipeline(db: Session = Depends(get_db)):
 
         audit = AuditRun(
             run_name=run_name,
-            filename=fname,
+            file_name=fname,
             row_count=len(df),
-            col_count=len(df.columns),
+            
             status="pending",
-            created_at=datetime.utcnow(),
+            
         )
         db.add(audit)
         db.commit()
