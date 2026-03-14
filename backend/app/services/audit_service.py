@@ -237,7 +237,7 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
         print(f"🏆 Score: {overall_score}/100 | Risk: {risk_level}")
 
         # Compute proxy model performance metrics
-        model_metrics = bias_engine.compute_model_metrics(y_true, y_pred, model_type=model_type)
+        model_metrics = bias_engine.compute_model_metrics(y_true, y_pred, model_type=model_type, df=df, feature_cols=feature_cols)
         print(f"📊 Model metrics: {model_metrics}")
 
         compliance_checks = bias_engine.compute_compliance_checks(fairness_results, overall_score)
