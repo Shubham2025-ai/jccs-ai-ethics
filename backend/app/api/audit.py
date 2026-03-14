@@ -142,6 +142,7 @@ def get_audit_result(audit_id: int, db: Session = Depends(get_db)):
             "remediation_plan": next((e.content for e in explanations if e.explanation_type == "remediation"), ""),
             "bias_findings": [e.content for e in explanations if e.explanation_type == "bias_finding"]
         },
+        "model_metrics": __import__('json').loads(next((e.content for e in explanations if e.explanation_type == "model_metrics"), "{}")),
         "remediations": [
             {
                 "dimension": r.dimension,

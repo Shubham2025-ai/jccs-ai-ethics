@@ -236,6 +236,10 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
         overall_score, risk_level = bias_engine.compute_overall_score(fairness_results, model_type=model_type)
         print(f"🏆 Score: {overall_score}/100 | Risk: {risk_level}")
 
+        # Compute proxy model performance metrics
+        model_metrics = bias_engine.compute_model_metrics(y_true, y_pred, model_type=model_type)
+        print(f"📊 Model metrics: {model_metrics}")
+
         compliance_checks = bias_engine.compute_compliance_checks(fairness_results, overall_score)
         remediations      = bias_engine.generate_remediations(fairness_results, run_name)
 
@@ -349,6 +353,7 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
 
         db.add(AiExplanation(audit_id=audit_id, explanation_type="summary",     content=str(summary)))
         db.add(AiExplanation(audit_id=audit_id, explanation_type="remediation", content=str(remediation_plan)))
+        db.add(AiExplanation(audit_id=audit_id, explanation_type="model_metrics", content=json.dumps(sanitize(model_metrics))))
         for finding in bias_findings:
             db.add(AiExplanation(audit_id=audit_id, explanation_type="bias_finding", content=str(finding)))
         db.commit()
@@ -376,7 +381,12 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
 
         print(f"🎉 Audit #{audit_id} COMPLETE — {overall_score}/100 | {risk_level} risk")
         print(f"{'='*55}\n")
-        return {"audit_id": audit_id, "overall_score": overall_score, "risk_level": risk_level}
+        return {
+            "audit_id": audit_id,
+            "overall_score": overall_score,
+            "risk_level": risk_level,
+            "model_metrics": model_metrics
+        }
 
     except Exception as e:
         import traceback

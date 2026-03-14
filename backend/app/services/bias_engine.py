@@ -10,6 +10,10 @@ from typing import Dict, List, Tuple, Optional
 from sklearn.preprocessing import LabelEncoder
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score,
+    f1_score, roc_auc_score, confusion_matrix
+)
 
 # Fairness
 try:
@@ -31,6 +35,69 @@ except ImportError:
 
 
 FAIRNESS_THRESHOLD = 0.1  # Max allowed disparity (classification default)
+
+
+def compute_model_metrics(y_true, y_pred, model_type: str = "classification") -> Dict:
+    """
+    Compute standard ML model performance metrics for the proxy model.
+    Returns accuracy, precision, recall, F1, AUC-ROC and confusion matrix.
+    These are metrics of the PROXY RandomForest model — not the original AI model.
+    """
+    try:
+        y_true = np.array(y_true)
+        y_pred = np.array(y_pred)
+
+        if model_type == "regression":
+            # For regression use continuous metrics
+            from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+            mae  = round(float(mean_absolute_error(y_true, y_pred)), 4)
+            rmse = round(float(np.sqrt(mean_squared_error(y_true, y_pred))), 4)
+            r2   = round(float(r2_score(y_true, y_pred)), 4)
+            return {
+                "model_type": "regression",
+                "mae": mae,
+                "rmse": rmse,
+                "r2_score": r2,
+                "note": "Proxy RandomForestRegressor metrics on uploaded CSV data"
+            }
+
+        # Classification metrics
+        accuracy  = round(float(accuracy_score(y_true, y_pred)), 4)
+        precision = round(float(precision_score(y_true, y_pred, zero_division=0)), 4)
+        recall    = round(float(recall_score(y_true, y_pred, zero_division=0)), 4)
+        f1        = round(float(f1_score(y_true, y_pred, zero_division=0)), 4)
+
+        # AUC-ROC only if both classes present
+        try:
+            auc = round(float(roc_auc_score(y_true, y_pred)), 4)
+        except Exception:
+            auc = None
+
+        # Confusion matrix
+        cm = confusion_matrix(y_true, y_pred).tolist()
+        tn, fp, fn, tp = cm[0][0], cm[0][1], cm[1][0], cm[1][1]
+
+        return {
+            "model_type": model_type,
+            "accuracy":   accuracy,
+            "precision":  precision,
+            "recall":     recall,
+            "f1_score":   f1,
+            "auc_roc":    auc,
+            "confusion_matrix": {
+                "true_negative":  tn,
+                "false_positive": fp,
+                "false_negative": fn,
+                "true_positive":  tp,
+            },
+            "note": "Proxy RandomForestClassifier metrics — reflects decision patterns of the audited model"
+        }
+    except Exception as e:
+        return {
+            "model_type": model_type,
+            "error": str(e),
+            "note": "Could not compute model metrics"
+        }
 
 # Per model type thresholds — regression is stricter, ranking is more lenient on calibration
 THRESHOLDS = {
