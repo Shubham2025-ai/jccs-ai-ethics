@@ -237,6 +237,93 @@ function BatchUploadCard({ onComplete }) {
   )
 }
 
+/* ── Pipeline Report ───────────────────────────────────────────────────────── */
+const PASS_THRESHOLD = 60
+
+function PipelineReport({ audits }) {
+  const results = audits.map(a => ({
+    name: a.run_name,
+    score: Math.round(a.overall_score || 0),
+    risk: a.risk_level,
+    passed: (a.overall_score || 0) >= PASS_THRESHOLD,
+  }))
+  const passCount = results.filter(r => r.passed).length
+  const allPassed = passCount === results.length
+  const nonePassed = passCount === 0
+
+  return (
+    <div className="glass rounded-3xl p-6 border"
+      style={{ borderColor: allPassed ? 'rgba(0,184,148,0.3)' : nonePassed ? 'rgba(233,69,96,0.3)' : 'rgba(253,203,110,0.3)' }}>
+
+      {/* Pipeline header */}
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <div className="text-xs font-black uppercase tracking-widest mb-1"
+            style={{ color: allPassed ? '#00B894' : nonePassed ? '#E94560' : '#FDCB6E' }}>
+            ⚡ Automated Pipeline Report
+          </div>
+          <h3 className="text-white font-black text-lg">Deployment Gate Analysis</h3>
+          <p className="text-gray-500 text-xs mt-0.5">Models must score ≥ {PASS_THRESHOLD}/100 to be safe for deployment</p>
+        </div>
+        <div className="text-right">
+          <div className="text-3xl font-black" style={{ color: allPassed ? '#00B894' : nonePassed ? '#E94560' : '#FDCB6E' }}>
+            {passCount}/{results.length}
+          </div>
+          <div className="text-xs text-gray-500">models passed</div>
+        </div>
+      </div>
+
+      {/* Per-model results */}
+      <div className="space-y-3 mb-5">
+        {results.map((r, i) => (
+          <div key={i} className="flex items-center gap-4 p-3 rounded-xl"
+            style={{ background: r.passed ? 'rgba(0,184,148,0.05)' : 'rgba(233,69,96,0.05)',
+                     border: `1px solid ${r.passed ? 'rgba(0,184,148,0.15)' : 'rgba(233,69,96,0.15)'}` }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ background: r.passed ? 'rgba(0,184,148,0.15)' : 'rgba(233,69,96,0.15)' }}>
+              <span className="text-sm">{r.passed ? '✅' : '❌'}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-white truncate">{r.name}</div>
+              <div className="text-xs text-gray-500 capitalize">{r.risk} risk</div>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <div className="text-lg font-black" style={{ color: r.passed ? '#00B894' : '#E94560' }}>
+                {r.score}/100
+              </div>
+              <div className="text-xs font-black px-2 py-0.5 rounded-full"
+                style={{ background: r.passed ? 'rgba(0,184,148,0.15)' : 'rgba(233,69,96,0.15)',
+                         color: r.passed ? '#00B894' : '#E94560' }}>
+                {r.passed ? 'APPROVED' : 'BLOCKED'}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Pipeline verdict */}
+      <div className="rounded-2xl p-4 text-center"
+        style={{ background: allPassed ? 'rgba(0,184,148,0.08)' : nonePassed ? 'rgba(233,69,96,0.08)' : 'rgba(253,203,110,0.08)',
+                 border: `1px solid ${allPassed ? 'rgba(0,184,148,0.2)' : nonePassed ? 'rgba(233,69,96,0.2)' : 'rgba(253,203,110,0.2)'}` }}>
+        <div className="text-2xl mb-1">
+          {allPassed ? '🟢' : nonePassed ? '🔴' : '🟡'}
+        </div>
+        <div className="font-black text-white text-lg mb-1">
+          Pipeline {allPassed ? 'PASSED' : nonePassed ? 'FAILED' : 'PARTIAL'}
+        </div>
+        <div className="text-xs text-gray-400 leading-relaxed">
+          {allPassed
+            ? `All ${results.length} models meet the fairness threshold. Safe to deploy.`
+            : nonePassed
+            ? `All ${results.length} models blocked. Significant bias detected — do not deploy without remediation.`
+            : `${passCount} of ${results.length} models passed. Deploy only approved models. Fix blocked models before deployment.`
+          }
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ── Comparison table ─────────────────────────────────────────────────────── */
 function ComparisonTable({ auditIds }) {
   const [data, setData] = useState(null)
@@ -265,6 +352,9 @@ function ComparisonTable({ auditIds }) {
 
   return (
     <div className="space-y-6">
+
+      {/* Pipeline Report — shown first */}
+      <PipelineReport audits={audits} />
 
       {/* Winner banner */}
       <div className="glass rounded-2xl px-6 py-4 border border-yellow-500/20 flex items-center gap-3"
