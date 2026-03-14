@@ -226,7 +226,7 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
         print("🔬 Running LIME...")
         try:
             bias_engine.run_lime_analysis._model_type = model_type
-        lime_results = bias_engine.run_lime_analysis(df, feature_cols, y_pred)
+            lime_results = bias_engine.run_lime_analysis(df, feature_cols, y_pred)
         except Exception as e:
             print(f"   ⚠️  LIME failed: {e} — using mock")
             lime_results = bias_engine._mock_lime(feature_cols)
