@@ -74,6 +74,10 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
     if not audit:
         raise ValueError(f"Audit {audit_id} not found")
 
+    # Read model_type from DB — determines how we process outcomes
+    model_type = audit.model_type or "classification"
+    print(f"🎯 Model type: {model_type}")
+
     try:
         audit.status = "processing"
         db.commit()
@@ -86,7 +90,7 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
         label_col      = col_map["label"]
         pred_col       = col_map["prediction"]
         sensitive_cols = col_map["sensitive"]
-        audit_mode     = col_map.get("mode", "classification")
+        audit_mode     = col_map.get("mode", model_type)
 
         print(f"🎯 Mode: {audit_mode}")
         print(f"   Label:      {label_col}")
@@ -103,9 +107,25 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
             else:
                 raise ValueError("CSV has no numeric columns. Cannot perform bias analysis.")
 
-        # ── STEP 2: Prepare y_true / y_pred ──────────────────────────────────
-        y_true = _safe_binarize(df[label_col], label_col)
-        y_pred = _safe_binarize(df[pred_col],  pred_col)
+        # ── STEP 2: Prepare y_true / y_pred based on model_type ─────────────
+        if model_type == "regression":
+            # Regression: binarize continuous output at median — above median = positive outcome
+            y_true_raw = pd.to_numeric(df[label_col], errors='coerce').fillna(0)
+            y_pred_raw = pd.to_numeric(df[pred_col],  errors='coerce').fillna(0)
+            y_true = (y_true_raw >= y_true_raw.median()).astype(int).values
+            y_pred = (y_pred_raw >= y_pred_raw.median()).astype(int).values
+            print(f"   Regression mode: binarized at median (true={y_true_raw.median():.2f}, pred={y_pred_raw.median():.2f})")
+        elif model_type == "ranking":
+            # Ranking: binarize at top-50% rank — top half = positive outcome
+            y_true_raw = pd.to_numeric(df[label_col], errors='coerce').fillna(0)
+            y_pred_raw = pd.to_numeric(df[pred_col],  errors='coerce').fillna(0)
+            y_true = (y_true_raw.rank(ascending=False) <= len(y_true_raw) * 0.5).astype(int).values
+            y_pred = (y_pred_raw.rank(ascending=False) <= len(y_pred_raw) * 0.5).astype(int).values
+            print(f"   Ranking mode: binarized at top-50% rank")
+        else:
+            # Classification (default): standard binarize
+            y_true = _safe_binarize(df[label_col], label_col)
+            y_pred = _safe_binarize(df[pred_col],  pred_col)
 
         # Edge case: all same value → jitter slightly so fairness metrics don't divide by zero
         if len(np.unique(y_pred)) < 2:
@@ -163,20 +183,23 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
                     print(f"   ⚠️  {fallback_label} failed: {e}")
                     return bias_engine._mock_result(fallback_dim, fallback_label, 75.0)
 
+            # Get thresholds for this model type
+            thresholds = bias_engine.THRESHOLDS.get(model_type, bias_engine.THRESHOLDS["classification"])
+
             fairness_results.append(safe_run(
-                bias_engine.run_demographic_parity, y_true, y_pred, sensitive_col,
+                bias_engine.run_demographic_parity, y_true, y_pred, sensitive_col, thresholds["demographic_parity"],
                 fallback_dim="demographic_parity", fallback_label="Demographic Parity"))
             fairness_results.append(safe_run(
-                bias_engine.run_equal_opportunity, y_true, y_pred, sensitive_col,
+                bias_engine.run_equal_opportunity, y_true, y_pred, sensitive_col, thresholds["equal_opportunity"],
                 fallback_dim="equal_opportunity", fallback_label="Equal Opportunity"))
             fairness_results.append(safe_run(
-                bias_engine.run_calibration, y_true, y_pred.astype(float), sensitive_col,
+                bias_engine.run_calibration, y_true, y_pred.astype(float), sensitive_col, thresholds["calibration"],
                 fallback_dim="calibration", fallback_label="Calibration"))
             fairness_results.append(safe_run(
-                bias_engine.run_individual_fairness, df, y_pred, feature_cols,
+                bias_engine.run_individual_fairness, df, y_pred, feature_cols, thresholds["individual_fairness"],
                 fallback_dim="individual_fairness", fallback_label="Individual Fairness"))
             fairness_results.append(safe_run(
-                bias_engine.run_counterfactual_fairness, df, y_pred, sensitive_attr, sensitive_col,
+                bias_engine.run_counterfactual_fairness, df, y_pred, sensitive_attr, sensitive_col, thresholds["counterfactual_fairness"],
                 fallback_dim="counterfactual_fairness", fallback_label="Counterfactual Fairness"))
         else:
             # No sensitive column — use heuristic scores based on data distribution
@@ -187,13 +210,13 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
             fairness_results.append(bias_engine.run_individual_fairness(df, y_pred, feature_cols))
             fairness_results.append(bias_engine._mock_result("counterfactual_fairness","Counterfactual Fairness",79.0))
 
-        fairness_results.append(bias_engine.run_transparency(df, feature_cols, y_pred))
+        fairness_results.append(bias_engine.run_transparency(df, feature_cols, y_pred, model_type=model_type))
         print(f"✅ {len(fairness_results)} fairness dimensions complete")
 
         # ── STEP 6: SHAP ─────────────────────────────────────────────────────
         print("🔬 Running SHAP...")
         try:
-            shap_results = bias_engine.run_shap_analysis(df, feature_cols, y_pred)
+            shap_results = bias_engine.run_shap_analysis(df, feature_cols, y_pred, model_type=model_type)
         except Exception as e:
             print(f"   ⚠️  SHAP failed: {e} — using mock")
             shap_results = bias_engine._mock_shap(feature_cols)
@@ -202,14 +225,15 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
         # ── STEP 7: LIME ─────────────────────────────────────────────────────
         print("🔬 Running LIME...")
         try:
-            lime_results = bias_engine.run_lime_analysis(df, feature_cols, y_pred)
+            bias_engine.run_lime_analysis._model_type = model_type
+        lime_results = bias_engine.run_lime_analysis(df, feature_cols, y_pred)
         except Exception as e:
             print(f"   ⚠️  LIME failed: {e} — using mock")
             lime_results = bias_engine._mock_lime(feature_cols)
         print(f"✅ LIME: {len(lime_results)} features")
 
         # ── STEP 8: Score + compliance + remediations ─────────────────────────
-        overall_score, risk_level = bias_engine.compute_overall_score(fairness_results)
+        overall_score, risk_level = bias_engine.compute_overall_score(fairness_results, model_type=model_type)
         print(f"🏆 Score: {overall_score}/100 | Risk: {risk_level}")
 
         compliance_checks = bias_engine.compute_compliance_checks(fairness_results, overall_score)

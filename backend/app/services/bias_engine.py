@@ -8,7 +8,7 @@ import hashlib
 import json
 from typing import Dict, List, Tuple, Optional
 from sklearn.preprocessing import LabelEncoder
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.model_selection import train_test_split
 
 # Fairness
@@ -30,7 +30,14 @@ except ImportError:
     SHAP_AVAILABLE = False
 
 
-FAIRNESS_THRESHOLD = 0.1  # Max allowed disparity
+FAIRNESS_THRESHOLD = 0.1  # Max allowed disparity (classification default)
+
+# Per model type thresholds — regression is stricter, ranking is more lenient on calibration
+THRESHOLDS = {
+    "classification": {"demographic_parity": 0.10, "equal_opportunity": 0.10, "calibration": 0.10, "individual_fairness": 0.05, "counterfactual_fairness": 0.10, "transparency": 0.60},
+    "regression":     {"demographic_parity": 0.08, "equal_opportunity": 0.08, "calibration": 0.05, "individual_fairness": 0.05, "counterfactual_fairness": 0.08, "transparency": 0.60},
+    "ranking":        {"demographic_parity": 0.08, "equal_opportunity": 0.10, "calibration": 0.15, "individual_fairness": 0.04, "counterfactual_fairness": 0.10, "transparency": 0.55},
+}
 
 
 def compute_sha256(df: pd.DataFrame) -> str:
@@ -205,25 +212,28 @@ def detect_columns(df: pd.DataFrame) -> Dict:
     return result
 
 
-def score_from_disparity(disparity: float) -> float:
-    """Convert disparity metric to 0-100 score. Lower disparity = higher score."""
+def score_from_disparity(disparity: float, threshold: float = 0.10) -> float:
+    """Convert disparity metric to 0-100 score. Threshold-aware — stricter threshold = lower score for same disparity."""
     disparity = abs(disparity)
-    if disparity <= 0.02:
+    # Scale disparity relative to threshold so stricter thresholds penalize more
+    ratio = disparity / threshold  # 0 = perfect, 1 = at threshold, >1 = over threshold
+    if ratio <= 0.2:
         return 100.0
-    elif disparity <= 0.05:
-        return 90.0 - (disparity - 0.02) * 200
-    elif disparity <= 0.10:
-        return 80.0 - (disparity - 0.05) * 400
-    elif disparity <= 0.20:
-        return 60.0 - (disparity - 0.10) * 200
-    elif disparity <= 0.50:
-        return max(20.0, 40.0 - (disparity - 0.20) * 60)
+    elif ratio <= 0.5:
+        return 90.0 - (ratio - 0.2) * 67
+    elif ratio <= 1.0:
+        return 70.0 - (ratio - 0.5) * 120
+    elif ratio <= 2.0:
+        return max(20.0, 40.0 - (ratio - 1.0) * 20)
+    elif ratio <= 5.0:
+        return max(10.0, 20.0 - (ratio - 2.0) * 3.3)
     else:
-        return max(5.0, 20.0 - (disparity - 0.50) * 20)
+        return max(5.0, 10.0 - (ratio - 5.0) * 1.0)
 
 
-def run_demographic_parity(y_true, y_pred, sensitive_col) -> Dict:
+def run_demographic_parity(y_true, y_pred, sensitive_col, threshold=None) -> Dict:
     """Dimension 1: Are positive outcomes equally distributed across groups?"""
+    if threshold is None: threshold = FAIRNESS_THRESHOLD
     try:
         if FAIRLEARN_AVAILABLE:
             disparity = demographic_parity_difference(y_true, y_pred, sensitive_features=sensitive_col)
@@ -232,7 +242,7 @@ def run_demographic_parity(y_true, y_pred, sensitive_col) -> Dict:
             rates = {g: y_pred[sensitive_col == g].mean() for g in groups}
             disparity = max(rates.values()) - min(rates.values())
 
-        score = score_from_disparity(disparity)
+        score = score_from_disparity(abs(float(disparity)), threshold)
         groups = sensitive_col.unique()
         group_rates = {str(g): round(float(y_pred[sensitive_col == g].mean()), 4) for g in groups}
 
@@ -240,17 +250,18 @@ def run_demographic_parity(y_true, y_pred, sensitive_col) -> Dict:
             "dimension": "demographic_parity",
             "dimension_label": "Demographic Parity",
             "score": round(score, 2),
-            "passed": abs(disparity) <= FAIRNESS_THRESHOLD,
+            "passed": abs(disparity) <= threshold,
             "metric_value": round(float(disparity), 4),
-            "threshold": FAIRNESS_THRESHOLD,
+            "threshold": threshold,
             "details": {"group_positive_rates": group_rates, "disparity": round(float(disparity), 4)}
         }
     except Exception as e:
         return _error_result("demographic_parity", "Demographic Parity", str(e))
 
 
-def run_equal_opportunity(y_true, y_pred, sensitive_col) -> Dict:
+def run_equal_opportunity(y_true, y_pred, sensitive_col, threshold=None) -> Dict:
     """Dimension 2: Are true positive rates equal across groups?"""
+    if threshold is None: threshold = FAIRNESS_THRESHOLD
     try:
         if FAIRLEARN_AVAILABLE:
             disparity = equalized_odds_difference(y_true, y_pred, sensitive_features=sensitive_col)
@@ -265,22 +276,23 @@ def run_equal_opportunity(y_true, y_pred, sensitive_col) -> Dict:
             vals = list(tprs.values())
             disparity = max(vals) - min(vals)
 
-        score = score_from_disparity(disparity)
+        score = score_from_disparity(abs(float(disparity)), threshold)
         return {
             "dimension": "equal_opportunity",
             "dimension_label": "Equal Opportunity",
             "score": round(score, 2),
-            "passed": abs(disparity) <= FAIRNESS_THRESHOLD,
+            "passed": abs(disparity) <= threshold,
             "metric_value": round(float(disparity), 4),
-            "threshold": FAIRNESS_THRESHOLD,
+            "threshold": threshold,
             "details": {"tpr_disparity": round(float(disparity), 4)}
         }
     except Exception as e:
         return _error_result("equal_opportunity", "Equal Opportunity", str(e))
 
 
-def run_calibration(y_true, y_pred_proba, sensitive_col) -> Dict:
+def run_calibration(y_true, y_pred_proba, sensitive_col, threshold=None) -> Dict:
     """Dimension 3: Do confidence scores reflect true probabilities equally for all groups?"""
+    if threshold is None: threshold = FAIRNESS_THRESHOLD
     try:
         groups = sensitive_col.unique()
         calibration_errors = {}
@@ -308,7 +320,8 @@ def run_calibration(y_true, y_pred_proba, sensitive_col) -> Dict:
         return _error_result("calibration", "Calibration", str(e))
 
 
-def run_individual_fairness(df: pd.DataFrame, y_pred, feature_cols: List[str]) -> Dict:
+def run_individual_fairness(df: pd.DataFrame, y_pred, feature_cols: List[str], threshold=None) -> Dict:
+    if threshold is None: threshold = 0.05
     """Dimension 4: Are similar individuals treated similarly?"""
     try:
         sample_size = min(500, len(df))
@@ -388,7 +401,7 @@ def run_counterfactual_fairness(df: pd.DataFrame, y_pred, sensitive_col_name: st
         return _error_result("counterfactual_fairness", "Counterfactual Fairness", str(e))
 
 
-def run_transparency(df: pd.DataFrame, feature_cols: List[str], y_pred) -> Dict:
+def run_transparency(df: pd.DataFrame, feature_cols: List[str], y_pred, model_type: str = "classification") -> Dict:
     """Dimension 6: Can we explain the model's decisions? (SHAP-based)"""
     try:
         if not SHAP_AVAILABLE:
@@ -404,7 +417,12 @@ def run_transparency(df: pd.DataFrame, feature_cols: List[str], y_pred) -> Dict:
         X_sample = X.head(sample_size)
         y_sample = y_pred[:sample_size]
 
-        model = RandomForestClassifier(n_estimators=20, random_state=42, max_depth=5)
+        # Use appropriate model based on model_type
+        if model_type == "regression":
+            model = RandomForestRegressor(n_estimators=20, random_state=42, max_depth=5)
+        else:
+            model = RandomForestClassifier(n_estimators=20, random_state=42, max_depth=5)
+
         if len(np.unique(y_sample)) > 1:
             model.fit(X_sample, y_sample)
             explainer = shap.TreeExplainer(model)
@@ -450,7 +468,7 @@ def run_transparency(df: pd.DataFrame, feature_cols: List[str], y_pred) -> Dict:
         return _mock_result("transparency", "Model Transparency", round(score, 2))
 
 
-def run_shap_analysis(df: pd.DataFrame, feature_cols: List[str], y_pred) -> List[Dict]:
+def run_shap_analysis(df: pd.DataFrame, feature_cols: List[str], y_pred, model_type: str = "classification") -> List[Dict]:
     """Run full SHAP analysis and return ranked feature importances."""
     try:
         if not SHAP_AVAILABLE:
@@ -464,16 +482,23 @@ def run_shap_analysis(df: pd.DataFrame, feature_cols: List[str], y_pred) -> List
         X_sample = X.head(sample_size)
         y_sample = y_pred[:sample_size]
 
-        model = RandomForestClassifier(n_estimators=30, random_state=42, max_depth=6)
-        if len(np.unique(y_sample)) < 2:
-            return _mock_shap(list(X_sample.columns))
-
-        model.fit(X_sample, y_sample)
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(X_sample)
-
-        if isinstance(shap_values, list):
-            shap_values = shap_values[1]
+        # Use appropriate model based on model_type
+        if model_type == "regression":
+            model = RandomForestRegressor(n_estimators=30, random_state=42, max_depth=6)
+            if len(X_sample) < 2:
+                return _mock_shap(list(X_sample.columns))
+            model.fit(X_sample, y_sample.astype(float))
+            explainer = shap.TreeExplainer(model)
+            shap_values = explainer.shap_values(X_sample)
+        else:
+            model = RandomForestClassifier(n_estimators=30, random_state=42, max_depth=6)
+            if len(np.unique(y_sample)) < 2:
+                return _mock_shap(list(X_sample.columns))
+            model.fit(X_sample, y_sample)
+            explainer = shap.TreeExplainer(model)
+            shap_values = explainer.shap_values(X_sample)
+            if isinstance(shap_values, list):
+                shap_values = shap_values[1]
 
         mean_abs = np.abs(shap_values).mean(axis=0)
         results = []
@@ -510,9 +535,13 @@ def run_lime_analysis(df: pd.DataFrame, feature_cols: List[str], y_pred) -> List
         if len(np.unique(y_sample)) < 2:
             return _mock_lime(cols)
 
-        # Train a black-box model (the model we are explaining)
-        model = RandomForestClassifier(n_estimators=30, random_state=42, max_depth=6)
-        model.fit(X_np, y_sample)
+        # Train appropriate model based on model_type
+        if hasattr(run_lime_analysis, '_model_type') and run_lime_analysis._model_type == "regression":
+            model = RandomForestRegressor(n_estimators=30, random_state=42, max_depth=6)
+            model.fit(X_np, y_sample.astype(float))
+        else:
+            model = RandomForestClassifier(n_estimators=30, random_state=42, max_depth=6)
+            model.fit(X_np, y_sample)
 
         # LIME core: for each instance, perturb it, get predictions, fit linear model
         n_perturbations = 50
@@ -736,16 +765,42 @@ def generate_remediations(fairness_results: List[Dict], run_name: str = "") -> L
     return remediations
 
 
-def compute_overall_score(fairness_results: List[Dict]) -> Tuple[float, str]:
-    """Compute weighted overall ethics score and risk level."""
-    weights = {
-        "demographic_parity": 0.25,
-        "equal_opportunity": 0.25,
-        "counterfactual_fairness": 0.20,
-        "calibration": 0.15,
-        "individual_fairness": 0.10,
-        "transparency": 0.05,
-    }
+def compute_overall_score(fairness_results: List[Dict], model_type: str = "classification") -> Tuple[float, str]:
+    """Compute weighted overall ethics score and risk level.
+    Weights differ by model type — regression emphasizes calibration,
+    ranking emphasizes demographic parity and individual fairness.
+    """
+    if model_type == "regression":
+        # Regression: calibration is most important (continuous predictions must be equally accurate)
+        weights = {
+            "demographic_parity":     0.20,
+            "equal_opportunity":      0.15,
+            "counterfactual_fairness":0.15,
+            "calibration":            0.30,  # Most important for regression
+            "individual_fairness":    0.15,
+            "transparency":           0.05,
+        }
+    elif model_type == "ranking":
+        # Ranking: demographic parity and individual fairness most important
+        # (equal representation in top-k results)
+        weights = {
+            "demographic_parity":     0.30,  # Most important — equal top-k representation
+            "equal_opportunity":      0.20,
+            "counterfactual_fairness":0.15,
+            "calibration":            0.10,
+            "individual_fairness":    0.20,  # Similar items must rank similarly
+            "transparency":           0.05,
+        }
+    else:
+        # Classification (default)
+        weights = {
+            "demographic_parity":     0.25,
+            "equal_opportunity":      0.25,
+            "counterfactual_fairness":0.20,
+            "calibration":            0.15,
+            "individual_fairness":    0.10,
+            "transparency":           0.05,
+        }
     total_weight = 0
     weighted_score = 0
     for r in fairness_results:
