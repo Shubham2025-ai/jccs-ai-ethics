@@ -267,7 +267,7 @@ export default function ResultsPage() {
 
   if (!data) return <div className="text-center text-gray-400 py-20">Audit not found.</div>
 
-  const { audit, fairness_results, shap_results, explanations, remediations, compliance_checks } = data
+  const { audit, fairness_results, shap_results, explanations, remediations, compliance_checks, model_metrics } = data
   const score = Math.round(audit.overall_score || 0)
 
   const radarData = fairness_results?.map(r => ({
@@ -438,6 +438,82 @@ export default function ResultsPage() {
               ))}
             </div>
           </div>
+
+          {/* Model Performance Metrics */}
+          {model_metrics && !model_metrics.error && (
+            <div>
+              <h3 className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wider flex items-center gap-2">
+                🤖 Proxy Model Performance
+                <span className="text-gray-600 normal-case font-normal">— RandomForest on 20% held-out test set</span>
+              </h3>
+              <div className="glass rounded-2xl p-5 border border-white/5">
+                {model_metrics.model_type === 'regression' ? (
+                  <div className="grid grid-cols-3 gap-4">
+                    {[
+                      { label: 'MAE', value: model_metrics.mae, color: '#6C63FF' },
+                      { label: 'RMSE', value: model_metrics.rmse, color: '#E94560' },
+                      { label: 'R² Score', value: model_metrics.r2_score, color: '#00B894' },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} className="text-center">
+                        <div className="text-2xl font-black" style={{ color }}>{value}</div>
+                        <div className="text-xs text-gray-500 mt-1">{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {[
+                        { label: 'Accuracy', value: `${(model_metrics.accuracy * 100).toFixed(1)}%`, color: '#6C63FF', sub: 'Overall correctness' },
+                        { label: 'Precision', value: `${(model_metrics.precision * 100).toFixed(1)}%`, color: '#00B894', sub: 'When positive, how often right' },
+                        { label: 'Recall', value: `${(model_metrics.recall * 100).toFixed(1)}%`, color: '#FDCB6E', sub: 'Actual positives caught' },
+                        { label: 'F1 Score', value: `${(model_metrics.f1_score * 100).toFixed(1)}%`, color: '#E94560', sub: 'Precision + Recall balance' },
+                      ].map(({ label, value, color, sub }) => (
+                        <div key={label} className="rounded-xl p-3 text-center border border-white/5"
+                          style={{ background: 'rgba(255,255,255,0.02)' }}>
+                          <div className="text-2xl font-black mb-0.5" style={{ color }}>{value}</div>
+                          <div className="text-xs font-bold text-white mb-0.5">{label}</div>
+                          <div className="text-xs text-gray-600">{sub}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {model_metrics.auc_roc && (
+                      <div className="flex items-center gap-3 px-3 py-2 rounded-xl border border-white/5"
+                        style={{ background: 'rgba(108,99,255,0.05)' }}>
+                        <div className="text-xs text-gray-400">AUC-ROC</div>
+                        <div className="flex-1 h-2 rounded-full bg-white/5">
+                          <div className="h-2 rounded-full transition-all duration-1000"
+                            style={{ width: `${model_metrics.auc_roc * 100}%`,
+                              background: model_metrics.auc_roc >= 0.8 ? '#00B894' : model_metrics.auc_roc >= 0.6 ? '#FDCB6E' : '#E94560' }} />
+                        </div>
+                        <div className="text-sm font-black" style={{
+                          color: model_metrics.auc_roc >= 0.8 ? '#00B894' : model_metrics.auc_roc >= 0.6 ? '#FDCB6E' : '#E94560'
+                        }}>{model_metrics.auc_roc}</div>
+                        <div className="text-xs text-gray-600">({model_metrics.test_size} test samples)</div>
+                      </div>
+                    )}
+                    {model_metrics.confusion_matrix && (
+                      <div className="grid grid-cols-4 gap-2 text-center">
+                        {[
+                          { label: 'True Neg', value: model_metrics.confusion_matrix.true_negative, color: '#00B894' },
+                          { label: 'False Pos', value: model_metrics.confusion_matrix.false_positive, color: '#E94560' },
+                          { label: 'False Neg', value: model_metrics.confusion_matrix.false_negative, color: '#E17055' },
+                          { label: 'True Pos', value: model_metrics.confusion_matrix.true_positive, color: '#00B894' },
+                        ].map(({ label, value, color }) => (
+                          <div key={label} className="rounded-lg p-2 border border-white/5"
+                            style={{ background: 'rgba(255,255,255,0.02)' }}>
+                            <div className="text-lg font-black" style={{ color }}>{value}</div>
+                            <div className="text-xs text-gray-600">{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <p className="text-xs text-gray-600 mt-3 text-center">{model_metrics.note}</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -656,6 +732,30 @@ export default function ResultsPage() {
       {/* REMEDIATION */}
       {activeTab === 'remediation' && (
         <div className="space-y-4">
+
+          {/* Technique summary banner */}
+          <div className="glass rounded-2xl p-5 border border-[#6C63FF]/20">
+            <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
+              <span>🛠️</span> Bias Mitigation Techniques Applied
+            </h3>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {[
+                { label: 'Reweighing', color: '#6C63FF', desc: 'Balance training data across groups' },
+                { label: 'Fairness Constraints', color: '#E94560', desc: 'ExponentiatedGradient with DemographicParity' },
+                { label: 'Threshold Adjustment', color: '#00B894', desc: 'ThresholdOptimizer with EqualizedOdds' },
+                { label: 'Calibration', color: '#FDCB6E', desc: 'Platt scaling per demographic group' },
+                { label: 'Causal Analysis', color: '#a78bfa', desc: 'Remove proxy features encoding bias' },
+              ].map((t, i) => (
+                <div key={i} className="flex flex-col px-3 py-2 rounded-xl text-xs"
+                  style={{ background: t.color + '15', border: `1px solid ${t.color}30` }}>
+                  <span className="font-black" style={{ color: t.color }}>{t.label}</span>
+                  <span className="text-gray-500 mt-0.5">{t.desc}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-gray-500 text-xs">Each failed dimension receives a specific mitigation technique from the above — selected based on domain and bias type.</p>
+          </div>
+
           {explanations?.remediation_plan && (
             <div className="glass rounded-2xl p-5 border border-[#6C63FF]/20">
               <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
@@ -666,24 +766,41 @@ export default function ResultsPage() {
           )}
           {remediations?.length > 0 ? (
             <div className="space-y-3">
-              {remediations.map((r, i) => (
-                <div key={i} className={`glass rounded-xl p-5 border ${
-                  r.priority === 'high' ? 'border-red-500/30' : r.priority === 'medium' ? 'border-yellow-500/30' : 'border-green-500/30'
-                }`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-semibold text-white capitalize">{r.dimension?.replace(/_/g, ' ')}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full uppercase font-bold ${
-                      r.priority === 'high' ? 'bg-red-500/20 text-red-400' :
-                      r.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-green-500/20 text-green-400'
-                    }`}>{r.priority} priority</span>
+              {remediations.map((r, i) => {
+                // Map dimension to technique badge
+                const techniques = {
+                  demographic_parity: { label: 'Reweighing + Fairness Constraints', color: '#6C63FF' },
+                  equal_opportunity: { label: 'Threshold Adjustment', color: '#00B894' },
+                  calibration: { label: 'Platt Scaling / Calibration', color: '#FDCB6E' },
+                  individual_fairness: { label: 'Fairness Regularization', color: '#a78bfa' },
+                  counterfactual_fairness: { label: 'Causal Analysis', color: '#E94560' },
+                }
+                const tech = techniques[r.dimension] || { label: 'Mitigation', color: '#6C63FF' }
+                return (
+                  <div key={i} className={`glass rounded-xl p-5 border ${
+                    r.priority === 'high' ? 'border-red-500/30' : r.priority === 'medium' ? 'border-yellow-500/30' : 'border-green-500/30'
+                  }`}>
+                    <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                      <span className="text-sm font-semibold text-white capitalize">{r.dimension?.replace(/_/g, ' ')}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs px-2 py-0.5 rounded-full font-bold"
+                          style={{ background: tech.color + '20', color: tech.color }}>
+                          🔧 {tech.label}
+                        </span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full uppercase font-bold ${
+                          r.priority === 'high' ? 'bg-red-500/20 text-red-400' :
+                          r.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-green-500/20 text-green-400'
+                        }`}>{r.priority} priority</span>
+                      </div>
+                    </div>
+                    <p className="text-gray-300 text-sm leading-relaxed mb-3">{r.suggestion}</p>
+                    <div className="flex gap-4 text-xs">
+                      <span className="text-green-400">📉 Bias reduction: ~{r.estimated_bias_reduction}%</span>
+                      <span className="text-yellow-400">⚡ Accuracy loss: ~{r.estimated_accuracy_loss}%</span>
+                    </div>
                   </div>
-                  <p className="text-gray-300 text-sm leading-relaxed mb-3">{r.suggestion}</p>
-                  <div className="flex gap-4 text-xs">
-                    <span className="text-green-400">📉 Bias reduction: ~{r.estimated_bias_reduction}%</span>
-                    <span className="text-yellow-400">⚡ Accuracy loss: ~{r.estimated_accuracy_loss}%</span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <div className="glass rounded-xl p-8 text-center">
