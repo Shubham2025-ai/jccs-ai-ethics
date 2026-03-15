@@ -1,6 +1,6 @@
 # 🛡️ JCCS — Jedi Code Compliance System
 
-**Ethical AI Auditing Framework — Bluebit Hackathon 4.0 | PS9**
+**Ethical AI Auditing Framework — Bluebit Hackathon 4.0 | PS9 | Round 3 Finalist**
 
 > *"The Force will be with you, always — but your AI model? That needs an audit."*
 
@@ -38,7 +38,7 @@ AI systems are making life-altering decisions in hiring, healthcare, criminal ju
 | Transparency / Interpretability | ✅ | SHAP (global) + LIME (local) XAI |
 | Show WHY model made specific decisions | ✅ | Per-prediction LIME feature attribution |
 | Feature Importance Visualization | ✅ | Interactive SHAP bar + LIME charts |
-| Visual Scorecard (Pass / Fail) | ✅ | Per-criterion compliance cards |
+| Visual Scorecard (Pass / Fail) | ✅ | Per-criterion compliance cards with thresholds |
 | Bias Instances Highlighted | ✅ | Top-3 most discriminatory features flagged |
 | Recommendations for Improvement | ✅ | Domain-specific remediation per violation |
 
@@ -47,17 +47,21 @@ AI systems are making life-altering decisions in hiring, healthcare, criminal ju
 | Bonus | Status | How |
 |---|---|---|
 | Test multiple AI models simultaneously | ✅ | Upload 2–10 CSVs → all audited in parallel threads simultaneously |
-| Automated testing pipeline | ✅ | Click "Run Pipeline" → auto-fetches all 4 datasets → audits all in parallel — zero manual steps |
+| Automated testing pipeline | ✅ | One click → auto-fetches 4 datasets → audits in parallel → CI/CD pipeline report with PASS/FAIL deployment gates |
 
 ### Beyond the Spec
 
 - **Blockchain Anchoring** — SHA-256 hash anchored to Bitcoin via OriginStamp
-- **Groq AI (LLaMA 3 70B)** — Plain-English explanations of every bias finding
+- **LLaMA 3 70B via Groq** — Plain-English explanations of every bias finding
 - **3 Regulatory Frameworks** — EU AI Act 2026, India DPDP Act, ISO/IEC 42001
 - **PDF Certificate** — Downloadable court-ready audit report
 - **Counterfactual Fairness** — Would outcome change if only demographics changed?
 - **Individual Fairness** — Similar people must receive similar outcomes
-- **Multi-Model Comparison Page** — Side-by-side fairness scores, dimension bars, compliance matrix, trophy for fairest model
+- **Multi-Model Comparison** — Side-by-side fairness scores, dimension bars, compliance matrix
+- **CI/CD Pipeline Report** — BLOCKED/APPROVED deployment gates per model
+- **Model Type Support** — Classification, Regression, Ranking each use different ML model and scoring weights
+- **Proxy Model Metrics** — Accuracy, Precision, Recall, F1, AUC-ROC via 80/20 train-test split
+- **Lighthouse Scores** — Performance 92, Accessibility 96, Best Practices 100, SEO 91
 
 ---
 
@@ -90,16 +94,31 @@ AI systems are making life-altering decisions in hiring, healthcare, criminal ju
 
 ---
 
+## 🤖 How the ML Model Works
+
+1. **Upload CSV** → FastAPI receives file, creates audit record
+2. **Column Detection** → `bias_engine.detect_columns()` auto-identifies sensitive attributes, outcome column, and domain
+3. **Proxy Model Training** → `RandomForestClassifier` (classification/ranking) or `RandomForestRegressor` (regression) trained on 80% of uploaded data
+4. **6 Fairness Dimensions** → Fairlearn + AIF360 compute disparity metrics per group
+5. **SHAP Analysis** → `TreeExplainer` on proxy model → global feature importance
+6. **LIME Analysis** → Perturbation-based → individual decision explanation
+7. **Score Calculation** → Weighted average of 6 dimensions (weights differ by model type)
+8. **AI Summary** → LLaMA 3 70B generates plain-English findings and remediation plan
+9. **Compliance Mapping** → Results mapped to EU AI Act, DPDP, ISO article numbers
+10. **Blockchain** → SHA-256 hash saved to Bitcoin via OriginStamp
+
+---
+
 ## 🧪 The 6 Fairness Dimensions
 
-| # | Dimension | What It Checks |
-|---|---|---|
-| 1 | **Demographic Parity** | Equal prediction rates across gender, race, age |
-| 2 | **Equal Opportunity** | Equal true positive rates across all groups |
-| 3 | **Calibration** | Confidence scores must match actual outcomes |
-| 4 | **Individual Fairness** | Similar people must receive similar outcomes |
-| 5 | **Counterfactual Fairness** | Would outcome change if only demographics were different? |
-| 6 | **Transparency** | Model explainability coverage via SHAP + LIME |
+| # | Dimension | Threshold | What It Checks |
+|---|---|---|---|
+| 1 | **Demographic Parity** | < 10% disparity | Equal prediction rates across gender, race, age |
+| 2 | **Equal Opportunity** | < 10% TPR gap | Equal true positive rates across all groups |
+| 3 | **Calibration** | < 10% error gap | Confidence scores must match actual outcomes |
+| 4 | **Individual Fairness** | < 5% inconsistency | Similar people must receive similar outcomes |
+| 5 | **Counterfactual Fairness** | < 10% flip rate | Outcome unchanged if only demographics change |
+| 6 | **Transparency** | > 60% top-3 coverage | Model explainability via SHAP + LIME |
 
 **Risk Levels:**
 
@@ -109,6 +128,20 @@ AI systems are making life-altering decisions in hiring, healthcare, criminal ju
 | 40 – 59 | 🟠 High Risk |
 | 60 – 79 | 🟡 Medium Risk |
 | 80 – 100 | 🟢 Low Risk |
+
+---
+
+## 🛠️ Bias Mitigation Techniques
+
+Each failed dimension receives a specific mitigation recommendation:
+
+| Dimension | Technique | Library |
+|---|---|---|
+| Demographic Parity | Reweighing + Fairness Constraints | Fairlearn ExponentiatedGradient |
+| Equal Opportunity | Threshold Adjustment | Fairlearn ThresholdOptimizer |
+| Calibration | Platt Scaling per group | scikit-learn CalibratedClassifierCV |
+| Individual Fairness | Fairness Regularization | Custom metric learning |
+| Counterfactual Fairness | Causal Analysis + proxy removal | Custom causal graph |
 
 ---
 
@@ -124,12 +157,30 @@ AI systems are making life-altering decisions in hiring, healthcare, criminal ju
 
 ## 🗂️ Demo Datasets
 
-| File | Domain | Sensitive Attributes | Rows |
-|---|---|---|---|
-| `adult_income.csv` | Income / Employment | sex, race, age | 1,000 |
-| `german_credit.csv` | Credit Scoring | sex, age | 1,000 |
-| `compas_recidivism.csv` | Criminal Justice | race, sex | 1,000 |
-| `healthcare_diagnosis.csv` | Healthcare | age, gender, ethnicity | 1,000 |
+| File | Domain | Sensitive Attributes | Rows | Expected Score |
+|---|---|---|---|---|
+| `adult_income.csv` | Income / Employment | sex, race, age | 1,000 | ~33 Critical |
+| `german_credit.csv` | Credit Scoring | sex, age | 1,000 | ~28 Critical |
+| `compas_recidivism.csv` | Criminal Justice | race, sex | 1,000 | ~30 Critical |
+| `healthcare_diagnosis.csv` | Healthcare | age, gender, ethnicity | 1,000 | ~30 Critical |
+| `fair_hiring.csv` | Hiring (synthetic) | gender, race | 1,000 | ~68 Medium |
+
+---
+
+## 🧪 Testing Evidence
+
+Different results per dataset proves real analysis — not hardcoded:
+
+| Test | adult_income | german_credit | compas | healthcare |
+|---|---|---|---|---|
+| Overall Score | 33 | 28 | 30 | 30 |
+| EU AI Act Art.14 | ✅ Pass | ❌ Fail | ✅ Pass | ✅ Pass |
+| DPDP Section 16 | ❌ Fail | ❌ Fail | ❌ Fail | ✅ Pass |
+| ISO 9.1 Calibration | ✅ Pass | ❌ Fail | ✅ Pass | ✅ Pass |
+| SHAP Generated | ✅ | ✅ | ✅ | ✅ |
+| LIME Generated | ✅ | ✅ | ✅ | ✅ |
+| Blockchain Anchored | ✅ | ✅ | ✅ | ✅ |
+| PDF Exported | ✅ | ✅ | ✅ | ✅ |
 
 ---
 
@@ -189,30 +240,13 @@ SECRET_KEY=your_random_secret_key
 
 ---
 
-## 🧪 Testing Evidence
-
-Different results per dataset proves real analysis (not hardcoded):
-
-| Test | adult_income | german_credit | compas | healthcare |
-|---|---|---|---|---|
-| Overall Score | 33 | 28 | 32 | 30 |
-| EU AI Act Art.14 | ✅ Pass | ❌ Fail | ✅ Pass | ✅ Pass |
-| DPDP Section 16 | ❌ Fail | ❌ Fail | ❌ Fail | ✅ Pass |
-| ISO 9.1 Calibration | ✅ Pass | ❌ Fail | ✅ Pass | ✅ Pass |
-| SHAP Generated | ✅ | ✅ | ✅ | ✅ |
-| LIME Generated | ✅ | ✅ | ✅ | ✅ |
-| Blockchain Anchored | ✅ | ✅ | ✅ | ✅ |
-| PDF Exported | ✅ | ✅ | ✅ | ✅ |
-
----
-
 ## 🔗 API Endpoints
 
 | Endpoint | Method | Description |
 |---|---|---|
 | `/health` | GET | Health check / wake backend |
-| `/audit/upload` | POST | Upload CSV, trigger audit |
-| `/audit/{id}` | GET | Fetch audit results |
+| `/audit/upload` | POST | Upload CSV, trigger full audit pipeline |
+| `/audit/{id}` | GET | Fetch complete audit results |
 | `/audits/list` | GET | List all past audits |
 | `/api/audit/batch` | POST | Upload 2–10 CSVs, run all in parallel |
 | `/api/audit/batch/{id}` | GET | Poll batch progress |
@@ -227,31 +261,30 @@ Different results per dataset proves real analysis (not hardcoded):
 jccs-ai-ethics/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py
-│   │   ├── api/
-│   │   │   └── audit.py
-│   │   ├── routers/
-│   │   │   └── batch_audit.py        ← Bonus: parallel multi-model
-│   │   ├── models/
+│   │   ├── main.py                        ← FastAPI app + CORS
+│   │   ├── api/audit.py                   ← Main audit endpoints
+│   │   ├── routers/batch_audit.py         ← BONUS: parallel multi-model
+│   │   ├── models/models.py               ← SQLAlchemy ORM
 │   │   └── services/
-│   │       ├── audit_service.py
-│   │       ├── bias_engine.py
-│   │       ├── groq_service.py
-│   │       └── blockchain_service.py
+│   │       ├── bias_engine.py             ← 6 fairness dimensions + SHAP/LIME
+│   │       ├── audit_service.py           ← Orchestration pipeline
+│   │       ├── groq_service.py            ← LLaMA 3 AI summaries
+│   │       └── blockchain_service.py      ← SHA-256 + OriginStamp
 │   └── requirements.txt
-├── frontend/
-│   └── src/
-│       └── pages/
-│           ├── HomePage.jsx
-│           ├── UploadPage.jsx
-│           ├── ResultsPage.jsx
-│           ├── HistoryPage.jsx
-│           └── ComparePage.jsx       ← Bonus: multi-model comparison
+├── frontend/src/
+│   ├── pages/
+│   │   ├── HomePage.jsx                   ← Live bias preview
+│   │   ├── UploadPage.jsx                 ← CSV upload + progress
+│   │   ├── ResultsPage.jsx                ← Full audit results
+│   │   ├── HistoryPage.jsx                ← Audit history
+│   │   └── ComparePage.jsx                ← BONUS: multi-model comparison
+│   └── components/dashboard/Navbar.jsx
 ├── datasets/
 │   ├── adult_income.csv
 │   ├── german_credit.csv
 │   ├── compas_recidivism.csv
-│   └── healthcare_diagnosis.csv
+│   ├── healthcare_diagnosis.csv
+│   └── fair_hiring.csv
 └── README.md
 ```
 
@@ -264,6 +297,7 @@ jccs-ai-ethics/
 | **Team Name** | print("WIN") |
 | **Problem Statement** | PS9 — Jedi Code Compliance System |
 | **Hackathon** | Bluebit Hackathon 4.0 by MLSC PCCOE |
+| **Round** | Round 3 Finalist — Offline at PCCOE |
 | **Track** | Ethical AI |
 
 ---
