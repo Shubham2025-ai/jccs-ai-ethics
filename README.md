@@ -336,7 +336,7 @@ jccs-ai-ethics/
 
 | | |
 |---|---|
-| **Team Name** | JCCS |
+| **Team Name** | print("WIN") |
 | **Problem Statement** | PS9 — Jedi Code Compliance System |
 | **Hackathon** | Bluebit Hackathon 4.0 by MLSC PCCOE |
 | **Round** | Round 3 Finalist — Offline at PCCOE |
