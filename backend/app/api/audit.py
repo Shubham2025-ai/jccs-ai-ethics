@@ -219,3 +219,58 @@ def verify_audit_blockchain(audit_id: int, db: Session = Depends(get_db)):
         "verify_url": result.get("verify_url"),
         "message": result.get("message", "Verification complete.")
     }
+
+@router.get("/monitor/trend")
+def get_fairness_trend(run_name: str = None, limit: int = 10, db: Session = Depends(get_db)):
+    """
+    Continuous Monitoring — track fairness scores over time.
+    Returns trend data showing if model is improving or degrading.
+    """
+    query = db.query(AuditRun).filter(AuditRun.status == "completed")
+    if run_name:
+        query = query.filter(AuditRun.run_name.ilike(f"%{run_name}%"))
+    audits = query.order_by(AuditRun.created_at.desc()).limit(limit).all()
+    audits = list(reversed(audits))  # oldest first for trend
+
+    if len(audits) < 2:
+        return {
+            "trend": "insufficient_data",
+            "message": "Need at least 2 audits of the same model to detect drift.",
+            "data": []
+        }
+
+    scores = [a.overall_score for a in audits if a.overall_score]
+    if not scores:
+        return {"trend": "no_scores", "data": []}
+
+    # Detect trend
+    first_half = sum(scores[:len(scores)//2]) / (len(scores)//2)
+    second_half = sum(scores[len(scores)//2:]) / (len(scores) - len(scores)//2)
+    diff = second_half - first_half
+
+    if diff > 5:
+        trend = "improving"
+        trend_msg = f"✅ Fairness is improving (+{diff:.1f} points). Model bias is decreasing over time."
+    elif diff < -5:
+        trend = "degrading"
+        trend_msg = f"⚠️ Fairness is DEGRADING ({diff:.1f} points). Model bias is increasing — action required!"
+    else:
+        trend = "stable"
+        trend_msg = f"📊 Fairness is stable (±{abs(diff):.1f} points). Continue monitoring."
+
+    return {
+        "trend": trend,
+        "trend_message": trend_msg,
+        "score_change": round(diff, 2),
+        "first_score": round(scores[0], 2),
+        "latest_score": round(scores[-1], 2),
+        "data": [
+            {
+                "id": a.id,
+                "run_name": a.run_name,
+                "score": round(a.overall_score, 2) if a.overall_score else None,
+                "risk_level": a.risk_level,
+                "created_at": str(a.created_at)
+            } for a in audits
+        ]
+    }

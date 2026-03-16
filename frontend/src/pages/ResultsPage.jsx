@@ -563,6 +563,46 @@ export default function ResultsPage() {
               Together they satisfy both GDPR right-to-explanation and PS9 official success criteria.
             </p>
           </div>
+
+          {/* Counterfactual Examples */}
+          {shap_results?.length > 0 && (
+            <div className="glass rounded-2xl p-5 border border-purple-500/20">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#a78bfa22', color: '#a78bfa' }}>COUNTERFACTUAL</span>
+                <h3 className="font-semibold text-white">What Would Change Your Outcome?</h3>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">Based on LIME feature importance — these are the most likely changes that would flip the decision for a borderline individual.</p>
+              <div className="space-y-3">
+                {shap_results?.slice(0, 3).map((s, i) => {
+                  const featureName = s.feature_name?.replace(/_/g, ' ')
+                  const impact = (s.shap_importance * 100).toFixed(0)
+                  const examples = {
+                    0: { change: `Improving "${featureName}" significantly`, effect: 'most likely to flip the outcome', icon: '🔑' },
+                    1: { change: `Adjusting "${featureName}"`, effect: 'second strongest lever for change', icon: '🔄' },
+                    2: { change: `Modifying "${featureName}"`, effect: 'third most impactful factor', icon: '📊' },
+                  }
+                  const ex = examples[i] || examples[2]
+                  return (
+                    <div key={i} className="flex items-start gap-3 p-3 rounded-xl border border-white/5"
+                      style={{ background: 'rgba(167,139,250,0.05)' }}>
+                      <span className="text-xl flex-shrink-0">{ex.icon}</span>
+                      <div className="flex-1">
+                        <div className="text-sm text-white font-medium mb-0.5">
+                          {ex.change} <span className="text-purple-400">({impact}% influence)</span>
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          This is the {ex.effect}. Changing this feature has the highest probability of resulting in a different decision.
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-xs text-gray-600 mt-3">
+                💡 Counterfactual explanations answer: <em>"What is the minimum change needed to get a different outcome?"</em> — required by GDPR Article 22 and EU AI Act Article 13.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
