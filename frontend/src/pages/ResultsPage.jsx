@@ -268,7 +268,7 @@ export default function ResultsPage() {
 
   if (!data) return <div className="text-center text-gray-400 py-20">Audit not found.</div>
 
-  const { audit, fairness_results, shap_results, explanations, remediations, compliance_checks, model_metrics } = data
+  const { audit, fairness_results, shap_results, explanations, remediations, compliance_checks, model_metrics, decision_rules } = data
   const score = Math.round(audit.overall_score || 0)
 
   const radarData = fairness_results?.map(r => ({
@@ -554,6 +554,45 @@ export default function ResultsPage() {
               </div>
             ) : <p className="text-gray-500 text-sm py-4 text-center">Run a new audit to see LIME results.</p>}
           </div>
+
+          {/* Decision Rules */}
+          {decision_rules?.rules?.length > 0 && (
+            <div className="glass rounded-2xl p-5 border border-green-500/20">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#00B89422', color: '#00B894' }}>RULE EXTRACTION</span>
+                <h3 className="font-semibold text-white">Decision Tree Rules — How the AI Decides</h3>
+              </div>
+              <p className="text-xs text-gray-500 mb-1">Human-readable IF-THEN rules extracted from a DecisionTree proxy. Accuracy: {decision_rules.tree_accuracy}%</p>
+              {decision_rules.biased_rules?.length > 0 && (
+                <div className="rounded-xl p-3 mb-3 border border-red-500/20" style={{ background: 'rgba(233,69,96,0.06)' }}>
+                  <div className="text-xs font-black text-red-400 mb-2">⚠️ Potentially Discriminatory Rules Detected:</div>
+                  {decision_rules.biased_rules.map((b, i) => (
+                    <div key={i} className="text-xs text-red-300 mb-1">• {b.concern}</div>
+                  ))}
+                </div>
+              )}
+              <div className="space-y-2">
+                {decision_rules.rules.map((r, i) => (
+                  <div key={i} className="rounded-xl p-3 border border-white/5"
+                    style={{ background: r.outcome === 'APPROVED' ? 'rgba(0,184,148,0.04)' : 'rgba(233,69,96,0.04)' }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <code className="text-xs font-mono text-gray-200 flex-1 leading-relaxed">{r.rule}</code>
+                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        <span className="text-xs font-black px-2 py-0.5 rounded-full"
+                          style={{ background: r.outcome === 'APPROVED' ? 'rgba(0,184,148,0.2)' : 'rgba(233,69,96,0.2)', color: r.outcome === 'APPROVED' ? '#00B894' : '#E94560' }}>
+                          {r.confidence}% confident
+                        </span>
+                        <span className="text-xs text-gray-600">{r.sample_pct}% of cases</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-600 mt-3">
+                🌳 Rules extracted from DecisionTree (depth=4) trained on your CSV. Each rule shows the exact logic used for that subset of cases.
+              </p>
+            </div>
+          )}
 
           {/* Comparison callout */}
           <div className="glass rounded-xl p-4 border border-[#6C63FF]/20">

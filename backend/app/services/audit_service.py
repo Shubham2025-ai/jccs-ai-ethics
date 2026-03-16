@@ -237,6 +237,15 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
             lime_results = bias_engine._mock_lime(feature_cols)
         print(f"✅ LIME: {len(lime_results)} features")
 
+        # ── STEP 7b: Rule Extraction ─────────────────────────────────────────
+        print("🌳 Extracting decision rules...")
+        try:
+            rule_results = bias_engine.extract_decision_rules(df, feature_cols, y_pred, model_type=model_type)
+            print(f"✅ Rules: {rule_results.get('total_rules_found', 0)} rules extracted")
+        except Exception as e:
+            print(f"   ⚠️  Rule extraction failed: {e}")
+            rule_results = {"rules": [], "error": str(e)}
+
         # ── STEP 8: Score + compliance + remediations ─────────────────────────
         overall_score, risk_level = bias_engine.compute_overall_score(fairness_results, model_type=model_type)
         print(f"🏆 Score: {overall_score}/100 | Risk: {risk_level}")
@@ -368,6 +377,7 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
         db.add(AiExplanation(audit_id=audit_id, explanation_type="summary",     content=str(summary)))
         db.add(AiExplanation(audit_id=audit_id, explanation_type="remediation", content=str(remediation_plan)))
         db.add(AiExplanation(audit_id=audit_id, explanation_type="model_metrics", content=json.dumps(sanitize(model_metrics))))
+        db.add(AiExplanation(audit_id=audit_id, explanation_type="decision_rules", content=json.dumps(sanitize(rule_results))))
         for finding in bias_findings:
             db.add(AiExplanation(audit_id=audit_id, explanation_type="bias_finding", content=str(finding)))
         db.commit()

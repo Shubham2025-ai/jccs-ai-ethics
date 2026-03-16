@@ -9,6 +9,7 @@ import json
 from typing import Dict, List, Tuple, Optional
 from sklearn.preprocessing import LabelEncoder
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.tree import DecisionTreeClassifier, export_text
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score,
@@ -36,6 +37,129 @@ except ImportError:
 
 FAIRNESS_THRESHOLD = 0.1  # Max allowed disparity (classification default)
 
+
+
+def extract_decision_rules(df: pd.DataFrame, feature_cols: List[str], y_pred, model_type: str = "classification", max_rules: int = 8) -> Dict:
+    """
+    Extract human-readable IF-THEN decision rules from a DecisionTree proxy model.
+    Shows judges exactly what logic the AI is using — the ultimate transparency feature.
+    
+    Returns rules like:
+    "IF education_num <= 9 AND age <= 28 THEN REJECTED (confidence: 87%)"
+    "IF education_num > 12 THEN APPROVED (confidence: 92%)"
+    """
+    try:
+        X = df[feature_cols].select_dtypes(include=[np.number]).fillna(0)
+        if X.empty or len(X.columns) == 0:
+            return {"rules": [], "error": "No numeric features available"}
+
+        sample_size = min(500, len(X))
+        X_sample = X.head(sample_size)
+        y_sample = np.array(y_pred[:sample_size])
+
+        if len(np.unique(y_sample)) < 2:
+            return {"rules": [], "error": "Need at least 2 outcome classes"}
+
+        # Train shallow decision tree — shallow = interpretable rules
+        tree = DecisionTreeClassifier(
+            max_depth=4,          # shallow = human readable
+            min_samples_leaf=15,  # each rule covers at least 15 cases
+            random_state=42
+        )
+        tree.fit(X_sample, y_sample)
+
+        feature_names = list(X_sample.columns)
+        class_names = ["REJECTED", "APPROVED"] if len(tree.classes_) == 2 else [str(c) for c in tree.classes_]
+
+        # Extract rules by traversing the tree
+        rules = []
+        tree_ = tree.tree_
+        feature_name = [feature_names[i] if i != -2 else "leaf" for i in tree_.feature]
+
+        def recurse(node, conditions, depth):
+            if depth > 4 or len(rules) >= max_rules:
+                return
+            if tree_.feature[node] == -2:  # leaf node
+                # Get prediction and confidence
+                values = tree_.value[node][0]
+                total = sum(values)
+                if total == 0:
+                    return
+                predicted_class = int(np.argmax(values))
+                confidence = round(float(values[predicted_class] / total) * 100, 1)
+                samples = int(total)
+
+                if confidence < 60 or samples < 10:
+                    return
+
+                label = class_names[predicted_class] if predicted_class < len(class_names) else str(predicted_class)
+                outcome = "APPROVED ✅" if predicted_class == 1 else "REJECTED ❌"
+
+                if conditions:
+                    rule_text = "IF " + " AND ".join(conditions) + f" → {outcome}"
+                else:
+                    rule_text = f"Default → {outcome}"
+
+                rules.append({
+                    "rule": rule_text,
+                    "outcome": label,
+                    "confidence": confidence,
+                    "samples_covered": samples,
+                    "sample_pct": round(samples / sample_size * 100, 1),
+                    "conditions": list(conditions)
+                })
+            else:
+                fname = feature_name[node].replace("_", " ")
+                threshold = round(float(tree_.threshold[node]), 2)
+
+                # Left branch: feature <= threshold
+                recurse(
+                    tree_.children_left[node],
+                    conditions + [f"{fname} ≤ {threshold}"],
+                    depth + 1
+                )
+                # Right branch: feature > threshold
+                recurse(
+                    tree_.children_right[node],
+                    conditions + [f"{fname} > {threshold}"],
+                    depth + 1
+                )
+
+        recurse(0, [], 0)
+
+        # Sort by samples covered (most impactful rules first)
+        rules.sort(key=lambda x: x["samples_covered"], reverse=True)
+        rules = rules[:max_rules]
+
+        # Calculate tree accuracy
+        tree_preds = tree.predict(X_sample)
+        tree_accuracy = round(float(accuracy_score(y_sample, tree_preds)) * 100, 1)
+
+        # Find biased rules — rules where protected groups are disadvantaged
+        biased_rules = []
+        bias_keywords = ["age", "gender", "sex", "race", "ethnicity", "nationality", "religion"]
+        for r in rules:
+            for cond in r["conditions"]:
+                if any(kw in cond.lower() for kw in bias_keywords) and "REJECTED" in r["rule"]:
+                    biased_rules.append({
+                        "rule": r["rule"],
+                        "concern": f"This rule uses '{[k for k in bias_keywords if k in cond.lower()][0]}' as a rejection criterion — potential discriminatory pattern"
+                    })
+
+        return {
+            "rules": rules,
+            "biased_rules": biased_rules,
+            "tree_accuracy": tree_accuracy,
+            "total_rules_found": len(rules),
+            "features_used": list(set([
+                cond.split(" ≤ ")[0].split(" > ")[0].strip()
+                for r in rules for cond in r["conditions"]
+            ])),
+            "note": f"DecisionTree proxy (depth=4) trained on {sample_size} samples. Rules cover actual decision patterns."
+        }
+
+    except Exception as e:
+        return {"rules": [], "error": str(e), "note": "Rule extraction failed"}
 
 def compute_model_metrics(y_true, y_pred, model_type: str = "classification", df=None, feature_cols=None) -> Dict:
     """
