@@ -19,7 +19,7 @@ const realCases = [
 
 const steps = [
   { n: '01', emoji: '📁', title: 'Upload CSV',    desc: 'Drop any AI model predictions file. Zero setup — columns auto-detected across any domain.' },
-  { n: '02', emoji: '🔬', title: 'Deep Analysis', desc: '6 fairness dimensions + SHAP + LIME + Groq AI explanations — all run in parallel under 60s.' },
+  { n: '02', emoji: '🔬', title: 'Deep Analysis', desc: '9 fairness dimensions + SHAP + LIME + IF-THEN Rules + Groq AI explanations — all run in parallel under 60s.' },
   { n: '03', emoji: '🏅', title: 'Get Certified', desc: 'Download a blockchain-anchored PDF audit mapped to EU AI Act, DPDP Act, and ISO 42001.' },
 ]
 
@@ -137,7 +137,7 @@ export default function HomePage() {
 
               <p className="text-gray-400 text-sm leading-relaxed mb-4 max-w-xl mx-auto lg:mx-0">
                 Upload any AI model's predictions as a CSV.
-                Detect bias across <span className="text-white font-semibold">6 fairness dimensions</span>.
+                Detect bias across <span className="text-white font-semibold">9 fairness dimensions</span>.
                 Get a blockchain-certified report in{' '}
                 <span className="text-white font-semibold">under 60 seconds</span>.
               </p>
