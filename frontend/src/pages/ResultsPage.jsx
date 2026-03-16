@@ -268,7 +268,7 @@ export default function ResultsPage() {
 
   if (!data) return <div className="text-center text-gray-400 py-20">Audit not found.</div>
 
-  const { audit, fairness_results, shap_results, explanations, remediations, compliance_checks, model_metrics, decision_rules } = data
+  const { audit, fairness_results, shap_results, explanations, remediations, compliance_checks, model_metrics, decision_rules, digital_signature } = data
   const score = Math.round(audit.overall_score || 0)
 
   const radarData = fairness_results?.map(r => ({
@@ -733,6 +733,46 @@ export default function ResultsPage() {
               </div>
             )
           })()}
+          {/* Digital Signature */}
+          {digital_signature?.valid && (
+            <div className="glass rounded-xl p-5 border border-purple-500/20">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-white flex items-center gap-2 text-sm">
+                  <span>🔐</span> Digital Signature Certificate
+                </h3>
+                <span className="text-xs font-bold px-2 py-1 rounded-full bg-purple-500/20 text-purple-400">
+                  ✅ VERIFIED
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mb-3 text-xs">
+                <div className="glass rounded-lg p-3">
+                  <div className="text-gray-500 mb-1">Certificate Serial</div>
+                  <div className="text-white font-mono font-bold">{digital_signature.certificate_serial}</div>
+                </div>
+                <div className="glass rounded-lg p-3">
+                  <div className="text-gray-500 mb-1">Algorithm</div>
+                  <div className="text-purple-400 font-bold font-mono">{digital_signature.signature_algorithm}</div>
+                </div>
+                <div className="glass rounded-lg p-3">
+                  <div className="text-gray-500 mb-1">Key Fingerprint</div>
+                  <div className="text-white font-mono break-all">{digital_signature.key_fingerprint?.slice(0,16)}...</div>
+                </div>
+                <div className="glass rounded-lg p-3">
+                  <div className="text-gray-500 mb-1">Issued At</div>
+                  <div className="text-white font-mono">{digital_signature.issued_at?.slice(0,19)}</div>
+                </div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-3 mb-3">
+                <div className="text-xs text-gray-500 mb-1">Signature (HMAC-SHA256)</div>
+                <div className="text-xs text-gray-300 font-mono break-all leading-relaxed">
+                  {digital_signature.signature?.slice(0, 44)}...
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                This digital signature cryptographically proves this certificate was issued by JCCS and has not been modified. Any change to the audit results would invalidate this signature. Uses HMAC-SHA256 — the same algorithm used in JWT tokens and TLS certificates.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

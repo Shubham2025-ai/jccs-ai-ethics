@@ -144,6 +144,7 @@ def get_audit_result(audit_id: int, db: Session = Depends(get_db)):
         },
         "model_metrics": __import__('json').loads(next((e.content for e in explanations if e.explanation_type == "model_metrics"), "{}")),
         "decision_rules": __import__('json').loads(next((e.content for e in explanations if e.explanation_type == "decision_rules"), "{}")),
+        "digital_signature": __import__('json').loads(next((e.content for e in explanations if e.explanation_type == "digital_signature"), "{}")),
         "remediations": [
             {
                 "dimension": r.dimension,
@@ -274,4 +275,52 @@ def get_fairness_trend(run_name: str = None, limit: int = 10, db: Session = Depe
                 "created_at": str(a.created_at)
             } for a in audits
         ]
+    }
+
+@router.post("/{audit_id}/verify-signature")
+def verify_audit_signature(audit_id: int, db: Session = Depends(get_db)):
+    """
+    Verify the digital signature of an audit certificate.
+    Proves the certificate is authentic and has not been tampered with.
+    """
+    from app.services import blockchain_service
+    audit = db.query(AuditRun).filter(AuditRun.id == audit_id).first()
+    if not audit:
+        raise HTTPException(status_code=404, detail=f"Audit {audit_id} not found.")
+
+    # Get stored signature
+    from app.models.models import AiExplanation
+    import json
+    sig_record = db.query(AiExplanation).filter(
+        AiExplanation.audit_id == audit_id,
+        AiExplanation.explanation_type == "digital_signature"
+    ).first()
+
+    if not sig_record:
+        return {"verified": False, "message": "No digital signature found for this audit."}
+
+    sig_data = json.loads(sig_record.content)
+    if not sig_data.get("signature"):
+        return {"verified": False, "message": "Invalid signature record."}
+
+    result = blockchain_service.verify_digital_signature(
+        audit_id=audit_id,
+        run_name=audit.run_name,
+        overall_score=audit.overall_score or 0,
+        risk_level=audit.risk_level or "unknown",
+        sha256_hash=audit.hash_sha256 or "",
+        issued_at=sig_data.get("issued_at", ""),
+        provided_signature=sig_data["signature"]
+    )
+
+    return {
+        "audit_id": audit_id,
+        "run_name": audit.run_name,
+        "verified": result["valid"],
+        "message": result["message"],
+        "certificate_serial": sig_data.get("certificate_serial"),
+        "key_fingerprint": sig_data.get("key_fingerprint"),
+        "issued_at": sig_data.get("issued_at"),
+        "algorithm": sig_data.get("signature_algorithm", "HMAC-SHA256"),
+        "certificate_text": sig_data.get("certificate_text")
     }

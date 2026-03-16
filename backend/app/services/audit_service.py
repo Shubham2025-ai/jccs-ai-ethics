@@ -329,6 +329,27 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
             print(f"   ⚠️  Blockchain anchoring skipped: {e}")
             audit.blockchain_tx = f"JCCS-LocalProof|SHA256|{sha256_hash[:32]}|{datetime.utcnow().isoformat()[:19]}"
 
+        # Generate digital signature
+        try:
+            digital_sig = blockchain_service.generate_digital_signature(
+                audit_id=audit_id,
+                run_name=run_name,
+                overall_score=overall_score,
+                risk_level=risk_level,
+                sha256_hash=audit.hash_sha256 or ""
+            )
+            print(f"🔐 Digital signature: {digital_sig.get('certificate_serial','')}")
+        except Exception as e:
+            print(f"   ⚠️  Digital signature failed: {e}")
+            digital_sig = {"valid": False, "error": str(e)}
+
+        # Store digital signature
+        db.add(AiExplanation(
+            audit_id=audit_id,
+            explanation_type="digital_signature",
+            content=json.dumps(sanitize(digital_sig))
+        ))
+
         # Add accountability dimension after blockchain
         accountability_result = bias_engine.run_accountability(
             audit_id=audit_id,
