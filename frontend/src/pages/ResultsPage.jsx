@@ -236,6 +236,7 @@ export default function ResultsPage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
+  const [stakeholderView, setStakeholderView] = useState('executive')
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
@@ -770,16 +771,12 @@ export default function ResultsPage() {
       {/* STAKEHOLDER REPORTS */}
       {activeTab === 'stakeholders' && (
         <div className="space-y-4">
-          {/* Tab selector */}
           {(() => {
-            const [stakeholderView, setStakeholderView] = useState('executive')
             const score = Math.round(audit?.overall_score || 0)
             const risk = audit?.risk_level || 'unknown'
             const passedCount = fairness_results?.filter(r => r.passed).length || 0
             const failedCount = fairness_results?.filter(r => !r.passed).length || 0
             const failedDims = fairness_results?.filter(r => !r.passed).map(r => r.dimension_label) || []
-            const topShap = shap_results?.[0]?.feature_name || 'unknown feature'
-
             return (
               <div className="space-y-4">
                 {/* View selector */}
@@ -1066,3 +1063,7 @@ export default function ResultsPage() {
           </div>
         </div>
       )}
+
+    </div>
+  )
+}
