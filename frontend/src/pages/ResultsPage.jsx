@@ -93,7 +93,7 @@ function FairnessCard({ r }) {
 }
 
 function generatePDF(data, id) {
-  const { audit, fairness_results, shap_results, explanations, remediations, compliance_checks } = data
+  const { audit, fairness_results, shap_results, explanations, remediations, compliance_checks, digital_signature } = data
   const score = Math.round(audit.overall_score || 0)
   const riskColor = RISK_COLORS[audit.risk_level] || '#E94560'
   const scoreColor = SCORE_COLOR(score)
@@ -242,6 +242,10 @@ ${digital_signature?.valid ? `
 </div></body></html>`
 
   const win = window.open('', '_blank')
+  if (!win) {
+    alert('Popup blocked! Please allow popups for this site and try again.')
+    return
+  }
   win.document.write(html)
   win.document.close()
   setTimeout(() => win.print(), 600)
