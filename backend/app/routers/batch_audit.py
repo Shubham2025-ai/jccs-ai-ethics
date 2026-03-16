@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 import pandas as pd
 
 from app.core.database import get_db
-from app.models.models import AuditRun
+from app.models.models import AuditRun, FairnessResult
 from app.services import audit_service
 
 router = APIRouter(prefix="/api/audit", tags=["batch"])
@@ -253,4 +253,163 @@ def autorun_pipeline(db: Session = Depends(get_db)):
         "missing_files": missing,
         "message": f"✅ Auto-pipeline triggered: {len(launched)} audits running in parallel.",
         "note": "Place CSVs in /datasets/ folder. Poll /api/audit/history for results."
+    }
+
+# ── POST /api/audit/regression-test ──────────────────────────────────────────
+@router.post("/regression-test")
+async def regression_test(
+    baseline_file: UploadFile = File(...),
+    improved_file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Regression Testing — compare baseline model vs improved model.
+    Upload two CSVs: the original (baseline) and the updated (improved) model.
+    Returns a detailed diff showing which dimensions improved, degraded, or stayed the same.
+    Both audits run in parallel. Returns regression_id to poll for results.
+    """
+    import uuid
+    regression_id = f"regtest_{uuid.uuid4().hex[:12]}"
+
+    results = {}
+    audit_ids = {}
+
+    for label, file in [("baseline", baseline_file), ("improved", improved_file)]:
+        content = await file.read()
+        try:
+            import pandas as pd
+            df = pd.read_csv(pd.io.common.BytesIO(content))
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Cannot parse {file.filename} as CSV.")
+
+        run_name = f"{label.capitalize()} — {file.filename.replace('.csv','')}"
+
+        audit = AuditRun(
+            run_name=run_name,
+            file_name=file.filename,
+            row_count=len(df),
+            status="pending",
+        )
+        db.add(audit)
+        db.commit()
+        db.refresh(audit)
+        audit_ids[label] = audit.id
+
+        from app.core.database import SessionLocal
+        t = threading.Thread(
+            target=_run_in_thread,
+            args=(SessionLocal, audit.id, df, run_name),
+            daemon=True
+        )
+        t.start()
+
+    # Store regression job
+    _batch_jobs[regression_id] = {
+        "type": "regression",
+        "baseline_id": audit_ids["baseline"],
+        "improved_id": audit_ids["improved"],
+        "status": "running"
+    }
+
+    return {
+        "regression_id": regression_id,
+        "baseline_audit_id": audit_ids["baseline"],
+        "improved_audit_id": audit_ids["improved"],
+        "message": "✅ Regression test started. Both models auditing in parallel.",
+        "poll": f"/api/audit/regression-test/{regression_id}"
+    }
+
+
+@router.get("/regression-test/{regression_id}")
+def regression_test_results(regression_id: str, db: Session = Depends(get_db)):
+    """
+    Poll regression test results.
+    Returns detailed diff: which dimensions improved/degraded/stable.
+    """
+    job = _batch_jobs.get(regression_id)
+    if not job or job.get("type") != "regression":
+        raise HTTPException(status_code=404, detail="Regression test not found.")
+
+    baseline_id = job["baseline_id"]
+    improved_id = job["improved_id"]
+
+    baseline = db.query(AuditRun).filter(AuditRun.id == baseline_id).first()
+    improved = db.query(AuditRun).filter(AuditRun.id == improved_id).first()
+
+    if not baseline or not improved:
+        raise HTTPException(status_code=404, detail="Audit records not found.")
+
+    # Still processing
+    if baseline.status not in ("completed", "failed") or improved.status not in ("completed", "failed"):
+        return {
+            "status": "running",
+            "baseline_status": baseline.status,
+            "improved_status": improved.status,
+            "message": "Audits still processing..."
+        }
+
+    # Get fairness results for both
+    baseline_dims = db.query(FairnessResult).filter(FairnessResult.audit_id == baseline_id).all()
+    improved_dims = db.query(FairnessResult).filter(FairnessResult.audit_id == improved_id).all()
+
+    baseline_map = {r.dimension: r.score for r in baseline_dims}
+    improved_map = {r.dimension: r.score for r in improved_dims}
+
+    # Build diff
+    dimension_diff = []
+    all_dims = set(list(baseline_map.keys()) + list(improved_map.keys()))
+
+    for dim in all_dims:
+        b_score = baseline_map.get(dim, 0)
+        i_score = improved_map.get(dim, 0)
+        diff = i_score - b_score
+        if diff > 3:
+            status = "improved"
+        elif diff < -3:
+            status = "degraded"
+        else:
+            status = "stable"
+
+        dimension_diff.append({
+            "dimension": dim,
+            "baseline_score": round(b_score, 2),
+            "improved_score": round(i_score, 2),
+            "diff": round(diff, 2),
+            "status": status
+        })
+
+    dimension_diff.sort(key=lambda x: abs(x["diff"]), reverse=True)
+
+    overall_diff = (improved.overall_score or 0) - (baseline.overall_score or 0)
+    improved_count = len([d for d in dimension_diff if d["status"] == "improved"])
+    degraded_count = len([d for d in dimension_diff if d["status"] == "degraded"])
+
+    if overall_diff > 5:
+        verdict = "PASSED"
+        verdict_msg = f"✅ Model improved by {overall_diff:.1f} points. Bias reduction confirmed."
+    elif overall_diff < -5:
+        verdict = "FAILED"
+        verdict_msg = f"❌ Model DEGRADED by {abs(overall_diff):.1f} points. Changes made things worse!"
+    else:
+        verdict = "NEUTRAL"
+        verdict_msg = f"⚠️ Minimal change ({overall_diff:+.1f} points). Review individual dimensions."
+
+    return {
+        "status": "completed",
+        "regression_id": regression_id,
+        "verdict": verdict,
+        "verdict_message": verdict_msg,
+        "overall": {
+            "baseline_score": round(baseline.overall_score or 0, 2),
+            "improved_score": round(improved.overall_score or 0, 2),
+            "diff": round(overall_diff, 2),
+            "baseline_risk": baseline.risk_level,
+            "improved_risk": improved.risk_level,
+        },
+        "summary": {
+            "improved_dimensions": improved_count,
+            "degraded_dimensions": degraded_count,
+            "stable_dimensions": len(dimension_diff) - improved_count - degraded_count,
+        },
+        "dimension_diff": dimension_diff
     }
