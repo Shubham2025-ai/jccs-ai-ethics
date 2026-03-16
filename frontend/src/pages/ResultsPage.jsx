@@ -237,6 +237,9 @@ export default function ResultsPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
   const [stakeholderView, setStakeholderView] = useState('executive')
+  const [debiasMethod, setDebiasMethod] = useState('reweighing')
+  const [debiasState, setDebiasState] = useState('idle') // idle | preview | approved | loading
+  const [debiasResult, setDebiasResult] = useState(null)
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
@@ -882,6 +885,128 @@ export default function ResultsPage() {
               <CheckCircle className="w-10 h-10 text-green-400 mx-auto mb-3" />
               <p className="text-white font-medium">No remediations needed!</p>
               <p className="text-gray-400 text-sm">All fairness dimensions passed their thresholds.</p>
+            </div>
+          )}
+
+          {/* Automated Debiasing */}
+          {remediations?.length > 0 && (
+            <div className="glass rounded-2xl p-6 border border-[#6C63FF]/30"
+              style={{ background: 'rgba(108,99,255,0.03)' }}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                  style={{ background: 'linear-gradient(135deg, #6C63FF, #E94560)' }}>
+                  <span className="text-white text-base">🤖</span>
+                </div>
+                <div>
+                  <h3 className="font-black text-white">Automated Debiasing</h3>
+                  <p className="text-xs text-gray-500">Simulate applying a fix — human approval required before production</p>
+                </div>
+              </div>
+
+              {debiasState === 'idle' && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { key: 'reweighing', label: '⚖️ Reweighing', desc: 'Balance group weights' },
+                      { key: 'threshold',  label: '🎯 Threshold',  desc: 'Per-group thresholds' },
+                      { key: 'suppression',label: '🔇 Suppression',desc: 'Remove biased features' },
+                    ].map(m => (
+                      <button key={m.key} onClick={() => setDebiasMethod(m.key)}
+                        className="p-3 rounded-xl text-xs font-bold transition-all border"
+                        style={{
+                          background: debiasMethod === m.key ? 'rgba(108,99,255,0.2)' : 'rgba(255,255,255,0.03)',
+                          borderColor: debiasMethod === m.key ? '#6C63FF' : 'rgba(255,255,255,0.08)',
+                          color: debiasMethod === m.key ? '#a78bfa' : '#9ca3af'
+                        }}>
+                        <div>{m.label}</div>
+                        <div className="font-normal text-gray-600 mt-0.5">{m.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={async () => {
+                      setDebiasState('loading')
+                      try {
+                        const res = await fetch(`${import.meta.env.VITE_API_URL || 'https://jccs-ai-ethics.onrender.com'}/audit/${id}/debias?method=${debiasMethod}&approved=false`, { method: 'POST' })
+                        const data = await res.json()
+                        setDebiasResult(data)
+                        setDebiasState('preview')
+                      } catch (e) {
+                        setDebiasState('idle')
+                      }
+                    }}
+                    className="w-full py-2.5 rounded-xl font-black text-white text-sm transition-all hover:scale-[1.01]"
+                    style={{ background: 'linear-gradient(135deg, #6C63FF, #8B5CF6)' }}>
+                    🔬 Simulate {debiasMethod.charAt(0).toUpperCase() + debiasMethod.slice(1)} Debiasing
+                  </button>
+                </div>
+              )}
+
+              {debiasState === 'loading' && (
+                <div className="text-center py-4">
+                  <div className="w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                  <p className="text-gray-400 text-sm">Simulating debiasing...</p>
+                </div>
+              )}
+
+              {debiasState === 'preview' && debiasResult && (
+                <div className="space-y-3">
+                  <div className="rounded-xl p-3 border border-yellow-500/20" style={{ background: 'rgba(253,203,110,0.06)' }}>
+                    <div className="text-yellow-400 font-black text-xs mb-1">⚠️ SIMULATION PREVIEW — Human Approval Required</div>
+                    <p className="text-gray-300 text-xs">{debiasResult.method_description}</p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="rounded-xl p-3 border border-red-500/20" style={{ background: 'rgba(233,69,96,0.05)' }}>
+                      <div className="text-xs text-gray-500 mb-1">Current</div>
+                      <div className="text-2xl font-black" style={{ color: SCORE_COLOR(debiasResult.current?.overall_score) }}>{debiasResult.current?.overall_score}</div>
+                    </div>
+                    <div className="rounded-xl p-3 border border-purple-500/20 flex flex-col items-center justify-center" style={{ background: 'rgba(108,99,255,0.05)' }}>
+                      <div className="text-lg font-black text-purple-400">+{debiasResult.projected?.score_improvement}</div>
+                      <div className="text-xs text-gray-600">projected gain</div>
+                    </div>
+                    <div className="rounded-xl p-3 border border-green-500/20" style={{ background: 'rgba(0,184,148,0.05)' }}>
+                      <div className="text-xs text-gray-500 mb-1">Projected</div>
+                      <div className="text-2xl font-black" style={{ color: SCORE_COLOR(debiasResult.projected?.overall_score) }}>{debiasResult.projected?.overall_score}</div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        setDebiasState('loading')
+                        try {
+                          const res = await fetch(`${import.meta.env.VITE_API_URL || 'https://jccs-ai-ethics.onrender.com'}/audit/${id}/debias?method=${debiasMethod}&approved=true`, { method: 'POST' })
+                          const data = await res.json()
+                          setDebiasResult(data)
+                          setDebiasState('approved')
+                        } catch { setDebiasState('preview') }
+                      }}
+                      className="flex-1 py-2.5 rounded-xl font-black text-white text-sm"
+                      style={{ background: 'linear-gradient(135deg, #00B894, #00cec9)' }}>
+                      ✅ Approve & Get Implementation Guide
+                    </button>
+                    <button onClick={() => setDebiasState('idle')}
+                      className="px-4 py-2.5 rounded-xl text-sm text-gray-400 border border-white/10 hover:border-white/20 transition-all">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {debiasState === 'approved' && debiasResult && (
+                <div className="space-y-3">
+                  <div className="rounded-xl p-4 border border-green-500/20" style={{ background: 'rgba(0,184,148,0.06)' }}>
+                    <div className="text-green-400 font-black mb-2">✅ {debiasResult.message}</div>
+                    <div className="text-xs text-gray-300 font-black mb-2">Implementation Steps:</div>
+                    {debiasResult.next_steps?.map((step, i) => (
+                      <div key={i} className="text-xs text-gray-300 mb-1">{step}</div>
+                    ))}
+                  </div>
+                  <button onClick={() => { setDebiasState('idle'); setDebiasResult(null) }}
+                    className="w-full py-2 rounded-xl text-sm text-gray-400 border border-white/10 hover:border-white/20 transition-all">
+                    Try Another Method
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

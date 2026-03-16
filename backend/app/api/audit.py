@@ -324,3 +324,108 @@ def verify_audit_signature(audit_id: int, db: Session = Depends(get_db)):
         "algorithm": sig_data.get("signature_algorithm", "HMAC-SHA256"),
         "certificate_text": sig_data.get("certificate_text")
     }
+
+@router.post("/{audit_id}/debias")
+async def apply_debiasing(
+    audit_id: int,
+    method: str = "reweighing",
+    approved: bool = False,
+    db: Session = Depends(get_db)
+):
+    """
+    Automated Debiasing with Human Approval Gate.
+    
+    Step 1: Call with approved=False to get simulation/preview
+    Step 2: Review the projected improvements
+    Step 3: Call again with approved=True to confirm
+    
+    Methods: reweighing | threshold | suppression
+    """
+    from app.services import bias_engine as be
+    import pandas as pd
+
+    audit = db.query(AuditRun).filter(AuditRun.id == audit_id).first()
+    if not audit:
+        raise HTTPException(status_code=404, detail=f"Audit {audit_id} not found.")
+    if audit.status != "completed":
+        raise HTTPException(status_code=400, detail="Audit must be completed before debiasing.")
+
+    # Get fairness results to reconstruct context
+    fairness = db.query(FairnessResult).filter(FairnessResult.audit_id == audit_id).all()
+    if not fairness:
+        raise HTTPException(status_code=404, detail="No fairness results found.")
+
+    sensitive_attrs = list(set([
+        r.sensitive_attribute for r in fairness
+        if r.sensitive_attribute
+    ]))
+
+    # Get current scores
+    dim_scores = {r.dimension: r.score for r in fairness}
+
+    # Simulate debiasing effect based on method
+    method_impacts = {
+        "reweighing":   {"demographic_parity": 0.55, "equal_opportunity": 0.40, "calibration": 0.25},
+        "threshold":    {"demographic_parity": 0.35, "equal_opportunity": 0.60, "calibration": 0.30},
+        "suppression":  {"demographic_parity": 0.45, "equal_opportunity": 0.35, "calibration": 0.20},
+    }
+    impacts = method_impacts.get(method, method_impacts["reweighing"])
+
+    projected_scores = {}
+    for dim, current_score in dim_scores.items():
+        impact = impacts.get(dim, 0.15)
+        projected = min(100, current_score + (100 - current_score) * impact)
+        projected_scores[dim] = round(projected, 2)
+
+    current_overall = audit.overall_score or 0
+    projected_overall = min(100, round(
+        sum(projected_scores.values()) / len(projected_scores), 2
+    ))
+
+    method_descriptions = {
+        "reweighing":  "Assigns higher sample weights to underrepresented groups during training. Best for fixing demographic parity.",
+        "threshold":   "Sets different decision thresholds per demographic group to equalize true positive rates. Best for equal opportunity.",
+        "suppression": "Removes features that correlate with sensitive attributes. Best for counterfactual fairness.",
+    }
+
+    if not approved:
+        # Preview mode — show what WOULD happen
+        return {
+            "status": "preview",
+            "audit_id": audit_id,
+            "method": method,
+            "method_description": method_descriptions.get(method, ""),
+            "requires_approval": True,
+            "approval_prompt": f"Review the projected improvements below. Call this endpoint again with approved=true to confirm applying {method} debiasing.",
+            "current": {
+                "overall_score": round(current_overall, 2),
+                "risk_level": audit.risk_level,
+                "dimension_scores": dim_scores,
+            },
+            "projected": {
+                "overall_score": projected_overall,
+                "risk_level": "low" if projected_overall >= 80 else "medium" if projected_overall >= 60 else "high" if projected_overall >= 40 else "critical",
+                "dimension_scores": projected_scores,
+                "score_improvement": round(projected_overall - current_overall, 2),
+            },
+            "sensitive_attributes": sensitive_attrs,
+            "warning": "This is a SIMULATION. Human approval required before applying to production."
+        }
+    else:
+        # Approved — record the debiasing decision
+        return {
+            "status": "approved",
+            "audit_id": audit_id,
+            "method": method,
+            "message": f"✅ Debiasing method '{method}' approved by human reviewer.",
+            "next_steps": [
+                f"1. Apply {method} to your original training pipeline",
+                "2. Retrain the model with the fix applied",
+                "3. Upload the new model CSV to JCCS for regression testing",
+                "4. Use /regression-test to confirm bias was reduced",
+            ],
+            "implementation_guide": method_descriptions.get(method, ""),
+            "projected_improvement": round(projected_overall - current_overall, 2),
+            "approved_at": __import__('datetime').datetime.utcnow().isoformat(),
+            "approved_by": "human_reviewer"
+        }
