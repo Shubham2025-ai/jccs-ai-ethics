@@ -339,6 +339,8 @@ export default function ResultsPage() {
           { key: 'explainability', label: 'Explainability', icon: '🧠' },
           { key: 'compliance', label: 'Compliance', icon: '📋' },
           { key: 'remediation', label: 'Remediation', icon: '🔧' },
+          { key: 'stakeholders', label: 'Reports', icon: '👥' },
+          { key: 'beforeafter', label: 'Before/After', icon: '📈' },
         ].map(({ key, label, icon }) => (
           <button key={key} onClick={() => setActiveTab(key)}
             aria-label={label}
@@ -764,6 +766,303 @@ export default function ResultsPage() {
           )}
         </div>
       )}
-    </div>
-  )
-}
+
+      {/* STAKEHOLDER REPORTS */}
+      {activeTab === 'stakeholders' && (
+        <div className="space-y-4">
+          {/* Tab selector */}
+          {(() => {
+            const [stakeholderView, setStakeholderView] = useState('executive')
+            const score = Math.round(audit?.overall_score || 0)
+            const risk = audit?.risk_level || 'unknown'
+            const passedCount = fairness_results?.filter(r => r.passed).length || 0
+            const failedCount = fairness_results?.filter(r => !r.passed).length || 0
+            const failedDims = fairness_results?.filter(r => !r.passed).map(r => r.dimension_label) || []
+            const topShap = shap_results?.[0]?.feature_name || 'unknown feature'
+
+            return (
+              <div className="space-y-4">
+                {/* View selector */}
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { key: 'executive', label: '👔 Executive', color: '#6C63FF' },
+                    { key: 'developer', label: '💻 Developer', color: '#00B894' },
+                    { key: 'regulator', label: '⚖️ Regulator', color: '#FDCB6E' },
+                    { key: 'enduser',   label: '👤 End User',   color: '#E94560' },
+                  ].map(v => (
+                    <button key={v.key} onClick={() => setStakeholderView(v.key)}
+                      className="px-4 py-2 rounded-xl text-sm font-bold transition-all"
+                      style={{
+                        background: stakeholderView === v.key ? v.color + '25' : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${stakeholderView === v.key ? v.color : 'rgba(255,255,255,0.08)'}`,
+                        color: stakeholderView === v.key ? v.color : '#9ca3af'
+                      }}>
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Executive Report */}
+                {stakeholderView === 'executive' && (
+                  <div className="space-y-4">
+                    <div className="glass rounded-2xl p-6 border border-[#6C63FF]/20">
+                      <h3 className="font-black text-white text-lg mb-1">Executive Summary</h3>
+                      <p className="text-gray-400 text-xs mb-4">High-level risk assessment for leadership and board</p>
+                      <div className="grid grid-cols-3 gap-4 mb-5">
+                        <div className="text-center rounded-xl p-4" style={{ background: 'rgba(108,99,255,0.08)', border: '1px solid rgba(108,99,255,0.2)' }}>
+                          <div className="text-3xl font-black" style={{ color: SCORE_COLOR(score) }}>{score}</div>
+                          <div className="text-xs text-gray-500 mt-1">Ethics Score / 100</div>
+                        </div>
+                        <div className="text-center rounded-xl p-4" style={{ background: 'rgba(0,184,148,0.08)', border: '1px solid rgba(0,184,148,0.2)' }}>
+                          <div className="text-3xl font-black text-green-400">{passedCount}</div>
+                          <div className="text-xs text-gray-500 mt-1">Checks Passed</div>
+                        </div>
+                        <div className="text-center rounded-xl p-4" style={{ background: 'rgba(233,69,96,0.08)', border: '1px solid rgba(233,69,96,0.2)' }}>
+                          <div className="text-3xl font-black text-red-400">{failedCount}</div>
+                          <div className="text-xs text-gray-500 mt-1">Issues Found</div>
+                        </div>
+                      </div>
+                      <div className="rounded-xl p-4 mb-3" style={{ background: risk === 'critical' || risk === 'high' ? 'rgba(233,69,96,0.08)' : 'rgba(0,184,148,0.08)', border: `1px solid ${risk === 'critical' || risk === 'high' ? 'rgba(233,69,96,0.2)' : 'rgba(0,184,148,0.2)'}` }}>
+                        <div className="font-black text-white mb-1">
+                          {risk === 'critical' ? '🔴 DO NOT DEPLOY' : risk === 'high' ? '🟠 HIGH RISK — Review Required' : risk === 'medium' ? '🟡 MEDIUM RISK — Monitor Closely' : '🟢 LOW RISK — Safe to Deploy'}
+                        </div>
+                        <p className="text-gray-300 text-sm">
+                          {risk === 'critical' || risk === 'high'
+                            ? `This AI model has significant fairness issues that could expose the organization to legal liability under EU AI Act 2026 and India DPDP Act. Deployment is not recommended until ${failedCount} identified issues are resolved.`
+                            : `This AI model meets minimum fairness standards. ${passedCount} of ${passedCount + failedCount} checks passed. Continue monitoring post-deployment for fairness drift.`
+                          }
+                        </p>
+                      </div>
+                      <p className="text-gray-500 text-xs">
+                        Audit ID: #{audit?.id} · {audit?.file_name} · {audit?.row_count?.toLocaleString()} rows analyzed · {new Date(audit?.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Developer Report */}
+                {stakeholderView === 'developer' && (
+                  <div className="space-y-3">
+                    <div className="glass rounded-2xl p-6 border border-green-500/20">
+                      <h3 className="font-black text-white text-lg mb-1">Developer Technical Report</h3>
+                      <p className="text-gray-400 text-xs mb-4">Code-level metrics and implementation suggestions</p>
+                      <div className="space-y-3">
+                        {failedDims.length > 0 && (
+                          <div className="rounded-xl p-4" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <div className="text-xs font-black text-green-400 mb-2">// Failed Dimensions — Fix Priority</div>
+                            {fairness_results?.filter(r => !r.passed).map((r, i) => (
+                              <div key={i} className="text-xs font-mono text-gray-300 mb-1">
+                                <span className="text-red-400">✗</span> {r.dimension} — score: {Math.round(r.score)}/100, disparity: {r.metric_value?.toFixed(4)}, threshold: {r.threshold}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="rounded-xl p-4" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          <div className="text-xs font-black text-green-400 mb-2">// Top Feature Driving Bias (SHAP)</div>
+                          {shap_results?.slice(0, 5).map((s, i) => (
+                            <div key={i} className="text-xs font-mono text-gray-300 mb-1">
+                              <span className="text-yellow-400">→</span> {s.feature_name}: {(s.shap_importance * 100).toFixed(1)}% importance
+                            </div>
+                          ))}
+                        </div>
+                        <div className="rounded-xl p-4" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          <div className="text-xs font-black text-green-400 mb-2">// Recommended Libraries</div>
+                          <div className="text-xs font-mono text-gray-300 space-y-1">
+                            <div><span className="text-purple-400">pip install</span> fairlearn  <span className="text-gray-600"># ExponentiatedGradient, ThresholdOptimizer</span></div>
+                            <div><span className="text-purple-400">pip install</span> aif360     <span className="text-gray-600"># Reweighing, AdversarialDebiasing</span></div>
+                            <div><span className="text-purple-400">pip install</span> shap       <span className="text-gray-600"># TreeExplainer for feature attribution</span></div>
+                          </div>
+                        </div>
+                        <div className="rounded-xl p-4" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          <div className="text-xs font-black text-green-400 mb-2">// SHA-256 Audit Hash</div>
+                          <div className="text-xs font-mono text-gray-400 break-all">{audit?.hash_sha256}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Regulator Report */}
+                {stakeholderView === 'regulator' && (
+                  <div className="space-y-3">
+                    <div className="glass rounded-2xl p-6 border border-yellow-500/20">
+                      <h3 className="font-black text-white text-lg mb-1">Regulatory Compliance Report</h3>
+                      <p className="text-gray-400 text-xs mb-4">Formal compliance status for regulatory submission</p>
+                      {Object.entries(
+                        compliance_checks?.reduce((acc, c) => {
+                          if (!acc[c.standard]) acc[c.standard] = []
+                          acc[c.standard].push(c)
+                          return acc
+                        }, {}) || {}
+                      ).map(([std, checks]) => {
+                        const passed = checks.filter(c => c.passed).length
+                        const total = checks.length
+                        const stdNames = { EU_AI_ACT: 'EU AI Act 2026', DPDP: 'India DPDP Act 2025-26', ISO_42001: 'ISO/IEC 42001' }
+                        return (
+                          <div key={std} className="mb-4 rounded-xl p-4 border border-white/5" style={{ background: 'rgba(255,255,255,0.02)' }}>
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="font-black text-white text-sm">{stdNames[std] || std}</span>
+                              <span className={`text-sm font-black ${passed === total ? 'text-green-400' : 'text-yellow-400'}`}>{passed}/{total} COMPLIANT</span>
+                            </div>
+                            {checks.map((c, i) => (
+                              <div key={i} className="flex items-start gap-2 mb-1.5">
+                                {c.passed ? <CheckCircle className="w-3.5 h-3.5 text-green-400 mt-0.5 flex-shrink-0" /> : <XCircle className="w-3.5 h-3.5 text-red-400 mt-0.5 flex-shrink-0" />}
+                                <span className="text-xs text-gray-300">{c.requirement}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      })}
+                      <div className="rounded-xl p-3 border border-white/5 text-xs text-gray-500 text-center">
+                        Audit ID #{audit?.id} · Blockchain: {audit?.blockchain_tx?.split('|')[0]} · {new Date(audit?.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* End User Report */}
+                {stakeholderView === 'enduser' && (
+                  <div className="space-y-3">
+                    <div className="glass rounded-2xl p-6 border border-red-500/20">
+                      <h3 className="font-black text-white text-lg mb-1">Plain Language Report</h3>
+                      <p className="text-gray-400 text-xs mb-4">Simple explanation of how this AI model may affect you</p>
+                      <div className="space-y-3">
+                        <div className="rounded-xl p-4" style={{ background: risk === 'critical' || risk === 'high' ? 'rgba(233,69,96,0.08)' : 'rgba(0,184,148,0.08)', border: `1px solid ${risk === 'critical' || risk === 'high' ? 'rgba(233,69,96,0.2)' : 'rgba(0,184,148,0.2)'}` }}>
+                          <div className="font-black text-white mb-2">
+                            {risk === 'critical' ? '⚠️ This AI model may be treating people unfairly' : risk === 'high' ? '⚠️ This AI model has some fairness concerns' : '✅ This AI model appears to be reasonably fair'}
+                          </div>
+                          <p className="text-gray-300 text-sm leading-relaxed">
+                            {risk === 'critical'
+                              ? `Our analysis found that this AI model treats different groups of people unequally. If you were denied a service, loan, job, or healthcare by this system, the decision may have been influenced by your age, gender, or race — not just your qualifications or circumstances.`
+                              : risk === 'high'
+                              ? `This AI model shows some signs of unequal treatment across demographic groups. While not severely biased, there is a meaningful chance that decisions could be influenced by protected characteristics.`
+                              : `This AI model shows relatively equal treatment across different demographic groups. Decisions appear to be based primarily on relevant factors rather than protected characteristics.`
+                            }
+                          </p>
+                        </div>
+                        <div className="rounded-xl p-4 border border-white/5" style={{ background: 'rgba(255,255,255,0.02)' }}>
+                          <div className="font-bold text-white text-sm mb-2">🔍 What most influences decisions in this model:</div>
+                          {shap_results?.slice(0, 3).map((s, i) => (
+                            <div key={i} className="flex items-center gap-3 mb-2">
+                              <span className="text-sm">{i === 0 ? '1️⃣' : i === 1 ? '2️⃣' : '3️⃣'}</span>
+                              <div className="flex-1">
+                                <div className="text-sm text-white font-medium">{s.feature_name?.replace(/_/g, ' ')}</div>
+                                <div className="w-full h-1.5 rounded-full bg-white/5 mt-1">
+                                  <div className="h-1.5 rounded-full" style={{ width: `${s.shap_importance * 100}%`, background: i === 0 ? '#E94560' : i === 1 ? '#FDCB6E' : '#6C63FF' }} />
+                                </div>
+                              </div>
+                              <span className="text-xs text-gray-400">{(s.shap_importance * 100).toFixed(0)}%</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="rounded-xl p-4 border border-purple-500/20" style={{ background: 'rgba(108,99,255,0.05)' }}>
+                          <div className="font-bold text-white text-sm mb-2">📋 Your Rights</div>
+                          <p className="text-gray-300 text-xs leading-relaxed">Under the India DPDP Act Section 11, you have the right to an explanation for any automated decision that affects you. Under EU AI Act Article 13, AI systems must be transparent about how they make decisions. This audit certificate (ID #{audit?.id}) can be used as evidence in a formal complaint.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+        </div>
+      )}
+
+      {/* BEFORE / AFTER */}
+      {activeTab === 'beforeafter' && (
+        <div className="space-y-4">
+          <div className="glass rounded-2xl p-6 border border-[#6C63FF]/20">
+            <h3 className="font-black text-white text-lg mb-1 flex items-center gap-2">
+              📈 Projected After Remediation
+            </h3>
+            <p className="text-gray-400 text-xs mb-5">Estimated scores if all recommended fixes are applied. Based on academic benchmarks for each mitigation technique.</p>
+
+            {/* Overall score before/after */}
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="rounded-xl p-5 text-center border border-red-500/20" style={{ background: 'rgba(233,69,96,0.05)' }}>
+                <div className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2">Current Score</div>
+                <div className="text-5xl font-black mb-1" style={{ color: SCORE_COLOR(Math.round(audit?.overall_score || 0)) }}>
+                  {Math.round(audit?.overall_score || 0)}
+                </div>
+                <div className="text-xs font-black uppercase" style={{ color: SCORE_COLOR(Math.round(audit?.overall_score || 0)) }}>
+                  {audit?.risk_level} risk
+                </div>
+              </div>
+              <div className="rounded-xl p-5 text-center border border-green-500/20" style={{ background: 'rgba(0,184,148,0.05)' }}>
+                <div className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2">Projected Score</div>
+                {(() => {
+                  const current = Math.round(audit?.overall_score || 0)
+                  const totalReduction = remediations?.reduce((sum, r) => sum + (r.estimated_bias_reduction || 0), 0) || 0
+                  const avgReduction = remediations?.length > 0 ? totalReduction / remediations.length : 0
+                  const projected = Math.min(100, Math.round(current + (100 - current) * (avgReduction / 100)))
+                  const projRisk = projected >= 80 ? 'low' : projected >= 60 ? 'medium' : projected >= 40 ? 'high' : 'critical'
+                  return (
+                    <>
+                      <div className="text-5xl font-black mb-1" style={{ color: SCORE_COLOR(projected) }}>{projected}</div>
+                      <div className="text-xs font-black uppercase" style={{ color: SCORE_COLOR(projected) }}>{projRisk} risk</div>
+                    </>
+                  )
+                })()}
+              </div>
+            </div>
+
+            {/* Per-dimension before/after bars */}
+            <div className="space-y-4">
+              <div className="text-xs font-black text-gray-500 uppercase tracking-widest">Per-Dimension Improvement</div>
+              {fairness_results?.filter(r => !r.passed).map((r, i) => {
+                const rem = remediations?.find(rem => rem.dimension === r.dimension)
+                const projected = rem ? Math.min(100, Math.round(r.score + (100 - r.score) * (rem.estimated_bias_reduction / 100))) : Math.round(r.score)
+                return (
+                  <div key={i} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-300 font-medium capitalize">{r.dimension_label}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-red-400 font-bold">{Math.round(r.score)}</span>
+                        <span className="text-gray-600">→</span>
+                        <span className="text-green-400 font-bold">~{projected}</span>
+                      </div>
+                    </div>
+                    {/* Before bar */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-600 w-12">Before</span>
+                      <div className="flex-1 h-2 rounded-full bg-white/5">
+                        <div className="h-2 rounded-full transition-all duration-1000"
+                          style={{ width: `${r.score}%`, background: '#E94560' }} />
+                      </div>
+                    </div>
+                    {/* After bar */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-600 w-12">After</span>
+                      <div className="flex-1 h-2 rounded-full bg-white/5">
+                        <div className="h-2 rounded-full transition-all duration-1000"
+                          style={{ width: `${projected}%`, background: '#00B894' }} />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+              {fairness_results?.filter(r => r.passed).map((r, i) => (
+                <div key={i} className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500 font-medium capitalize">{r.dimension_label}</span>
+                    <span className="text-green-400 font-bold text-xs">✅ Already passing — {Math.round(r.score)}/100</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Accuracy trade-off warning */}
+            {remediations?.length > 0 && (
+              <div className="mt-5 rounded-xl p-4 border border-yellow-500/20" style={{ background: 'rgba(253,203,110,0.05)' }}>
+                <div className="text-yellow-400 font-black text-sm mb-1">⚡ Accuracy Trade-off</div>
+                <p className="text-gray-300 text-xs leading-relaxed">
+                  Applying all {remediations.length} recommended fixes is estimated to reduce accuracy by ~{remediations.reduce((sum, r) => sum + (r.estimated_accuracy_loss || 0), 0).toFixed(1)}% total.
+                  This is the standard fairness-accuracy trade-off documented in academic literature.
+                  Human approval is required before applying any automated debiasing.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
