@@ -173,7 +173,7 @@ h1{font-size:22px;font-weight:800;margin-bottom:4px}
   <div><span class="risk-badge">${(audit.risk_level||'unknown').toUpperCase()} RISK</span></div></div>
   <div class="stat"><div class="n" style="color:#00B894">${passed}</div><div class="l">Passed</div></div>
   <div class="stat"><div class="n" style="color:#E94560">${failed}</div><div class="l">Failed</div></div>
-  <div class="stat"><div class="n" style="color:#6C63FF">6</div><div class="l">Tested</div></div>
+  <div class="stat"><div class="n" style="color:#6C63FF">${fairness_results?.length || 0}</div><div class="l">Tested</div></div>
 </div>
 ${explanations?.summary ? `<div class="sec"><div class="sec-title">AI Analysis Summary</div><div class="summary">${explanations.summary.split(" ").slice(0,80).join(" ")}${explanations.summary.split(" ").length > 80 ? "..." : ""}</div></div>` : ''}
 <div class="sec"><div class="sec-title">Fairness Dimensions</div><div class="fg">
