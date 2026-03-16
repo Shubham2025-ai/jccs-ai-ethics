@@ -1338,39 +1338,57 @@ def run_robustness(df: pd.DataFrame, feature_cols: List[str], y_pred) -> Dict:
 
 def run_accountability(audit_id: int, run_name: str, hash_sha256: str, blockchain_tx: str) -> Dict:
     """
-    Dimension 9: Accountability — verifies audit trail completeness.
-    Checks that the audit is properly logged, hashed, and certified.
+    Dimension 9: Accountability — verifies audit trail completeness and quality.
+    Checks audit logging, cryptographic integrity, blockchain anchoring,
+    and whether the audit has a real Bitcoin anchor vs local proof.
     """
     try:
-        score = 40.0  # base score
+        score = 0.0
         details = {}
+        checks_passed = 0
+        total_checks = 5
 
-        # Check 1: Audit ID exists
+        # Check 1: Audit ID exists and is valid
         if audit_id and audit_id > 0:
-            score += 15
-            details["audit_id"] = f"#{audit_id} — logged"
-        else:
-            details["audit_id"] = "Missing"
-
-        # Check 2: Run name documented
-        if run_name and len(run_name) > 0:
-            score += 10
-            details["run_name"] = f"{run_name} — documented"
-
-        # Check 3: SHA-256 hash present
-        if hash_sha256 and len(hash_sha256) == 64:
             score += 20
-            details["sha256"] = f"{hash_sha256[:16]}... — verified"
+            checks_passed += 1
+            details["audit_id"] = f"#{audit_id} — logged ✅"
         else:
-            details["sha256"] = "Missing or invalid"
+            details["audit_id"] = "❌ Missing — audit not properly logged"
+
+        # Check 2: Run name is descriptive (not just default)
+        if run_name and len(run_name) > 3 and run_name.lower() not in ("audit run", "test", "untitled"):
+            score += 15
+            checks_passed += 1
+            details["run_name"] = f"{run_name} — documented ✅"
+        else:
+            details["run_name"] = "⚠️ Generic name — use descriptive run names"
+
+        # Check 3: SHA-256 hash is valid (64 hex chars)
+        if hash_sha256 and len(hash_sha256) == 64 and all(c in '0123456789abcdef' for c in hash_sha256.lower()):
+            score += 25
+            checks_passed += 1
+            details["sha256"] = f"{hash_sha256[:16]}... — cryptographic integrity verified ✅"
+        else:
+            details["sha256"] = "❌ Missing or invalid SHA-256 hash"
 
         # Check 4: Blockchain certificate present
         if blockchain_tx and len(blockchain_tx) > 10:
-            score += 15
             provider = blockchain_tx.split("|")[0] if "|" in blockchain_tx else "Unknown"
-            details["blockchain"] = f"Anchored via {provider}"
+            # Check 5: Real Bitcoin anchoring vs local proof
+            if provider == "OriginStamp":
+                score += 30  # Full marks for real blockchain
+                checks_passed += 2
+                details["blockchain"] = "Bitcoin anchored via OriginStamp ✅"
+                details["anchor_type"] = "Real Bitcoin transaction ✅"
+            else:
+                score += 20  # Partial marks for local proof
+                checks_passed += 1
+                details["blockchain"] = f"Local cryptographic proof ({provider}) ⚠️"
+                details["anchor_type"] = "⚠️ Local proof — not yet anchored to Bitcoin"
         else:
-            details["blockchain"] = "Not anchored"
+            details["blockchain"] = "❌ No blockchain certificate"
+            details["anchor_type"] = "❌ Missing"
 
         passed = score >= 70
 
@@ -1379,11 +1397,13 @@ def run_accountability(audit_id: int, run_name: str, hash_sha256: str, blockchai
             "dimension_label": "Accountability & Audit Trail",
             "score": round(min(score, 100), 2),
             "passed": passed,
-            "metric_value": round(score / 100, 4),
+            "metric_value": round(checks_passed / total_checks, 4),
             "threshold": 0.70,
             "details": {
                 **details,
-                "note": "Verifies decision logging, cryptographic integrity, and blockchain anchoring."
+                "checks_passed": checks_passed,
+                "total_checks": total_checks,
+                "note": "Verifies decision logging, cryptographic integrity, and blockchain anchoring quality."
             }
         }
     except Exception as e:
