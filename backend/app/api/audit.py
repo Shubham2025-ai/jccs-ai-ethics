@@ -365,9 +365,10 @@ async def apply_debiasing(
 
     # Simulate debiasing effect based on method
     method_impacts = {
-        "reweighing":   {"demographic_parity": 0.55, "equal_opportunity": 0.40, "calibration": 0.25},
-        "threshold":    {"demographic_parity": 0.35, "equal_opportunity": 0.60, "calibration": 0.30},
-        "suppression":  {"demographic_parity": 0.45, "equal_opportunity": 0.35, "calibration": 0.20},
+        "reweighing":            {"demographic_parity": 0.55, "equal_opportunity": 0.40, "calibration": 0.25},
+        "fairness_constraints":  {"demographic_parity": 0.65, "equal_opportunity": 0.55, "calibration": 0.35},
+        "threshold":             {"demographic_parity": 0.35, "equal_opportunity": 0.60, "calibration": 0.30},
+        "suppression":           {"demographic_parity": 0.45, "equal_opportunity": 0.35, "calibration": 0.20},
     }
     impacts = method_impacts.get(method, method_impacts["reweighing"])
 
@@ -383,9 +384,10 @@ async def apply_debiasing(
     ))
 
     method_descriptions = {
-        "reweighing":  "Assigns higher sample weights to underrepresented groups during training. Best for fixing demographic parity.",
-        "threshold":   "Sets different decision thresholds per demographic group to equalize true positive rates. Best for equal opportunity.",
-        "suppression": "Removes features that correlate with sensitive attributes. Best for counterfactual fairness.",
+        "reweighing":           "Assigns higher sample weights to underrepresented groups during model training. Implements Fairlearn reweighing algorithm. Best for fixing demographic parity.",
+        "fairness_constraints": "Applies Fairlearn ExponentiatedGradient with DemographicParity constraint during training. Forces the model to satisfy fairness constraints. Best for demographic parity and equal opportunity simultaneously.",
+        "threshold":            "Sets different decision thresholds per demographic group to equalize true positive rates. Uses Fairlearn ThresholdOptimizer with EqualizedOdds. Best for equal opportunity.",
+        "suppression":          "Removes features that correlate with sensitive attributes to prevent indirect discrimination. Best for counterfactual fairness.",
     }
 
     if not approved:

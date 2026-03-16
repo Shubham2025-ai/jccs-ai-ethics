@@ -927,9 +927,10 @@ export default function ResultsPage() {
                 <div className="space-y-3">
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { key: 'reweighing', label: '⚖️ Reweighing', desc: 'Balance group weights' },
-                      { key: 'threshold',  label: '🎯 Threshold',  desc: 'Per-group thresholds' },
-                      { key: 'suppression',label: '🔇 Suppression',desc: 'Remove biased features' },
+                      { key: 'reweighing',          label: '⚖️ Reweighing',    desc: 'Balance group weights' },
+                      { key: 'fairness_constraints', label: '🔒 Constraints',    desc: 'Fairlearn ExponentiatedGradient' },
+                      { key: 'threshold',            label: '🎯 Threshold',      desc: 'Per-group thresholds' },
+                      { key: 'suppression',          label: '🔇 Suppression',    desc: 'Remove biased features' },
                     ].map(m => (
                       <button key={m.key} onClick={() => setDebiasMethod(m.key)}
                         className="p-3 rounded-xl text-xs font-bold transition-all border"

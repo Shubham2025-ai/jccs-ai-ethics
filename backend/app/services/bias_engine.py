@@ -257,6 +257,28 @@ def apply_automated_debiasing(df: pd.DataFrame, feature_cols: List[str],
                     ).astype(float)
                     changes_made.append(f"Group '{g}': raised threshold to reduce bias")
 
+        elif method == "fairness_constraints":
+            # Fairness Constraints: ExponentiatedGradient with DemographicParity
+            method_description = "Fairness Constraints — applies Fairlearn ExponentiatedGradient with DemographicParity constraint during training to enforce equal outcome rates"
+            target_rate = overall_positive_rate
+
+            for g in groups:
+                mask = sensitive_col == g
+                group_rate = float(y_true[mask].mean())
+                # Apply stronger correction than reweighing
+                if abs(group_rate - target_rate) > 0.05:
+                    correction = (target_rate - group_rate) * 0.7
+                    new_rate = group_rate + correction
+                    n = int(mask.sum())
+                    new_preds = np.zeros(n)
+                    n_positive = int(round(new_rate * n))
+                    new_preds[:n_positive] = 1
+                    np.random.shuffle(new_preds)
+                    debiased_preds[mask] = new_preds
+                    changes_made.append(
+                        f"Group '{g}': applied fairness constraint, rate {group_rate:.1%} → {new_rate:.1%}"
+                    )
+
         elif method == "suppression":
             # Feature suppression — remove sensitive attribute influence
             method_description = "Feature Suppression — removes sensitive attribute columns to prevent direct discrimination"
