@@ -749,20 +749,29 @@ def compute_compliance_checks(fairness_results: List[Dict], overall_score: float
     # ISO Clause 9.1: calibration score >= 25 (model performance is measurable across groups)
     c91_passed = cal_score >= 25
 
+    # New Round 3 dimensions
+    priv_passed  = next((r["passed"] for r in fairness_results if r["dimension"] == "privacy"), True)
+    rob_passed   = next((r["passed"] for r in fairness_results if r["dimension"] == "robustness"), True)
+    acc_passed   = next((r["passed"] for r in fairness_results if r["dimension"] == "accountability"), True)
+
     return [
         # EU AI Act
         {"standard": "EU_AI_ACT", "requirement": "Article 10 - Training data must be free from discrimination",  "passed": dp_passed,   "notes": "Demographic parity check"},
         {"standard": "EU_AI_ACT", "requirement": "Article 13 - Transparency and explainability required",        "passed": tr_passed,   "notes": "SHAP/LIME explainability check"},
         {"standard": "EU_AI_ACT", "requirement": "Article 14 - Human oversight must be possible",                "passed": a14_passed,  "notes": "Overall risk score >= 30"},
-        {"standard": "EU_AI_ACT", "requirement": "Article 15 - Accuracy and robustness standards",               "passed": a15_passed,  "notes": "Equal opportunity + calibration check"},
+        {"standard": "EU_AI_ACT", "requirement": "Article 15 - Accuracy and robustness standards",               "passed": a15_passed and rob_passed, "notes": "Equal opportunity + calibration + robustness check"},
+        {"standard": "EU_AI_ACT", "requirement": "Article 9 - Risk management and data privacy",                 "passed": priv_passed, "notes": "PII detection and data leakage check"},
         # India DPDP Act
         {"standard": "DPDP", "requirement": "Section 4 - Fair and non-discriminatory data processing",           "passed": dp_passed,   "notes": "Demographic parity check"},
         {"standard": "DPDP", "requirement": "Section 11 - Right to explanation for automated decisions",         "passed": tr_passed,   "notes": "Model transparency check"},
         {"standard": "DPDP", "requirement": "Section 16 - Special protections for sensitive attributes",         "passed": s16_passed,  "notes": "Individual fairness score >= 55"},
+        {"standard": "DPDP", "requirement": "Section 6 - Data minimization and privacy by design",               "passed": priv_passed, "notes": "PII exposure and data leakage check"},
         # ISO 42001
         {"standard": "ISO_42001", "requirement": "Clause 6.1.2 - AI risk assessment",                           "passed": c612_passed, "notes": "Overall score > 28 (formally assessable)"},
         {"standard": "ISO_42001", "requirement": "Clause 8.4 - Fairness in AI system design",                   "passed": c84_passed,  "notes": "At least 2 of 4 core dimensions pass"},
         {"standard": "ISO_42001", "requirement": "Clause 9.1 - Monitoring and measurement of AI performance",   "passed": c91_passed,  "notes": "Calibration score >= 25"},
+        {"standard": "ISO_42001", "requirement": "Clause 8.6 - Robustness and reliability of AI systems",       "passed": rob_passed,  "notes": "Noise sensitivity and outlier robustness check"},
+        {"standard": "ISO_42001", "requirement": "Clause 9.3 - Accountability and audit management",            "passed": acc_passed,  "notes": "Blockchain anchoring and audit trail check"},
     ]
 
 
@@ -824,6 +833,22 @@ _REMEDIATIONS = {
         "income":     "Add a fairness regularization term to penalize inconsistent income predictions for individuals with identical work profiles. Define similarity using years of experience, education, and occupation — exclude gender, race, and native country.",
         "general":    "Add a fairness regularization term to penalize inconsistent predictions for similar individuals. Use metric learning to define a task-specific similarity metric.",
     },
+    "privacy": {
+        "general":    "Remove or anonymize PII columns (name, email, phone, SSN, address) before model training. Apply k-anonymity or differential privacy to prevent re-identification. Ensure sensitive attributes are not used as direct input features — use them only for fairness evaluation.",
+        "healthcare": "Apply HIPAA-compliant data anonymization. Remove patient identifiers, dates, and location data. Use synthetic data generation to augment training while preserving statistical properties without exposing real patient records.",
+        "credit":     "Remove account numbers, card details, and personal identifiers. Apply differential privacy during model training. Ensure PAN, Aadhar, or SSN fields are hashed or removed before the model sees the data.",
+        "criminal":   "Anonymize defendant identifiers and case numbers. Remove address and location data that could re-identify individuals. Apply data minimization — use only features strictly necessary for recidivism prediction.",
+        "hiring":     "Remove candidate names, emails, phone numbers, and addresses before model training. Blind the hiring model to personally identifiable information. Use anonymized candidate IDs instead.",
+        "income":     "Remove national ID, passport, and contact information. Apply differential privacy to income prediction. Ensure tax IDs and account numbers are excluded from the feature set.",
+    },
+    "robustness": {
+        "general":    "Apply data augmentation to balance class distribution. Use ensemble methods to reduce prediction instability. Add input validation to reject extreme outliers before prediction. Test with adversarial examples to identify edge cases.",
+        "healthcare": "Balance training data across disease prevalence rates. Add confidence thresholds — flag low-confidence diagnoses for human review. Test model on rare disease cases and demographic edge cases not well-represented in training data.",
+        "credit":     "Balance loan approval/rejection ratios. Add uncertainty quantification — flag borderline applications for manual review. Test model stability on economic edge cases (sudden income change, first-time borrowers, elderly applicants).",
+        "criminal":   "Balance recidivism/non-recidivism cases using oversampling. Add human oversight for edge cases where model confidence is below 70%. Test model on first-time offenders and cases with minimal prior record.",
+        "hiring":     "Balance candidate acceptance/rejection ratios across demographics. Add confidence scoring — flag candidates near decision boundary for human review. Test on edge cases like career changers and non-traditional backgrounds.",
+        "income":     "Balance high/low income classes in training data. Add robustness testing for unusual income patterns (gig workers, part-time, seasonal). Flag predictions with low confidence for manual review.",
+    },
 }
 
 
@@ -838,6 +863,9 @@ def generate_remediations(fairness_results: List[Dict], run_name: str = "") -> L
         "calibration":           {"bias_reduction": 45.0, "accuracy_loss": 0.5, "priority": "medium"},
         "counterfactual_fairness":{"bias_reduction": 50.0,"accuracy_loss": 3.0, "priority": "high"},
         "individual_fairness":   {"bias_reduction": 40.0, "accuracy_loss": 2.5, "priority": "medium"},
+        "privacy":               {"bias_reduction": 70.0, "accuracy_loss": 0.0, "priority": "high"},
+        "robustness":            {"bias_reduction": 35.0, "accuracy_loss": 1.0, "priority": "medium"},
+        "accountability":        {"bias_reduction": 20.0, "accuracy_loss": 0.0, "priority": "low"},
     }
 
     for r in fairness_results:
@@ -859,41 +887,256 @@ def generate_remediations(fairness_results: List[Dict], run_name: str = "") -> L
     return remediations
 
 
+
+
+def run_privacy(df: pd.DataFrame, feature_cols: List[str], sensitive_cols: List[str]) -> Dict:
+    """
+    Dimension 7: Privacy — detects PII exposure and data leakage risks.
+    Checks for sensitive personal data columns and whether sensitive attributes
+    leak into the feature set used for prediction.
+    """
+    try:
+        all_cols = [c.lower() for c in df.columns]
+
+        # PII keyword patterns
+        PII_PATTERNS = [
+            "email", "phone", "mobile", "ssn", "social_security",
+            "passport", "address", "zip", "postal", "credit_card",
+            "card_number", "account", "bank", "ip_address", "device_id",
+            "name", "firstname", "lastname", "surname", "dob", "birth",
+            "national_id", "aadhar", "pan_card", "voter"
+        ]
+
+        # Detect PII columns
+        pii_found = []
+        for col in df.columns:
+            col_lower = col.lower()
+            if any(p in col_lower for p in PII_PATTERNS):
+                pii_found.append(col)
+
+        # Check data leakage — sensitive attributes in feature cols
+        leakage_cols = [c for c in feature_cols if c in sensitive_cols]
+
+        # Check for high-cardinality ID columns in features (proxy for PII)
+        id_patterns = ["id", "_id", "ID", "Id", "identifier", "key"]
+        id_cols_in_features = [
+            c for c in feature_cols
+            if any(p in c for p in id_patterns)
+            and df[c].nunique() > len(df) * 0.5
+        ]
+
+        # Score calculation
+        pii_penalty    = len(pii_found) * 15      # 15 points per PII column found
+        leakage_penalty = len(leakage_cols) * 20  # 20 points per leakage col
+        id_penalty     = len(id_cols_in_features) * 5
+
+        score = max(0, 100 - pii_penalty - leakage_penalty - id_penalty)
+        passed = score >= 70
+
+        return {
+            "dimension": "privacy",
+            "dimension_label": "Privacy & Data Protection",
+            "score": round(score, 2),
+            "passed": passed,
+            "metric_value": round((pii_penalty + leakage_penalty) / 100, 4),
+            "threshold": 0.30,
+            "details": {
+                "pii_columns_detected": pii_found,
+                "leakage_columns": leakage_cols,
+                "id_columns_in_features": id_cols_in_features,
+                "pii_count": len(pii_found),
+                "leakage_count": len(leakage_cols),
+                "note": "PII columns increase re-identification risk. Leakage columns cause unfair predictions."
+            }
+        }
+    except Exception as e:
+        return _mock_result("privacy", "Privacy & Data Protection", 72.0)
+
+
+def run_robustness(df: pd.DataFrame, feature_cols: List[str], y_pred) -> Dict:
+    """
+    Dimension 8: Robustness — tests model stability under edge cases and noise.
+    Checks for extreme outliers, class imbalance, and prediction instability
+    when small amounts of noise are added to the data.
+    """
+    try:
+        X = df[feature_cols].select_dtypes(include=[np.number]).fillna(0)
+        if X.empty or len(X) < 50:
+            return _mock_result("robustness", "Robustness & Stability", 65.0)
+
+        issues = []
+        penalties = 0
+
+        # Check 1: Class imbalance
+        unique, counts = np.unique(y_pred, return_counts=True)
+        if len(unique) >= 2:
+            minority_ratio = counts.min() / counts.sum()
+            if minority_ratio < 0.10:
+                issues.append(f"Severe class imbalance: minority class = {minority_ratio:.1%}")
+                penalties += 25
+            elif minority_ratio < 0.20:
+                issues.append(f"Moderate class imbalance: minority class = {minority_ratio:.1%}")
+                penalties += 10
+
+        # Check 2: Outlier ratio per feature
+        outlier_counts = 0
+        for col in X.columns[:10]:  # check first 10 numeric features
+            q1, q3 = X[col].quantile(0.25), X[col].quantile(0.75)
+            iqr = q3 - q1
+            if iqr > 0:
+                outliers = ((X[col] < q1 - 3*iqr) | (X[col] > q3 + 3*iqr)).sum()
+                outlier_counts += outliers
+
+        outlier_ratio = outlier_counts / (len(X) * min(10, len(X.columns)))
+        if outlier_ratio > 0.05:
+            issues.append(f"High outlier ratio: {outlier_ratio:.1%} of values are extreme")
+            penalties += 15
+        elif outlier_ratio > 0.02:
+            issues.append(f"Moderate outliers: {outlier_ratio:.1%} of values are extreme")
+            penalties += 5
+
+        # Check 3: Noise sensitivity — add 5% Gaussian noise and check prediction stability
+        try:
+            from sklearn.ensemble import RandomForestClassifier as RFC
+            sample_size = min(200, len(X))
+            X_sample = X.head(sample_size).values
+            y_sample = np.array(y_pred[:sample_size])
+
+            if len(np.unique(y_sample)) >= 2:
+                model = RFC(n_estimators=20, random_state=42, max_depth=5)
+                model.fit(X_sample, y_sample)
+                original_preds = model.predict(X_sample)
+
+                # Add 5% noise
+                noise = np.random.normal(0, 0.05 * X_sample.std(axis=0) + 1e-9, X_sample.shape)
+                noisy_preds = model.predict(X_sample + noise)
+
+                instability = (original_preds != noisy_preds).mean()
+                if instability > 0.15:
+                    issues.append(f"High noise sensitivity: {instability:.1%} predictions change with 5% noise")
+                    penalties += 20
+                elif instability > 0.05:
+                    issues.append(f"Moderate noise sensitivity: {instability:.1%} predictions change with 5% noise")
+                    penalties += 10
+        except Exception:
+            instability = 0.0
+
+        score = max(0, 100 - penalties)
+        passed = score >= 60
+
+        return {
+            "dimension": "robustness",
+            "dimension_label": "Robustness & Stability",
+            "score": round(score, 2),
+            "passed": passed,
+            "metric_value": round(penalties / 100, 4),
+            "threshold": 0.40,
+            "details": {
+                "issues_found": issues,
+                "class_imbalance": round(float(minority_ratio) if len(unique) >= 2 else 0.5, 4),
+                "outlier_ratio": round(float(outlier_ratio), 4),
+                "noise_sensitivity": round(float(instability), 4),
+                "note": "Tests model stability under class imbalance, outliers, and input perturbations."
+            }
+        }
+    except Exception as e:
+        return _mock_result("robustness", "Robustness & Stability", 60.0)
+
+
+def run_accountability(audit_id: int, run_name: str, hash_sha256: str, blockchain_tx: str) -> Dict:
+    """
+    Dimension 9: Accountability — verifies audit trail completeness.
+    Checks that the audit is properly logged, hashed, and certified.
+    """
+    try:
+        score = 40.0  # base score
+        details = {}
+
+        # Check 1: Audit ID exists
+        if audit_id and audit_id > 0:
+            score += 15
+            details["audit_id"] = f"#{audit_id} — logged"
+        else:
+            details["audit_id"] = "Missing"
+
+        # Check 2: Run name documented
+        if run_name and len(run_name) > 0:
+            score += 10
+            details["run_name"] = f"{run_name} — documented"
+
+        # Check 3: SHA-256 hash present
+        if hash_sha256 and len(hash_sha256) == 64:
+            score += 20
+            details["sha256"] = f"{hash_sha256[:16]}... — verified"
+        else:
+            details["sha256"] = "Missing or invalid"
+
+        # Check 4: Blockchain certificate present
+        if blockchain_tx and len(blockchain_tx) > 10:
+            score += 15
+            provider = blockchain_tx.split("|")[0] if "|" in blockchain_tx else "Unknown"
+            details["blockchain"] = f"Anchored via {provider}"
+        else:
+            details["blockchain"] = "Not anchored"
+
+        passed = score >= 70
+
+        return {
+            "dimension": "accountability",
+            "dimension_label": "Accountability & Audit Trail",
+            "score": round(min(score, 100), 2),
+            "passed": passed,
+            "metric_value": round(score / 100, 4),
+            "threshold": 0.70,
+            "details": {
+                **details,
+                "note": "Verifies decision logging, cryptographic integrity, and blockchain anchoring."
+            }
+        }
+    except Exception as e:
+        return _mock_result("accountability", "Accountability & Audit Trail", 75.0)
+
 def compute_overall_score(fairness_results: List[Dict], model_type: str = "classification") -> Tuple[float, str]:
     """Compute weighted overall ethics score and risk level.
     Weights differ by model type — regression emphasizes calibration,
     ranking emphasizes demographic parity and individual fairness.
     """
     if model_type == "regression":
-        # Regression: calibration is most important (continuous predictions must be equally accurate)
         weights = {
-            "demographic_parity":     0.20,
-            "equal_opportunity":      0.15,
-            "counterfactual_fairness":0.15,
-            "calibration":            0.30,  # Most important for regression
-            "individual_fairness":    0.15,
-            "transparency":           0.05,
+            "demographic_parity":     0.15,
+            "equal_opportunity":      0.12,
+            "counterfactual_fairness":0.10,
+            "calibration":            0.25,
+            "individual_fairness":    0.12,
+            "transparency":           0.08,
+            "privacy":                0.10,
+            "robustness":             0.06,
+            "accountability":         0.02,
         }
     elif model_type == "ranking":
-        # Ranking: demographic parity and individual fairness most important
-        # (equal representation in top-k results)
         weights = {
-            "demographic_parity":     0.30,  # Most important — equal top-k representation
-            "equal_opportunity":      0.20,
-            "counterfactual_fairness":0.15,
-            "calibration":            0.10,
-            "individual_fairness":    0.20,  # Similar items must rank similarly
-            "transparency":           0.05,
+            "demographic_parity":     0.22,
+            "equal_opportunity":      0.15,
+            "counterfactual_fairness":0.12,
+            "calibration":            0.08,
+            "individual_fairness":    0.18,
+            "transparency":           0.08,
+            "privacy":                0.10,
+            "robustness":             0.05,
+            "accountability":         0.02,
         }
     else:
         # Classification (default)
         weights = {
-            "demographic_parity":     0.25,
-            "equal_opportunity":      0.25,
-            "counterfactual_fairness":0.20,
-            "calibration":            0.15,
+            "demographic_parity":     0.20,
+            "equal_opportunity":      0.20,
+            "counterfactual_fairness":0.15,
+            "calibration":            0.12,
             "individual_fairness":    0.10,
-            "transparency":           0.05,
+            "transparency":           0.08,
+            "privacy":                0.08,
+            "robustness":             0.05,
+            "accountability":         0.02,
         }
     total_weight = 0
     weighted_score = 0

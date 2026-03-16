@@ -211,6 +211,11 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
             fairness_results.append(bias_engine._mock_result("counterfactual_fairness","Counterfactual Fairness",79.0))
 
         fairness_results.append(bias_engine.run_transparency(df, feature_cols, y_pred, model_type=model_type))
+
+        # NEW Round 3 dimensions
+        fairness_results.append(bias_engine.run_privacy(df, feature_cols, sensitive_cols))
+        fairness_results.append(bias_engine.run_robustness(df, feature_cols, y_pred))
+
         print(f"✅ {len(fairness_results)} fairness dimensions complete")
 
         # ── STEP 6: SHAP ─────────────────────────────────────────────────────
@@ -314,6 +319,15 @@ def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -
         except Exception as e:
             print(f"   ⚠️  Blockchain anchoring skipped: {e}")
             audit.blockchain_tx = f"JCCS-LocalProof|SHA256|{sha256_hash[:32]}|{datetime.utcnow().isoformat()[:19]}"
+
+        # Add accountability dimension after blockchain
+        accountability_result = bias_engine.run_accountability(
+            audit_id=audit_id,
+            run_name=run_name,
+            hash_sha256=audit.hash_sha256 or "",
+            blockchain_tx=audit.blockchain_tx or ""
+        )
+        fairness_results.append(accountability_result)
 
         db.commit()
 

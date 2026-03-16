@@ -692,6 +692,9 @@ export default function ResultsPage() {
                   calibration:            { label: 'Platt Scaling', color: '#FDCB6E', icon: '📐' },
                   individual_fairness:    { label: 'Fairness Regularization', color: '#a78bfa', icon: '👤' },
                   counterfactual_fairness:{ label: 'Causal Analysis', color: '#E94560', icon: '🔄' },
+                  privacy:                { label: 'PII Removal + Anonymization', color: '#06B6D4', icon: '🔒' },
+                  robustness:             { label: 'Data Augmentation + Noise Testing', color: '#F97316', icon: '🛡️' },
+                  accountability:         { label: 'Audit Trail Enhancement', color: '#84CC16', icon: '📋' },
                 }
                 const tech = techniques[r.dimension] || { label: 'Mitigation', color: '#6C63FF', icon: '🔧' }
                 return (
