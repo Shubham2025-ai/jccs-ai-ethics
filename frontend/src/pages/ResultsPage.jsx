@@ -222,6 +222,22 @@ ${remediations.slice(0,5).map(r=>`<div class="rc">
 <span style="font-family:monospace;font-size:9.5px;color:#888;word-break:break-all;flex:1">${audit.hash_sha256||'Computing...'}</span>
 <span style="font-size:9px;color:#bbb;white-space:nowrap">Audit #${id} · ${new Date().toLocaleDateString()}</span>
 </div>
+${digital_signature?.valid ? `
+<div style="margin-top:8px;padding:8px 10px;background:#f8f4ff;border:1px solid #d4c5ff;border-radius:6px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+    <span style="font-size:11px;font-weight:700;color:#6C63FF">🔐 Digital Signature Certificate</span>
+    <span style="font-size:10px;font-weight:700;color:#00B894;background:#e6fff9;padding:2px 8px;border-radius:10px;border:1px solid #b3f0e0">✅ VERIFIED</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">
+    <div style="font-size:9.5px;color:#888">Serial: <span style="font-family:monospace;color:#444;font-weight:700">${digital_signature.certificate_serial||''}</span></div>
+    <div style="font-size:9.5px;color:#888">Algorithm: <span style="font-family:monospace;color:#6C63FF;font-weight:700">${digital_signature.signature_algorithm||'HMAC-SHA256'}</span></div>
+    <div style="font-size:9.5px;color:#888">Key ID: <span style="font-family:monospace;color:#444">${(digital_signature.key_fingerprint||'').slice(0,16)}...</span></div>
+    <div style="font-size:9.5px;color:#888">Issued: <span style="font-family:monospace;color:#444">${(digital_signature.issued_at||'').slice(0,19)}</span></div>
+  </div>
+  <div style="font-size:9px;color:#888;margin-bottom:4px">Signature (HMAC-SHA256):</div>
+  <div style="font-family:monospace;font-size:8.5px;color:#666;word-break:break-all;background:#fff;padding:4px 6px;border-radius:4px;border:1px solid #e0d5ff">${(digital_signature.signature||'').slice(0,64)}...</div>
+  <div style="font-size:8.5px;color:#aaa;margin-top:5px">This certificate is cryptographically signed by JCCS. Any modification invalidates this signature. Verify at: ${window.location.origin}/audit/${id}/verify-signature</div>
+</div>` : ''}
 <div style="margin-top:4px;font-size:9px;color:#aaa;text-align:center">JCCS · Jedi Code Compliance System · Star Wars Hackathon 2026 · PS9</div>
 </div></body></html>`
 
