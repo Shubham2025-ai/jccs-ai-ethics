@@ -1,6 +1,6 @@
 # 🛡️ JCCS — Jedi Code Compliance System
 
-**Ethical AI Auditing Framework — Bluebit Hackathon 4.0 | PS9 | Round 3 Finalist**
+**Ethical AI Auditing Framework — HackVenture 2026**
 
 > *"The Force will be with you, always — but your AI model? That needs an audit."*
 
@@ -16,7 +16,7 @@
 
 ## 📌 Problem Statement
 
-**PS9 — Jedi Code Compliance System: Ethical AI Auditing Framework**
+**Jedi Code Compliance System: Ethical AI Auditing Framework**
 
 AI systems are making life-altering decisions in hiring, healthcare, criminal justice, and credit scoring — yet most organisations have no way to audit these systems for bias or fairness.
 
@@ -336,11 +336,11 @@ jccs-ai-ethics/
 
 | | |
 |---|---|
-| **Team Name** | print("WIN") |
-| **Problem Statement** | PS9 — Jedi Code Compliance System |
-| **Hackathon** | Bluebit Hackathon 4.0 by MLSC PCCOE |
-| **Round** | Round 3 Finalist — Offline at PCCOE |
-| **Track** | Ethical AI |
+| **Team Name** | BELIVER |
+| **Problem Statement** | Jedi Code Compliance System |
+| **Hackathon** | HackVenture 2K26 |
+| **Round** | Round 2 HackVenture |
+| **Track** | Artifical Intelligence |
 
 ---
 
@@ -350,7 +350,7 @@ MIT — see [LICENSE](LICENSE)
 
 ---
 
-*Built with ⚡ during Bluebit Hackathon 4.0*
+*Built with ⚡ during HackVenture 2K26*
 
 > *"Other tools are libraries for data scientists. JCCS is a compliance platform for business leaders — upload a CSV, get a court-ready audit report in 60 seconds."*
 
