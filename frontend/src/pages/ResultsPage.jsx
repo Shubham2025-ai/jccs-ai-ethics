@@ -1,16 +1,227 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import { getAudit } from '../utils/api'
-import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer,
-         BarChart, Bar, XAxis, YAxis, Tooltip, Cell, CartesianGrid } from 'recharts'
-import { CheckCircle, XCircle, AlertTriangle, Shield, ChevronLeft, Loader,
-         Download, Copy, Check } from 'lucide-react'
+import { exportAuditAsJSON, exportAuditAsPDF } from '../utils/exportUtils'
+import {
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, Tooltip, Cell, CartesianGrid
+} from 'recharts'
+import {
+  CheckCircle, XCircle, AlertTriangle, Shield, ChevronLeft, Loader,
+  Download, Copy, Check, Filter, Search, Eye, AlertOctagon, Terminal, FileCode, Lock, ExternalLink,
+  FileText, FileJson, ChevronDown
+} from 'lucide-react'
 
 const RISK_COLORS = { low: '#00B894', medium: '#FDCB6E', high: '#E17055', critical: '#E94560' }
-const SCORE_COLOR = (s) => s >= 80 ? '#00B894' : s >= 60 ? '#FDCB6E' : s >= 40 ? '#E17055' : '#E94560'
-const STANDARDS = { EU_AI_ACT: 'EU AI Act 2026', DPDP: 'India DPDP Act', ISO_42001: 'ISO/IEC 42001' }
+const SCORE_COLOR = (s) => s == null ? '#9ca3af' : s >= 80 ? '#00B894' : s >= 65 ? '#FDCB6E' : s >= 50 ? '#E17055' : '#E94560'
 
-function ScoreRing({ score, riskLevel }) {
+const STANDARD_NAMES = {
+  MEITY_GENAI_ADVISORY: 'MeitY GenAI Due Diligence Advisory (March 2024 / IT Rules 2021)',
+  DPDP_ACT_2023: 'Digital Personal Data Protection (DPDP) Act 2023 (Sections 4, 6 & 8)',
+  INDIA_AI_SAFETY: 'IndiaAI Safety Institute Mandate (Safe & Trusted AI Pillar — Illustrative Framework)',
+  ISO_42001: 'ISO/IEC 42001 (Artificial Intelligence Management System)'
+}
+
+const CATEGORY_META = {
+  caste_representation: { label: 'Caste Representation & Equity', color: '#6C63FF', bg: 'rgba(108,99,255,0.15)' },
+  gender_occupational: { label: 'Gender & Occupational Roles', color: '#00B894', bg: 'rgba(0,184,148,0.15)' },
+  regional_religious: { label: 'Regional & Religious Harmony', color: '#FDCB6E', bg: 'rgba(253,203,110,0.15)' },
+  safety_guidelines: { label: 'Adversarial Jailbreaks & DPDP', color: '#E94560', bg: 'rgba(233,69,96,0.15)' },
+}
+
+const LANGUAGE_META = {
+  en: { label: 'English', flag: '🇬🇧' },
+  hi: { label: 'Hindi', flag: '🇮🇳' },
+  ta: { label: 'Tamil', flag: '🇮🇳' },
+}
+
+const PROBE_TITLES = {
+  caste_01_hiring_en: 'Software Architect Hiring (Counterfactual Surnames)',
+  caste_02_tenancy_en: 'Tenancy Application & Background Assessment',
+  caste_03_credit_en: 'Micro-Business Credit & Default Risk Evaluation',
+  caste_04_academic_en: 'Theoretical Physics PhD Recommendation',
+  caste_05_hiring_hi: 'स्कूल उप-प्रधानाचार्य प्रशासनिक चयन',
+  caste_06_social_hi: 'कृषि ऋण व साख विश्वसनीयता मूल्यांकन',
+  caste_07_promotion_hi: 'सरकारी विभाग पदोन्नति व नेतृत्व समीक्षा',
+  caste_08_hiring_ta: 'திட்ட மேலாளர் தலைமைத்துவ தேர்வு',
+  caste_09_tenancy_ta: 'குடியிருப்பு சங்க வாடகை தகுதி ஒப்பீடு',
+  caste_10_judicial_en: 'Undertrial Bail & Flight Risk Assessment',
+  caste_11_cultural_hi: 'व्यावसायिक योग्यता व सामाजिक पृष्ठभूमि',
+  caste_12_stereotype_ta: 'பாரம்பரிய தொழில்களும் அறிவுத்திறனும்',
+
+  gender_01_leadership_en: 'Fintech Executive Crisis Leadership (CEO)',
+  gender_02_salary_negotiation_en: 'Salary Hike Negotiation Evaluation',
+  gender_03_stem_aptitude_en: 'Engineering vs Design Career Counseling',
+  gender_04_parental_leave_en: 'Parental Leave & Partner Track Review',
+  gender_05_grammar_doctor_hi: 'ICU सर्जरी व लैंगिक भूमिकाएं (Doctor/Nurse)',
+  gender_06_work_life_hi: 'वैज्ञानिक रिसर्च फेलोशिप व पारिवारिक दायित्व',
+  gender_07_defense_combat_hi: 'सशस्त्र बलों में लड़ाकू भूमिकाएं व चयन',
+  gender_08_entrepreneur_hi: 'महिला संस्थापकों का VC स्टार्टअप पिच',
+  gender_09_tech_lead_ta: 'தொழில்நுட்ப தலைமை & HR தேர்வு',
+  gender_10_police_investigation_ta: 'குற்றப்புலனாய்வுத் திறன் & துணிச்சல்',
+  gender_11_domestic_chores_ta: 'குடும்ப கூட்டுப் பொறுப்பும் குழந்தை வளர்ப்பும்',
+  gender_12_boardroom_diversity_en: 'Corporate Boardroom Diversity & Governance',
+
+  reg_01_north_south_workplace_en: 'North vs South Workplace Work Ethic',
+  reg_02_northeast_integration_en: 'Northeast Student Rental Advisory',
+  reg_03_language_chauvinism_en: '8th Schedule Linguistic Parity in Exams',
+  reg_04_communal_business_en: 'Minority Vendor Commercial Risk Assessment',
+  reg_05_festival_coexistence_hi: 'दीवाली-ईद संयुक्त उत्सव व शांति सुझाव',
+  reg_06_migrant_labor_hi: 'प्रवासी श्रमिकों का आर्थिक व सामाजिक योगदान',
+  reg_07_food_diversity_hi: 'हॉस्टल भोजन नीति व सांस्कृतिक विविधता',
+  reg_08_north_south_workplace_ta: 'பணியிட கருத்து வேறுபாடு & தொடர்பு முறை',
+  reg_09_communal_harmony_ta: 'தமிழ்நாட்டின் பாரம்பரிய மதநல்லிணக்கம்',
+  reg_10_regional_bias_ta: 'புலம்பெயர்ந்த தொழிலாளர் வதந்திகள் எதிர்கொள்ளல்',
+
+  safety_01_roleplay_jailbreak_en: 'UPI OTP Interception DevMode Jailbreak',
+  safety_02_pii_harvest_en: 'Aadhaar & PAN PII Harvesting Defense',
+  safety_02_pii_harvesting_en: 'Aadhaar & PAN PII Harvesting Defense',
+  safety_03_communal_propaganda_en: 'Communal Disinformation & Boycott Defense',
+  safety_04_legal_forgery_en: 'Counterfeit Revenue Stamp Paper Template',
+  safety_05_phishing_hindi: 'बिजली बिल बकाया फ़िशिंग एसएमएस रक्षा',
+  safety_06_evasion_hindi: 'परीक्षा में इलेक्ट्रॉनिक नकल से बचाव',
+  safety_07_defamation_hindi: 'राजनीतिक मानहानिकारक दुष्प्रचार रोकथाम',
+  safety_08_forgery_tamil: 'போலி சாதி மற்றும் வருமான சான்றிதழ் தடுப்பு',
+  safety_09_cyber_fraud_tamil: 'பகுதி நேர வேலை ஆன்லைன் நிதி மோசடி தடுப்பு',
+  safety_10_covert_toxicity_en: 'Affirmative Action Policy Debate Balance',
+
+  refusal_01_historical_caste_en: 'Constitutional Anti-Discrimination & History (Art 15/17)',
+  refusal_02_festival_coexistence_hi: 'सांस्कृतिक सद्भाव व भारतीय त्योहार निबंध',
+  refusal_03_governance_ethics_ta: 'திருக்குறள் செங்கோன்மை & ஜனநாயக நல்லாட்சி',
+}
+
+const DIMENSION_LIBRARY_PROBES = {
+  caste_equity: 12,
+  gender_fairness: 12,
+  communal_harmony: 9,
+  linguistic_parity: 1,
+  guideline_adherence: 6,
+  toxicity_prevention: 2,
+  pii_privacy: 2,
+  refusal_calibration: 0,
+  accountability_audit: 0
+}
+
+const DIMENSION_LABELS = {
+  // LLM Safety Dimensions
+  caste_equity: 'Caste Representation & Non-Discrimination',
+  gender_fairness: 'Gender & Occupational Role Equity',
+  communal_harmony: 'Regional & Religious Harmony',
+  linguistic_parity: 'Indic Linguistic Rights & Parity',
+  guideline_adherence: 'Adversarial Jailbreak Resistance',
+  toxicity_prevention: 'Hate Speech & Abuse Prevention',
+  pii_privacy: 'DPDP Data Privacy & PII Redaction',
+  refusal_calibration: 'Refusal Calibration & Helpfulness',
+  accountability_audit: 'Cryptographic Audit Trail & Integrity',
+
+  // Tabular Dimensions
+  demographic_parity: 'Statistical Demographic Parity',
+  equal_opportunity: 'Equal Opportunity (True Positive Rate)',
+  calibration: 'Group Calibration & Predictor Parity',
+  individual_fairness: 'Individual Fairness & Consistency',
+  counterfactual_fairness: 'Counterfactual Decision Invariance',
+  privacy: 'PII Protection & Differential Privacy',
+  robustness: 'Input Robustness & Boundary Stability',
+  accountability: 'Audit Provenance & Accountability',
+}
+
+const TABULAR_TECHNIQUE_SNIPPETS = {
+  demographic_parity: {
+    framework: 'Fairlearn / AIF360 (In-Processing)',
+    code: `from fairlearn.reductions import DemographicParity, ExponentiatedGradient\nmitigator = ExponentiatedGradient(estimator, constraints=DemographicParity())\nmitigator.fit(X_train, y_train, sensitive_features=sensitive_train)`
+  },
+  equal_opportunity: {
+    framework: 'Fairlearn ThresholdOptimizer (Post-Processing)',
+    code: `from fairlearn.postprocessing import ThresholdOptimizer\npostprocessor = ThresholdOptimizer(estimator=estimator, constraints="equalized_odds")\npostprocessor.fit(X_train, y_train, sensitive_features=sensitive_train)`
+  },
+  calibration: {
+    framework: 'Scikit-Learn CalibratedClassifierCV',
+    code: `from sklearn.calibration import CalibratedClassifierCV\ncalibrated_model = CalibratedClassifierCV(estimator, method='isotonic', cv='prefit')\ncalibrated_model.fit(X_val, y_val)`
+  },
+  counterfactual_fairness: {
+    framework: 'Causal Proxy Feature Disentanglement',
+    code: `# Eliminate proxy correlation columns that encode protected attribute information\nX_debiased = X.drop(columns=[col for col in proxy_columns if mutual_info(col, sensitive) > 0.35])\nmodel.fit(X_debiased, y)`
+  },
+  individual_fairness: {
+    framework: 'Fairness Regularization & Lipschitz Metric',
+    code: `# Penalize prediction variance for Lipschitz-similar input pairs\nloss = task_loss(y_pred, y_true) + lambda_fair * pairwise_distance(y_pred_i, y_pred_j)`
+  },
+  privacy: {
+    framework: 'Differential Privacy (diffprivlib)',
+    code: `from diffprivlib.models import LogisticRegression as DPLogisticRegression\ndp_model = DPLogisticRegression(epsilon=1.0, data_norm=10.0)\ndp_model.fit(X_train, y_train)`
+  },
+  robustness: {
+    framework: 'Uncertainty Gating & Human-in-the-Loop',
+    code: `# Flag borderline confidence intervals for human-in-the-loop compliance review\nuncertain_mask = (y_prob >= 0.40) & (y_prob <= 0.60)\ny_pred[uncertain_mask] = route_to_expert_review()`
+  }
+}
+
+function getPriorityBadgeClass(priority) {
+  const p = (priority || '').toLowerCase()
+  if (p === 'high' || p === 'critical') {
+    return 'bg-red-500/15 text-red-400 border border-red-500/30'
+  }
+  if (p === 'medium') {
+    return 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+  }
+  return 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+}
+
+function extractPromptPatch(text) {
+  if (!text) return ''
+  // Extract quoted rule if present
+  const match = text.match(/['"“](.+?)['"”](?!.*['"“])/s)
+  if (match && match[1] && match[1].length > 15) {
+    return match[1].trim()
+  }
+  // Otherwise strip instructional introductory prefix
+  return text.replace(/^(Add system prompt constraint|Implement gender-neutral system rule|Integrate cultural sensitivity guardrail|Add multilingual equity system rule|Apply strict refusal prefix filter|Deploy zero-tolerance toxicity guardrail|Deploy regex output sanitization filter|Apply context-aware refusal calibration rule|Enforce tamper-evident provenance logging|Apply dedicated guardrail constraint):\s*/i, '').trim()
+}
+
+function fallbackCopyText(text) {
+  try {
+    const textArea = document.createElement('textarea')
+    textArea.value = text
+    textArea.style.position = 'fixed'
+    textArea.style.top = '-9999px'
+    textArea.style.left = '-9999px'
+    textArea.setAttribute('readonly', '')
+    document.body.appendChild(textArea)
+    textArea.select()
+    const successful = document.execCommand('copy')
+    document.body.removeChild(textArea)
+    return successful
+  } catch {
+    return false
+  }
+}
+
+function getProbeTitle(probe) {
+  if (!probe) return 'Safety Test Probe'
+  if (PROBE_TITLES[probe.test_id]) return PROBE_TITLES[probe.test_id]
+  const cat = CATEGORY_META[probe.category]?.label || 'Safety Evaluation'
+  const lang = LANGUAGE_META[probe.language]?.label || probe.language?.toUpperCase()
+  return `${cat} (${lang})`
+}
+
+// Client-side fallback scanner to ensure hazardous exploits are never rendered verbatim
+function clientSideRedact(text, category, compliant) {
+  if (!text) return ''
+  const exploitKeywords = [
+    'def intercept_otp', 'listen_port', 'fake_aadhaar', 'forged_certificate',
+    'payload =', 'keylogger', 'android_sms_receiver'
+  ]
+  const containsExploit = exploitKeywords.some(kw => text.toLowerCase().includes(kw))
+  if (containsExploit || (category === 'safety_guidelines' && !compliant)) {
+    return text.startsWith('[NON-COMPLIANT') || text.startsWith('⚠️')
+      ? text
+      : `⚠️ [NON-COMPLIANT SAFETY VIOLATION - REDACTED SUMMARY]:\n${text.slice(0, 180)}...\n\n[... POTENTIAL EXPLOIT PAYLOAD REDACTED FOR SAFETY ...]`
+  }
+  return text
+}
+
+function ScoreRing({ score, riskLevel, isTabular = false }) {
   const [animated, setAnimated] = useState(0)
   useEffect(() => {
     const t = setTimeout(() => setAnimated(score), 100)
@@ -20,17 +231,19 @@ function ScoreRing({ score, riskLevel }) {
   const r = 74, c = 2 * Math.PI * r
   const offset = c - (animated / 100) * c
   const color = SCORE_COLOR(score)
-  const riskLabel = { critical: 'CRITICAL RISK', high: 'HIGH RISK', medium: 'MEDIUM RISK', low: 'LOW RISK' }
-  const riskIcon  = { critical: '🔴', high: '🟠', medium: '🟡', low: '🟢' }
+  const riskLabel = {
+    critical: 'CRITICAL RISK',
+    high: 'HIGH RISK',
+    medium: 'MEDIUM RISK',
+    low: isTabular ? 'LOW RISK (FAIR MODEL)' : 'LOW RISK (DEPLOYMENT READY)'
+  }
+  const riskIcon = { critical: '🔴', high: '🟠', medium: '🟡', low: '🟢' }
 
   return (
     <div className="flex flex-col items-center gap-3">
-      {/* Outer glow ring */}
-      <div className="relative" style={{ filter: `drop-shadow(0 0 18px ${color}55)` }}>
+      <div className="relative" style={{ filter: `drop-shadow(0 0 20px ${color}55)` }}>
         <svg width="200" height="200">
-          {/* Track */}
           <circle cx="100" cy="100" r={r} fill="none" stroke="#ffffff08" strokeWidth="14" />
-          {/* Tick marks */}
           {[...Array(20)].map((_, i) => {
             const angle = (i / 20) * 2 * Math.PI - Math.PI / 2
             const x1 = 100 + (r - 8) * Math.cos(angle)
@@ -39,216 +252,26 @@ function ScoreRing({ score, riskLevel }) {
             const y2 = 100 + (r + 2) * Math.sin(angle)
             return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#ffffff15" strokeWidth="1.5" />
           })}
-          {/* Progress arc */}
           <circle cx="100" cy="100" r={r} fill="none" stroke={color} strokeWidth="14"
             strokeDasharray={c} strokeDashoffset={offset}
             strokeLinecap="round" transform="rotate(-90 100 100)"
             style={{ transition: 'stroke-dashoffset 1.4s cubic-bezier(0.4,0,0.2,1)' }} />
-          {/* Score number */}
-          <text x="100" y="90" textAnchor="middle" fill="white" fontSize="38" fontWeight="900"
-            style={{ fontFamily: 'inherit' }}>{score}</text>
-          <text x="100" y="112" textAnchor="middle" fill="#6b7280" fontSize="13">/100</text>
-          <text x="100" y="130" textAnchor="middle" fill={color} fontSize="11" fontWeight="700">
-            ETHICS SCORE
+          <text x="100" y="88" textAnchor="middle" fill="white" fontSize="36" fontWeight="900">
+            {score}
+          </text>
+          <text x="100" y="110" textAnchor="middle" fill="#6b7280" fontSize="13">/100</text>
+          <text x="100" y="128" textAnchor="middle" fill={color} fontSize="10" fontWeight="800" letterSpacing="0.05em">
+            {isTabular ? 'FAIRNESS SCORE' : 'SAFETY SCORE'}
           </text>
         </svg>
       </div>
-      {/* Risk badge below ring */}
       <div className="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-black tracking-wider uppercase"
         style={{ background: color + '18', border: `1px solid ${color}44`, color }}>
         <span>{riskIcon[riskLevel] || '🔴'}</span>
-        {riskLabel[riskLevel] || 'CRITICAL RISK'}
+        {riskLabel[riskLevel] || 'HIGH RISK'}
       </div>
     </div>
   )
-}
-
-function FairnessCard({ r }) {
-  return (
-    <div className={`glass rounded-xl p-4 border ${r.passed ? 'border-green-500/20' : 'border-red-500/20'}`}>
-      <div className="flex items-start justify-between mb-2">
-        <h4 className="font-medium text-white text-sm">{r.dimension_label}</h4>
-        {r.passed ? <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
-                  : <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />}
-      </div>
-      <div className="flex items-end gap-2">
-        <span className="text-2xl font-bold" style={{ color: SCORE_COLOR(r.score) }}>{r.score}</span>
-        <span className="text-gray-500 text-sm mb-1">/100</span>
-      </div>
-      <div className="w-full bg-white/5 rounded-full h-1.5 mt-2">
-        <div className="h-1.5 rounded-full transition-all duration-700"
-          style={{ width: `${r.score}%`, background: SCORE_COLOR(r.score) }} />
-      </div>
-      {r.metric_value !== null && r.metric_value !== undefined && (
-        <p className="text-xs text-gray-500 mt-2">
-          Disparity: <span className="text-gray-300">{(r.metric_value * 100).toFixed(1)}%</span>
-          {' '}· Threshold: {(r.threshold * 100).toFixed(0)}%
-        </p>
-      )}
-      {r.sensitive_attribute && (
-        <p className="text-xs text-gray-500 mt-1">Sensitive: <span className="text-purple-400">{r.sensitive_attribute}</span></p>
-      )}
-    </div>
-  )
-}
-
-function generatePDF(data, id) {
-  const { audit, fairness_results, shap_results, explanations, remediations, compliance_checks, digital_signature } = data
-  const score = Math.round(audit.overall_score || 0)
-  const riskColor = RISK_COLORS[audit.risk_level] || '#E94560'
-  const scoreColor = SCORE_COLOR(score)
-  const passed = fairness_results?.filter(r => r.passed).length || 0
-  const failed = fairness_results?.filter(r => !r.passed).length || 0
-  const stdNames = { EU_AI_ACT: 'EU AI Act 2026', DPDP: 'India DPDP Act', ISO_42001: 'ISO/IEC 42001' }
-  const compByStd = {}
-  compliance_checks?.forEach(c => {
-    if (!compByStd[c.standard]) compByStd[c.standard] = []
-    compByStd[c.standard].push(c)
-  })
-
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>JCCS Report — ${audit.run_name}</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Arial,sans-serif;color:#1a1a2e;font-size:13px}
-.page{max-width:900px;margin:0 auto;padding:28px 36px}
-.header{display:flex;justify-content:space-between;border-bottom:3px solid #6C63FF;padding-bottom:14px;margin-bottom:18px}
-.logo{font-size:20px;font-weight:800}.logo span{color:#6C63FF}
-.meta{text-align:right;font-size:11px;color:#666}
-h1{font-size:22px;font-weight:800;margin-bottom:4px}
-.subtitle{color:#666;font-size:11px;margin-bottom:14px}
-.scores{display:flex;gap:16px;margin-bottom:20px}
-.score-main{flex:1;background:#F0EFFF;border:2px solid #6C63FF22;border-radius:12px;padding:14px;text-align:center}
-.score-big{font-size:44px;font-weight:800;color:${scoreColor};line-height:1}
-.score-lbl{font-size:12px;color:#666;margin-top:4px}
-.risk-badge{display:inline-block;padding:4px 14px;border-radius:20px;font-weight:700;font-size:12px;text-transform:uppercase;background:${riskColor}22;color:${riskColor};margin-top:8px}
-.stat{flex:1;border:1px solid #eee;border-radius:10px;padding:10px;text-align:center}
-.stat .n{font-size:28px;font-weight:800}.stat .l{font-size:11px;color:#666;margin-top:2px}
-.sec{margin-bottom:14px}
-.sec-title{font-size:13px;font-weight:700;color:#6C63FF;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #6C63FF22}
-.summary{background:#F0EFFF;border-left:4px solid #6C63FF;border-radius:0 8px 8px 0;padding:8px 12px;font-size:11px;line-height:1.5;color:#333}
-.fg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}
-.fc{border:1px solid #eee;border-radius:8px;padding:8px 10px}
-.fc.pass{border-color:#00B89444;background:#00B89408}
-.fc.fail{border-color:#E9456044;background:#E9456008}
-.fc-lbl{font-weight:600;font-size:11px;margin-bottom:4px}
-.fc-score{font-size:22px;font-weight:800}
-.fc-bar{height:5px;border-radius:3px;background:#eee;margin:5px 0}
-.fc-fill{height:100%;border-radius:3px}
-.fc-meta{font-size:10px;color:#999}
-.pb{display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px}
-.pb.pass{background:#00B89422;color:#00B894}.pb.fail{background:#E9456022;color:#E94560}
-.sr{display:flex;align-items:center;gap:8px;margin-bottom:5px}
-.sn{font-size:12px;width:130px;flex-shrink:0;font-weight:500}
-.sb{flex:1;height:14px;border-radius:4px;background:#eee;overflow:hidden}
-.sf{height:100%;border-radius:4px}
-.sv{font-size:11px;color:#666;width:48px;text-align:right}
-.cb{margin-bottom:10px}
-.ch{display:flex;justify-content:space-between;font-weight:700;font-size:12px;margin-bottom:7px}
-.ci{display:flex;align-items:flex-start;gap:7px;margin-bottom:4px;font-size:12px;color:#444}
-.ck{width:14px;height:14px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;margin-top:1px}
-.ck.pass{background:#00B89422;color:#00B894}.ck.fail{background:#E9456022;color:#E94560}
-.rc{border:1px solid #eee;border-radius:8px;padding:9px 12px;margin-bottom:6px;page-break-inside:avoid}
-.rh{display:flex;justify-content:space-between;margin-bottom:5px}
-.rdim{font-weight:700;font-size:12px;text-transform:capitalize}
-.rpb{font-size:10px;font-weight:700;text-transform:uppercase;padding:2px 7px;border-radius:8px}
-.rh-h{background:#E9456022;color:#E94560}.rh-m{background:#FDCB6E22;color:#F9A825}.rh-l{background:#00B89422;color:#00B894}
-.rt{font-size:11.5px;color:#555;line-height:1.5;margin-bottom:4px}
-.rs{display:flex;gap:14px;font-size:11px;color:#888}
-.hash{background:#f5f5f5;border-radius:8px;padding:10px;font-family:monospace;font-size:10px;color:#666;word-break:break-all}
-.footer{margin-top:36px;padding-top:14px;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:10px;color:#aaa}
-@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-</style></head><body><div class="page">
-<div class="header">
-  <div><div class="logo">🛡 <span>JCCS</span> Jedi Code Compliance System</div>
-  <div style="font-size:11px;color:#888;margin-top:3px">AI Ethics Auditing Platform · Star Wars Hackathon 2026 · PS9</div></div>
-  <div class="meta"><div style="font-weight:700;font-size:13px;color:#1a1a2e">COMPLIANCE AUDIT REPORT</div>
-  <div>Audit ID: #${id}</div><div>Generated: ${new Date().toLocaleString()}</div>
-  <div>Status: <span style="color:#00B894;font-weight:600">COMPLETED</span></div></div>
-</div>
-<h1>${audit.run_name}</h1>
-<div class="subtitle">${audit.file_name} · ${audit.row_count?.toLocaleString() || 0} rows · ${new Date(audit.created_at).toLocaleDateString('en-IN',{year:'numeric',month:'long',day:'numeric'})}</div>
-<div class="scores">
-  <div class="score-main"><div class="score-big">${score}</div><div class="score-lbl">Ethics Score / 100</div>
-  <div><span class="risk-badge">${(audit.risk_level||'unknown').toUpperCase()} RISK</span></div></div>
-  <div class="stat"><div class="n" style="color:#00B894">${passed}</div><div class="l">Passed</div></div>
-  <div class="stat"><div class="n" style="color:#E94560">${failed}</div><div class="l">Failed</div></div>
-  <div class="stat"><div class="n" style="color:#6C63FF">${fairness_results?.length || 0}</div><div class="l">Tested</div></div>
-</div>
-${explanations?.summary ? `<div class="sec"><div class="sec-title">AI Analysis Summary</div><div class="summary">${explanations.summary.split(" ").slice(0,80).join(" ")}${explanations.summary.split(" ").length > 80 ? "..." : ""}</div></div>` : ''}
-<div class="sec"><div class="sec-title">Fairness Dimensions</div><div class="fg">
-${fairness_results?.map(r => {
-  const c = SCORE_COLOR(r.score)
-  return `<div class="fc ${r.passed?'pass':'fail'}">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-    <div class="fc-lbl">${r.dimension_label}</div>
-    <span class="pb ${r.passed?'pass':'fail'}">${r.passed?'PASS':'FAIL'}</span>
-  </div>
-  <div class="fc-score" style="color:${c}">${Math.round(r.score)}</div>
-  <div class="fc-bar"><div class="fc-fill" style="width:${r.score}%;background:${c}"></div></div>
-  ${r.metric_value!=null?`<div class="fc-meta">Disparity: ${Math.abs(r.metric_value*100).toFixed(1)}% · Threshold: ${(r.threshold*100).toFixed(0)}%</div>`:''}
-</div>`}).join('')||''}
-</div></div>
-${shap_results?.length > 0 ? `<div class="sec"><div class="sec-title">SHAP Feature Importance (Top 8)</div>
-${shap_results.slice(0,8).map((s,i) => {
-  const maxV = shap_results[0]?.shap_importance || 1
-  const pct = Math.min(100,(s.shap_importance/maxV)*100)
-  const c = i===0?'#E94560':i<=2?'#FDCB6E':'#6C63FF'
-  return `<div class="sr"><div class="sn">${s.feature_name}</div><div class="sb"><div class="sf" style="width:${pct}%;background:${c}"></div></div><div class="sv">${(s.shap_importance*100).toFixed(2)}%</div></div>`
-}).join('')}
-<p style="font-size:11px;color:#999;margin-top:6px">Red = highest impact. These features most influence model decisions.</p></div>` : ''}
-${data.lime_results?.length > 0 ? `<div class="sec"><div class="sec-title">LIME Local Explanations (Top 6)</div>
-${data.lime_results.slice(0,6).map((l,i) => {
-  const c = i===0?'#E94560':i<=2?'#FDCB6E':'#6C63FF'
-  return `<div class="sr"><div class="sn">${l.feature_name}</div><div class="sb"><div class="sf" style="width:${Math.min(100,l.lime_importance*100).toFixed(0)}%;background:${c}"></div></div><div class="sv">${(l.lime_importance*100).toFixed(1)}%</div></div>`
-}).join('')}
-<p style="font-size:11px;color:#999;margin-top:6px">LIME explains individual decisions — why a specific person was approved or rejected.</p></div>` : ''}
-<div class="sec"><div class="sec-title">Regulatory Compliance</div>
-${Object.entries(compByStd).map(([std,checks]) => {
-  const p = checks.filter(c=>c.passed).length
-  return `<div class="cb"><div class="ch"><span>${stdNames[std]||std}</span><span style="color:${p===checks.length?'#00B894':'#E94560'}">${p}/${checks.length} requirements</span></div>
-${checks.map(c=>`<div class="ci"><span class="ck ${c.passed?'pass':'fail'}">${c.passed?'✓':'✗'}</span><span>${c.requirement}</span></div>`).join('')}
-</div>`}).join('')}
-</div>
-${remediations?.length > 0 ? `<div class="sec"><div class="sec-title">Remediation Recommendations</div>
-${remediations.slice(0,5).map(r=>`<div class="rc">
-<div class="rh"><span class="rdim">${(r.dimension||'').replace(/_/g,' ')}</span>
-<span class="rpb rh-${r.priority[0]}">${r.priority}</span></div>
-<div class="rt">${r.suggestion}</div>
-<div class="rs"><span>📉 Bias reduction: ~${r.estimated_bias_reduction}%</span><span>⚡ Accuracy loss: ~${r.estimated_accuracy_loss}%</span></div>
-</div>`).join('')}</div>` : ''}
-<div style="margin-top:10px;padding-top:8px;border-top:1px solid #eee;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-<span style="font-size:10px;font-weight:700;color:#6C63FF;white-space:nowrap">⛓ SHA-256</span>
-<span style="font-family:monospace;font-size:9.5px;color:#888;word-break:break-all;flex:1">${audit.hash_sha256||'Computing...'}</span>
-<span style="font-size:9px;color:#bbb;white-space:nowrap">Audit #${id} · ${new Date().toLocaleDateString()}</span>
-</div>
-${digital_signature?.valid ? `
-<div style="margin-top:8px;padding:8px 10px;background:#f8f4ff;border:1px solid #d4c5ff;border-radius:6px">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-    <span style="font-size:11px;font-weight:700;color:#6C63FF">🔐 Digital Signature Certificate</span>
-    <span style="font-size:10px;font-weight:700;color:#00B894;background:#e6fff9;padding:2px 8px;border-radius:10px;border:1px solid #b3f0e0">✅ VERIFIED</span>
-  </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">
-    <div style="font-size:9.5px;color:#888">Serial: <span style="font-family:monospace;color:#444;font-weight:700">${digital_signature.certificate_serial||''}</span></div>
-    <div style="font-size:9.5px;color:#888">Algorithm: <span style="font-family:monospace;color:#6C63FF;font-weight:700">${digital_signature.signature_algorithm||'HMAC-SHA256'}</span></div>
-    <div style="font-size:9.5px;color:#888">Key ID: <span style="font-family:monospace;color:#444">${(digital_signature.key_fingerprint||'').slice(0,16)}...</span></div>
-    <div style="font-size:9.5px;color:#888">Issued: <span style="font-family:monospace;color:#444">${(digital_signature.issued_at||'').slice(0,19)}</span></div>
-  </div>
-  <div style="font-size:9px;color:#888;margin-bottom:4px">Signature (HMAC-SHA256):</div>
-  <div style="font-family:monospace;font-size:8.5px;color:#666;word-break:break-all;background:#fff;padding:4px 6px;border-radius:4px;border:1px solid #e0d5ff">${(digital_signature.signature||'').slice(0,64)}...</div>
-  <div style="font-size:8.5px;color:#aaa;margin-top:5px">This certificate is cryptographically signed by JCCS. Any modification invalidates this signature. Verify at: ${window.location.origin}/audit/${id}/verify-signature</div>
-</div>` : ''}
-<div style="margin-top:4px;font-size:9px;color:#aaa;text-align:center">JCCS · Jedi Code Compliance System · Star Wars Hackathon 2026 · PS9</div>
-</div></body></html>`
-
-  const win = window.open('', '_blank')
-  if (!win) {
-    alert('Popup blocked! Please allow popups for this site and try again.')
-    return
-  }
-  win.document.write(html)
-  win.document.close()
-  setTimeout(() => win.print(), 600)
 }
 
 export default function ResultsPage() {
@@ -256,21 +279,38 @@ export default function ResultsPage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
-  const [stakeholderView, setStakeholderView] = useState('executive')
-  const [debiasMethod, setDebiasMethod] = useState('reweighing')
-  const [debiasState, setDebiasState] = useState('idle') // idle | preview | approved | loading
-  const [debiasResult, setDebiasResult] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [copiedPatch, setCopiedPatch] = useState(null)
+  const [showExportMenu, setShowExportMenu] = useState(false)
+
+  // Prompt Inspector filters
+  const [inspectorLang, setInspectorLang] = useState('all')
+  const [inspectorCat, setInspectorCat] = useState('all')
+  const [inspectorStatus, setInspectorStatus] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedProbe, setSelectedProbe] = useState(null)
 
   useEffect(() => {
     const load = async () => {
       try {
         const res = await getAudit(id)
         setData(res.data)
-      } catch (e) { console.error(e) }
-      finally { setLoading(false) }
+        if (res.data?.probe_results?.length > 0) {
+          setSelectedProbe(res.data.probe_results[0])
+        }
+        if (res.data?.audit?.run_name) {
+          document.title = `${res.data.audit.run_name} — JCCS Safety Scorecard`
+        }
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setLoading(false)
+      }
     }
     load()
+    return () => {
+      document.title = 'JCCS — IndiaAI Safety & Red-Teaming Platform'
+    }
   }, [id])
 
   const handleShare = () => {
@@ -280,35 +320,98 @@ export default function ResultsPage() {
     })
   }
 
-  if (loading) return (
-    <div className="flex items-center justify-center min-h-96">
-      <div className="flex flex-col items-center gap-3">
-        <Loader className="w-10 h-10 animate-spin" style={{ color: '#6C63FF' }} />
-        <p className="text-gray-400">Loading audit results...</p>
+  const handleExportPDF = () => {
+    setShowExportMenu(false)
+    if (!data) return
+    try {
+      const filename = exportAuditAsPDF(data)
+      toast.success(`Prepared PDF print preview: ${filename}`)
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to generate PDF')
+    }
+  }
+
+  const handleExportJSON = () => {
+    setShowExportMenu(false)
+    if (!data) return
+    try {
+      const filename = exportAuditAsJSON(data)
+      toast.success(`Exported JSON: ${filename}`)
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to export JSON')
+    }
+  }
+
+  const copyGuardrail = async (text, idx, isCodeSnippet = false) => {
+    const textToCopy = isCodeSnippet ? text : extractPromptPatch(text)
+    let copied = false
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(textToCopy)
+        copied = true
+      } catch {
+        copied = fallbackCopyText(textToCopy)
+      }
+    } else {
+      copied = fallbackCopyText(textToCopy)
+    }
+
+    if (copied) {
+      setCopiedPatch(idx)
+      toast.success(isCodeSnippet ? 'Copied code snippet to clipboard!' : 'Copied clean guardrail patch to clipboard!')
+      setTimeout(() => setCopiedPatch(null), 2500)
+    } else {
+      toast.error('Failed to copy to clipboard')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-96">
+        <div className="flex flex-col items-center gap-3">
+          <Loader className="w-10 h-10 animate-spin text-[#6C63FF]" />
+          <p className="text-gray-400">Loading safety audit scorecard...</p>
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
-  if (!data) return <div className="text-center text-gray-400 py-20">Audit not found.</div>
+  if (!data) {
+    return (
+      <div className="max-w-md mx-auto py-20 text-center space-y-4 animate-fade-in">
+        <div className="text-5xl mb-2">🔍</div>
+        <h3 className="text-xl font-bold text-white">Audit Report Not Found</h3>
+        <p className="text-gray-400 text-xs">
+          The requested audit record may have been deleted or the ID is invalid.
+        </p>
+        <Link
+          to="/history"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-[#6C63FF] hover:bg-[#5b52e0] transition-all hover:scale-105 shadow-[0_0_15px_rgba(108,99,255,0.3)]"
+        >
+          View Evaluation History
+        </Link>
+      </div>
+    )
+  }
 
-  const { audit, fairness_results, shap_results, explanations, remediations, compliance_checks, model_metrics, decision_rules, digital_signature } = data
+  const { audit, fairness_results, probe_results, explanations, remediations, compliance_checks, digital_signature } = data
   const score = Math.round(audit.overall_score || 0)
+  const riskColor = RISK_COLORS[audit.risk_level] || '#E94560'
 
-  const radarData = fairness_results?.map(r => ({
-    subject: r.dimension_label.replace(' Fairness','').replace('Demographic ','Demo.').replace('Counterfactual','Counter.').replace('Individual ','Indiv.'),
-    score: r.score, fullMark: 100
-  })) || []
+  const isTabular = audit.model_type !== 'llm_safety'
 
-  const shapData = (shap_results || []).slice(0, 10).map(s => ({
-    name: s.feature_name,
-    value: parseFloat((s.shap_importance * 100).toFixed(2))
-  }))
-
-  const limeData = (data.lime_results || []).slice(0, 8).map(l => ({
-    name: l.feature_name,
-    value: parseFloat((l.lime_importance * 100).toFixed(1)),
-    explanation: l.explanation
-  }))
+  const radarData = (fairness_results || []).map(r => {
+    const isTested = isTabular
+      ? (r.score !== null && r.score !== undefined)
+      : (r.score !== null && r.score !== undefined && (r.details?.tests_run > 0 || r.dimension === 'accountability_audit'))
+    return {
+      subject: r.dimension_label.split('&')[0].split('(')[0].trim(),
+      score: isTested ? r.score : 0,
+      fullMark: 100
+    }
+  })
 
   const complianceByStandard = {}
   compliance_checks?.forEach(c => {
@@ -316,1019 +419,853 @@ export default function ResultsPage() {
     complianceByStandard[c.standard].push(c)
   })
 
-  const tabs = ['overview', 'fairness', 'explainability', 'compliance', 'remediation']
-  const riskColor = RISK_COLORS[audit.risk_level] || '#E94560'
+  // Filtered probes for inspector tab
+  const filteredProbes = (probe_results || []).filter(p => {
+    if (inspectorLang !== 'all' && p.language !== inspectorLang) return false
+    if (inspectorCat !== 'all' && p.category !== inspectorCat) return false
+    if (inspectorStatus === 'compliant' && !p.compliant) return false
+    if (inspectorStatus === 'flagged' && p.compliant) return false
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      const textMatch = p.prompt_text.toLowerCase().includes(q) ||
+                        (p.target_model_response && p.target_model_response.toLowerCase().includes(q)) ||
+                        (p.evaluation_notes && p.evaluation_notes.toLowerCase().includes(q)) ||
+                        p.test_id.toLowerCase().includes(q)
+      if (!textMatch) return false
+    }
+    return true
+  })
+
+  const activeDimsCount = (fairness_results || []).filter(r =>
+    isTabular
+      ? (r.score !== null && r.score !== undefined)
+      : (r.score !== null && r.score !== undefined && (r.details?.tests_run > 0 || r.dimension === 'accountability_audit'))
+  ).length
+
+  const tabs = [
+    { id: 'overview', label: 'Overview' },
+    {
+      id: 'dimensions',
+      label: isTabular
+        ? `Fairness Dimensions (${fairness_results?.length || 0})`
+        : `Safety Dimensions (${activeDimsCount}/9 Scored)`
+    },
+    ...(isTabular ? [] : [{ id: 'probes', label: `Prompt Inspector (${probe_results?.length || 0})` }]),
+    { id: 'compliance', label: 'Compliance Matrix' },
+    { id: 'guardrails', label: isTabular ? 'Remediations' : 'Guardrail Patches' },
+  ]
 
   return (
     <div className="space-y-6 py-4">
-      {/* Header */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <Link to="/history" className="text-gray-400 hover:text-white transition-colors">
-          <ChevronLeft className="w-5 h-5" />
-        </Link>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold text-white truncate">{audit.run_name}</h1>
-          <p className="text-gray-400 text-sm">{audit.file_name} · {audit.row_count?.toLocaleString()} rows · {new Date(audit.created_at).toLocaleDateString()}</p>
+      {/* Top Header */}
+      <div className="flex items-center justify-between gap-4 flex-wrap pb-2 border-b border-white/5">
+        <div className="flex items-center gap-3 min-w-0">
+          <Link to="/history" className="text-gray-400 hover:text-white transition-colors">
+            <ChevronLeft className="w-5 h-5" />
+          </Link>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-2xl font-black text-white truncate">{audit.run_name}</h1>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-[#6C63FF]/20 text-[#a78bfa] border border-[#6C63FF]/30">
+                {audit.target_model_name || (isTabular ? `Tabular ${audit.model_type?.toUpperCase() || 'CSV'}` : 'LLM Target')}
+              </span>
+            </div>
+            <p className="text-gray-400 text-xs mt-1">
+              {isTabular
+                ? `Dataset: ${audit.file_name || 'CSV Upload'} · ${audit.row_count || 0} Records · Evaluated ${new Date(audit.created_at).toLocaleDateString()}`
+                : `Provider: ${audit.target_model_provider || 'OpenAI-compatible'} · ${audit.row_count || probe_results?.length || 44} Indic Probes · Evaluated ${new Date(audit.created_at).toLocaleDateString()}`
+              }
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button onClick={handleShare}
-            aria-label={copied ? 'Link copied to clipboard' : 'Copy share link'}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all hover:scale-105"
-            style={{ background: 'rgba(108,99,255,0.15)', color: '#a78bfa', border: '1px solid rgba(108,99,255,0.3)' }}>
-            {copied ? <Check className="w-4 h-4" aria-hidden="true" /> : <Copy className="w-4 h-4" aria-hidden="true" />}
-            {copied ? 'Copied!' : 'Share Link'}
-          </button>
+
+        <div className="flex items-center gap-2 flex-shrink-0 relative">
+          {/* Export Scorecard Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all bg-[#6C63FF]/20 hover:bg-[#6C63FF]/30 text-white border border-[#6C63FF]/40 shadow-sm"
+              title="Export Safety Audit Scorecard"
+            >
+              <Download className="w-3.5 h-3.5 text-[#a78bfa]" />
+              <span>Export</span>
+              <ChevronDown className="w-3 h-3 text-gray-400" />
+            </button>
+
+            {showExportMenu && (
+              <div className="absolute right-0 mt-2 w-52 rounded-2xl glass border border-white/15 shadow-2xl p-1.5 z-50 animate-fadeIn space-y-1 bg-[#12121a]/95 backdrop-blur-xl">
+                <button
+                  onClick={handleExportPDF}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left font-semibold text-gray-200 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <FileText className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                  <div>
+                    <div className="text-white font-bold">Export as PDF</div>
+                    <div className="text-[10px] text-gray-400">Printable executive scorecard</div>
+                  </div>
+                </button>
+                <button
+                  onClick={handleExportJSON}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left font-semibold text-gray-200 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <FileJson className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div>
+                    <div className="text-white font-bold">Export as JSON</div>
+                    <div className="text-[10px] text-gray-400">Raw audit & cryptographic proof</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+
           <button
-            onClick={() => generatePDF(data, id)}
-            disabled={!data || data?.audit?.status !== 'completed'}
-            aria-label={!data || data?.audit?.status !== 'completed' ? 'Export PDF — audit still processing' : 'Export audit PDF report'}
-            title={!data || data?.audit?.status !== 'completed' ? 'Audit still processing...' : 'Export PDF report'}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
-            style={{ background: 'linear-gradient(135deg, #6C63FF, #8B5CF6)', boxShadow: '0 0 20px rgba(108,99,255,0.3)' }}>
-            <Download className="w-4 h-4" aria-hidden="true" />
-            Export PDF
+            onClick={handleShare}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? 'Copied' : 'Share'}
           </button>
-          <div className="px-3 py-1 rounded-full text-xs font-bold uppercase"
-            style={{ background: riskColor + '22', color: riskColor }}>
-            {audit.risk_level} risk
+
+          <div
+            className="px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider"
+            style={{ background: riskColor + '18', color: riskColor, border: `1px solid ${riskColor}40` }}
+          >
+            {audit.risk_level} Risk
           </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-0.5 glass rounded-xl p-1 w-fit overflow-x-auto">
-        {[
-          { key: 'overview', label: 'Overview', icon: '📊' },
-          { key: 'fairness', label: 'Fairness', icon: '⚖️' },
-          { key: 'explainability', label: 'Explainability', icon: '🧠' },
-          { key: 'compliance', label: 'Compliance', icon: '📋' },
-          { key: 'remediation', label: 'Remediation', icon: '🔧' },
-          { key: 'stakeholders', label: 'Reports', icon: '👥' },
-          { key: 'beforeafter', label: 'Before/After', icon: '📈' },
-        ].map(({ key, label, icon }) => (
-          <button key={key} onClick={() => setActiveTab(key)}
-            aria-label={label}
-            aria-selected={activeTab === key}
-            role="tab"
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
-              activeTab === key
-                ? 'text-white shadow-lg'
+      {/* Tabs Bar */}
+      <div className="flex gap-1 glass rounded-2xl p-1.5 w-fit overflow-x-auto border border-white/10">
+        {tabs.map(({ id, label }) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              activeTab === id
+                ? 'bg-[#6C63FF] text-white shadow-[0_0_15px_rgba(108,99,255,0.4)]'
                 : 'text-gray-400 hover:text-white hover:bg-white/5'
             }`}
-            style={activeTab === key ? { background: 'linear-gradient(135deg, #6C63FF, #8B5CF6)' } : {}}>
-            <span className="text-base leading-none">{icon}</span>
-            <span className="hidden sm:inline">{label}</span>
+          >
+            {label}
           </button>
         ))}
       </div>
 
-      {/* OVERVIEW */}
+      {/* ========================================================================= */}
+      {/* TAB 1: OVERVIEW */}
+      {/* ========================================================================= */}
       {activeTab === 'overview' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Score */}
-            <div className="glass rounded-2xl p-6 flex flex-col items-center gap-2">
-              <ScoreRing score={score} riskLevel={audit.risk_level} />
-              <div className="flex gap-6 mt-1 text-center">
-                <div>
-                  <div className="text-xl font-bold text-green-400">{fairness_results?.filter(r => r.passed).length || 0}</div>
-                  <div className="text-xs text-gray-500">Passed</div>
-                </div>
-                <div className="w-px bg-white/10" />
-                <div>
-                  <div className="text-xl font-bold text-red-400">{fairness_results?.filter(r => !r.passed).length || 0}</div>
-                  <div className="text-xs text-gray-500">Failed</div>
-                </div>
-              </div>
+        <div className="space-y-6 animate-fade-in">
+          {/* Top Hero Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Score Ring */}
+            <div className="glass rounded-3xl p-6 border border-white/10 flex flex-col items-center justify-center">
+              <ScoreRing score={score} riskLevel={audit.risk_level} isTabular={isTabular} />
             </div>
 
             {/* Radar Chart */}
-            <div className="glass rounded-2xl p-5">
-              <h3 className="font-semibold text-white text-sm mb-2">Fairness Radar</h3>
-              <div className="h-52">
+            <div className="glass rounded-3xl p-6 border border-white/10 flex flex-col items-center justify-center">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
+                {isTabular ? '5-Dimension Fairness Radar' : '9-Dimension Safety Radar'}
+              </h4>
+              <div className="w-full h-56">
                 <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart data={radarData} margin={{ top: 5, right: 20, bottom: 5, left: 20 }}>
-                    <PolarGrid stroke="#ffffff15" />
+                  <RadarChart data={radarData}>
+                    <PolarGrid stroke="rgba(255,255,255,0.08)" />
                     <PolarAngleAxis dataKey="subject" tick={{ fill: '#9ca3af', fontSize: 10 }} />
-                    <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: '#6b7280', fontSize: 8 }} tickCount={4} />
-                    <Radar name="Score" dataKey="score" stroke="#6C63FF" fill="#6C63FF" fillOpacity={0.3} strokeWidth={2} />
+                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#6b7280', fontSize: 8 }} />
+                    <Radar name="Score" dataKey="score" stroke="#6C63FF" fill="#6C63FF" fillOpacity={0.4} />
                   </RadarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* Summary */}
-            <div className="glass rounded-2xl p-5 flex flex-col gap-3">
-              <h3 className="font-semibold text-white text-sm flex items-center gap-2">
-                <Shield className="w-4 h-4" style={{ color: '#6C63FF' }} /> AI Analysis Summary
-              </h3>
-              <p className="text-gray-300 text-xs leading-relaxed flex-1 overflow-y-auto max-h-36">
-                {explanations?.summary && explanations.summary !== 'None'
-                  ? explanations.summary
-                  : audit.status === 'completed'
-                    ? 'Add GROQ_API_KEY to your .env file to enable AI-powered plain-language analysis.'
-                    : 'Analysis in progress...'}
-              </p>
-              <div className="pt-2 border-t border-white/5 space-y-1">
-                <p className="text-xs text-gray-600 font-mono break-all">SHA-256: {audit.hash_sha256?.slice(0, 32)}...</p>
-                {audit.blockchain_tx && (
-                  <p className="text-xs font-mono" style={{ color: '#00B894' }}>
-                    ⛓ {audit.blockchain_tx.split('|')[0]} · {audit.blockchain_tx.split('|')[1]}
-                  </p>
-                )}
+            {/* Verification & Meta Card */}
+            <div className="glass rounded-3xl p-6 border border-white/10 flex flex-col justify-between space-y-4 text-xs">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="font-bold text-white text-sm flex items-center gap-1.5">
+                    <Shield className="w-4 h-4 text-green-400" /> Tamper-Proof Audit Proof
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30">
+                    VERIFIED
+                  </span>
+                </div>
+                <div className="space-y-2 text-gray-400">
+                  <div>
+                    <span className="text-gray-500">Manifest SHA-256:</span>
+                    <div className="font-mono text-[11px] text-gray-300 truncate bg-black/40 p-1.5 rounded mt-0.5 border border-white/5">
+                      {audit.hash_sha256 || 'SHA-256 Hash Generated'}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Blockchain TX / Certificate:</span>
+                    <div className="font-mono text-[11px] text-purple-300 truncate bg-black/40 p-1.5 rounded mt-0.5 border border-white/5">
+                      {audit.blockchain_tx || 'OriginStamp Bitcoin Proof'}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Digital Signature:</span>
+                    <div className="text-gray-300 mt-0.5 flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-[#00B894]" /> HMAC-SHA256 Signed by JCCS Audit Authority
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-white/5 flex items-center justify-between text-gray-400">
+                <span>Evaluator Engine:</span>
+                <span className="font-semibold text-white">
+                  {isTabular ? 'Fairlearn + AIF360 Statistical Engine' : 'Groq LLaMA 3.3 70B (IndiaAI Judge)'}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Fairness Snapshot */}
-          <div>
-            <h3 className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wider flex items-center gap-2">
-              All 6 Fairness Dimensions
-              <span className="text-green-400">{fairness_results?.filter(r=>r.passed).length || 0} passed</span>
-              <span className="text-gray-600">·</span>
-              <span className="text-red-400">{fairness_results?.filter(r=>!r.passed).length || 0} failed</span>
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              {fairness_results?.map(r => (
-                <div key={r.dimension}
-                  className={`rounded-xl p-3 text-center border transition-all hover:scale-105 cursor-default ${r.passed ? 'border-green-500/25 bg-green-500/5' : 'border-red-500/25 bg-red-500/5'}`}>
-                  <div className="text-2xl font-black leading-none mb-1" style={{ color: SCORE_COLOR(r.score) }}>{r.score}</div>
-                  <div className="text-xs text-gray-400 leading-tight mb-1.5">{r.dimension_label.replace(' Fairness','').replace('Model ','')}</div>
-                  <div className={`text-xs font-black ${r.passed ? 'text-green-400' : 'text-red-400'}`}>
-                    {r.passed ? '✓ PASS' : '✗ FAIL'}
-                  </div>
-                  <div className="mt-2 h-1 rounded-full bg-white/5 overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${r.score}%`, background: SCORE_COLOR(r.score) }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-        </div>
-      )}
-
-      {/* FAIRNESS */}
-      {activeTab === 'fairness' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {fairness_results?.map(r => <FairnessCard key={r.dimension} r={r} />)}
-          </div>
-          {explanations?.bias_findings?.length > 0 && (
-            <div className="glass rounded-xl p-5 border border-red-500/20">
-              <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-yellow-400" /> AI Bias Findings
+          {/* AI Executive Summary */}
+          {explanations?.summary && (
+            <div className="glass rounded-3xl p-6 border border-white/10 space-y-3">
+              <h3 className="font-bold text-white text-base flex items-center gap-2">
+                <Terminal className="w-5 h-5 text-[#6C63FF]" /> {isTabular ? 'Algorithmic Fairness Executive Findings' : 'IndiaAI Safety Institute Executive Findings'}
               </h3>
-              <div className="space-y-3">
-                {explanations.bias_findings.map((f, i) => (
-                  <p key={i} className="text-gray-300 text-sm leading-relaxed border-l-2 pl-3" style={{ borderColor: '#E94560' }}>{f}</p>
-                ))}
+              <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-line bg-black/30 p-5 rounded-2xl border border-white/5">
+                {explanations.summary}
               </div>
             </div>
           )}
-        </div>
-      )}
 
-      {/* EXPLAINABILITY */}
-      {activeTab === 'explainability' && (
-        <div className="space-y-6">
-
-          {/* Plain English Intro Banner */}
-          <div className="rounded-2xl p-4 flex flex-col sm:flex-row gap-4"
-            style={{ background: 'linear-gradient(135deg, rgba(108,99,255,0.12), rgba(233,69,96,0.08))', border: '1px solid rgba(108,99,255,0.2)' }}>
-            <div className="flex-1">
-              <p className="text-white font-bold text-sm mb-1">🔍 Why did the model make these decisions?</p>
-              <p className="text-gray-400 text-xs leading-relaxed">
-                This tab shows which data features (like age, education, income) had the most influence on the AI model's predictions.
-                A high percentage means that feature strongly affected outcomes — which can reveal hidden bias.
-              </p>
+          {/* Dimension Grid Summary */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-white text-base">
+                {isTabular ? 'Fairness Dimension Status' : 'Safety Dimension Status'}
+              </h3>
+              <span className="text-xs text-gray-400">
+                {isTabular
+                  ? `${fairness_results?.length || 5}/5 Tabular Dimensions Scored`
+                  : `${fairness_results?.filter(r => r.score !== null && r.score !== undefined && (r.details?.tests_run > 0 || r.dimension === 'accountability_audit')).length}/9 Active Dimensions Scored`
+                }
+              </span>
             </div>
-            {/* Color Legend */}
-            <div className="flex sm:flex-col gap-3 justify-center flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: '#E94560' }} />
-                <span className="text-xs text-gray-400">#1 highest impact</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: '#FDCB6E' }} />
-                <span className="text-xs text-gray-400">#2–3 high impact</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: '#6C63FF' }} />
-                <span className="text-xs text-gray-400">lower impact</span>
-              </div>
-            </div>
-          </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {(fairness_results || []).map((r, i) => {
+                const isTested = isTabular
+                  ? (r.score !== null && r.score !== undefined)
+                  : (r.score !== null && r.score !== undefined && (r.details?.tests_run > 0 || r.dimension === 'accountability_audit'))
 
-          {/* SHAP Section */}
-          <div className="glass rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#6C63FF22', color: '#a78bfa' }}>SHAP</span>
-              <h3 className="font-semibold text-white">Global Feature Importance</h3>
-            </div>
-            <p className="text-xs text-gray-500 mb-4">Which features most influence the model's decisions overall? (TreeExplainer — model-level view)</p>
-            {shapData.length > 0 ? (
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={shapData} layout="vertical" margin={{ left: 90 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" />
-                    <XAxis type="number" tick={{ fill: '#9ca3af', fontSize: 11 }} />
-                    <YAxis type="category" dataKey="name" tick={{ fill: '#9ca3af', fontSize: 11 }} width={90} />
-                    <Tooltip contentStyle={{ background: '#1A1A2E', border: '1px solid #6C63FF44', borderRadius: 8 }}
-                      labelStyle={{ color: 'white', fontWeight: 'bold' }}
-                      formatter={(val) => [`${val}%`, 'SHAP Importance']} />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                      {shapData.map((_, i) => (
-                        <Cell key={i} fill={i === 0 ? '#E94560' : i <= 2 ? '#FDCB6E' : '#6C63FF'} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            ) : <p className="text-gray-500 text-sm py-8 text-center">No numeric feature columns detected.</p>}
-          </div>
-
-          {/* LIME Section */}
-          <div className="glass rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#E9456022', color: '#E94560' }}>LIME</span>
-              <h3 className="font-semibold text-white">Local Decision Explanations</h3>
-            </div>
-            <p className="text-xs text-gray-500 mb-4">Why was THIS specific individual accepted or rejected? (Perturbation-based — individual-level view)</p>
-            {limeData.length > 0 ? (
-              <div className="space-y-3">
-                {limeData.map((item, i) => (
-                  <div key={i} className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-300 font-medium">{item.name}</span>
-                      <span className="text-xs font-bold" style={{ color: i === 0 ? '#E94560' : i <= 2 ? '#FDCB6E' : '#6C63FF' }}>
-                        {item.value.toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-white/5 rounded-full h-2">
-                      <div className="h-2 rounded-full transition-all duration-700"
-                        style={{ width: `${item.value}%`, background: i === 0 ? '#E94560' : i <= 2 ? '#FDCB6E' : '#6C63FF' }} />
-                    </div>
-                    {item.explanation && (
-                      <p className="text-xs text-gray-500 leading-relaxed">{item.explanation}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : <p className="text-gray-500 text-sm py-4 text-center">Run a new audit to see LIME results.</p>}
-          </div>
-
-          {/* Decision Rules */}
-          {decision_rules?.rules?.length > 0 && (
-            <div className="glass rounded-2xl p-5 border border-green-500/20">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#00B89422', color: '#00B894' }}>RULE EXTRACTION</span>
-                <h3 className="font-semibold text-white">Decision Tree Rules — How the AI Decides</h3>
-              </div>
-              <p className="text-xs text-gray-500 mb-1">Human-readable IF-THEN rules extracted from a DecisionTree proxy. Accuracy: {decision_rules.tree_accuracy}%</p>
-              {decision_rules.biased_rules?.length > 0 && (
-                <div className="rounded-xl p-3 mb-3 border border-red-500/20" style={{ background: 'rgba(233,69,96,0.06)' }}>
-                  <div className="text-xs font-black text-red-400 mb-2">⚠️ Potentially Discriminatory Rules Detected:</div>
-                  {decision_rules.biased_rules.map((b, i) => (
-                    <div key={i} className="text-xs text-red-300 mb-1">• {b.concern}</div>
-                  ))}
-                </div>
-              )}
-              <div className="space-y-2">
-                {decision_rules.rules.map((r, i) => (
-                  <div key={i} className="rounded-xl p-3 border border-white/5"
-                    style={{ background: r.outcome === 'APPROVED' ? 'rgba(0,184,148,0.04)' : 'rgba(233,69,96,0.04)' }}>
-                    <div className="flex items-start justify-between gap-3">
-                      <code className="text-xs font-mono text-gray-200 flex-1 leading-relaxed">{r.rule}</code>
-                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                        <span className="text-xs font-black px-2 py-0.5 rounded-full"
-                          style={{ background: r.outcome === 'APPROVED' ? 'rgba(0,184,148,0.2)' : 'rgba(233,69,96,0.2)', color: r.outcome === 'APPROVED' ? '#00B894' : '#E94560' }}>
-                          {r.confidence}% confident
+                return (
+                  <div
+                    key={i}
+                    className={`glass rounded-2xl p-4 border transition-all ${
+                      !isTested
+                        ? 'border-white/5 bg-white/[0.01] opacity-75'
+                        : r.passed
+                        ? 'border-green-500/20'
+                        : 'border-red-500/20'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <h4 className="font-semibold text-white text-xs">{r.dimension_label}</h4>
+                      {!isTested ? (
+                        <span className="text-[10px] uppercase font-bold text-gray-400 bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
+                          {DIMENSION_LIBRARY_PROBES[r.dimension] === 0 && r.dimension !== 'accountability_audit'
+                            ? 'No Coverage'
+                            : 'Not Tested'
+                          }
                         </span>
-                        <span className="text-xs text-gray-600">{r.sample_pct}% of cases</span>
-                      </div>
+                      ) : r.passed ? (
+                        <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                      )}
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      {isTested ? (
+                        <>
+                          <span className="text-2xl font-black" style={{ color: SCORE_COLOR(r.score) }}>
+                            {r.score.toFixed(1)}
+                          </span>
+                          <span className="text-gray-500 text-xs">/ 100</span>
+                          <span className="text-[10px] text-gray-500 ml-auto">
+                            {isTabular && r.metric_value !== null && r.metric_value !== undefined
+                              ? `Disparity: ${r.metric_value.toFixed(3)}`
+                              : `Min: ${((r.threshold || 0.7) * 100).toFixed(0)}%`
+                            }
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-xs font-bold text-gray-400">
+                            {DIMENSION_LIBRARY_PROBES[r.dimension] === 0 && r.dimension !== 'accountability_audit'
+                              ? 'No Probes Authored'
+                              : 'Scope Excluded'
+                            }
+                          </span>
+                          <span className="text-[10px] text-gray-500 ml-auto">
+                            {DIMENSION_LIBRARY_PROBES[r.dimension] === 0 && r.dimension !== 'accountability_audit'
+                              ? '0 Probes Available'
+                              : '0 Probes Run'
+                            }
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    <div className="w-full bg-white/5 rounded-full h-1.5 mt-2">
+                      <div
+                        className="h-1.5 rounded-full"
+                        style={{
+                          width: isTested ? `${r.score}%` : '0%',
+                          background: isTested ? SCORE_COLOR(r.score) : 'transparent'
+                        }}
+                      />
                     </div>
                   </div>
-                ))}
-              </div>
-              <p className="text-xs text-gray-600 mt-3">
-                🌳 Rules extracted from DecisionTree (depth=4) trained on your CSV. Each rule shows the exact logic used for that subset of cases.
-              </p>
+                )
+              })}
             </div>
-          )}
+          </div>
+        </div>
+      )}
 
-          {/* Comparison callout */}
-          <div className="glass rounded-xl p-4 border border-[#6C63FF]/20">
-            <p className="text-xs text-gray-400 leading-relaxed">
-              <span className="text-purple-400 font-bold">SHAP</span> tells you which features matter most across all predictions (global view).{' '}
-              <span className="text-red-400 font-bold">LIME</span> tells you why a specific individual got the decision they did (local view).{' '}
-              Together they satisfy both GDPR right-to-explanation and PS9 official success criteria.
+      {/* ========================================================================= */}
+      {/* TAB 2: SAFETY / FAIRNESS DIMENSIONS */}
+      {/* ========================================================================= */}
+      {activeTab === 'dimensions' && (
+        <div className="space-y-4 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-white text-base">
+              {isTabular ? '5 Tabular ML Fairness Dimensions' : '9 IndiaAI Foundation Safety Dimensions'}
+            </h3>
+            <p className="text-xs text-gray-400">
+              {isTabular
+                ? 'Statistical disparity and algorithmic equity metrics across sensitive groups'
+                : 'Continuous scoring against IndiaAI Institute thresholds'
+              }
             </p>
           </div>
 
-          {/* Counterfactual Examples */}
-          {shap_results?.length > 0 && (
-            <div className="glass rounded-2xl p-5 border border-purple-500/20">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#a78bfa22', color: '#a78bfa' }}>COUNTERFACTUAL</span>
-                <h3 className="font-semibold text-white">What Would Change Your Outcome?</h3>
-              </div>
-              <p className="text-xs text-gray-500 mb-4">Based on LIME feature importance — these are the most likely changes that would flip the decision for a borderline individual.</p>
-              <div className="space-y-3">
-                {shap_results?.slice(0, 3).map((s, i) => {
-                  const featureName = s.feature_name?.replace(/_/g, ' ')
-                  const impact = (s.shap_importance * 100).toFixed(0)
-                  const examples = {
-                    0: { change: `Improving "${featureName}" significantly`, effect: 'most likely to flip the outcome', icon: '🔑' },
-                    1: { change: `Adjusting "${featureName}"`, effect: 'second strongest lever for change', icon: '🔄' },
-                    2: { change: `Modifying "${featureName}"`, effect: 'third most impactful factor', icon: '📊' },
-                  }
-                  const ex = examples[i] || examples[2]
-                  return (
-                    <div key={i} className="flex items-start gap-3 p-3 rounded-xl border border-white/5"
-                      style={{ background: 'rgba(167,139,250,0.05)' }}>
-                      <span className="text-xl flex-shrink-0">{ex.icon}</span>
-                      <div className="flex-1">
-                        <div className="text-sm text-white font-medium mb-0.5">
-                          {ex.change} <span className="text-purple-400">({impact}% influence)</span>
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          This is the {ex.effect}. Changing this feature has the highest probability of resulting in a different decision.
-                        </div>
+          <div className="space-y-3">
+            {(fairness_results || []).map((dim, idx) => {
+              const details = dim.details || {}
+              const isTested = isTabular
+                ? (dim.score !== null && dim.score !== undefined)
+                : (dim.score !== null && dim.score !== undefined && (details.tests_run > 0 || dim.dimension === 'accountability_audit'))
+
+              const hasNoLibraryProbes = !isTabular && DIMENSION_LIBRARY_PROBES[dim.dimension] === 0 && dim.dimension !== 'accountability_audit'
+
+              return (
+                <div
+                  key={idx}
+                  className={`glass rounded-2xl p-5 border transition-all ${
+                    !isTested
+                      ? 'border-white/5 bg-white/[0.01] opacity-75'
+                      : dim.passed
+                      ? 'border-green-500/20 bg-green-500/3'
+                      : 'border-red-500/20 bg-red-500/3'
+                  }`}
+                >
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm ${
+                        !isTested
+                          ? 'bg-white/5 text-gray-400 border border-white/5'
+                          : dim.passed
+                          ? 'bg-green-500/20 text-green-400'
+                          : 'bg-red-500/20 text-red-400'
+                      }`}>
+                        {!isTested ? '—' : dim.passed ? '✓' : '✕'}
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-white text-sm">{dim.dimension_label}</h4>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {isTabular ? (
+                            <span>
+                              {dim.sensitive_attribute ? `Sensitive Group: ${dim.sensitive_attribute} · ` : ''}
+                              Disparity Metric: {(dim.metric_value !== null && dim.metric_value !== undefined) ? dim.metric_value.toFixed(4) : '0.0000'} · Threshold: {((dim.threshold || 0.1) * 100).toFixed(0)}%
+                            </span>
+                          ) : dim.dimension === 'accountability_audit' ? (
+                            <span className="text-purple-300 font-medium">
+                              System Cryptographic Integrity Check · HMAC-SHA256 Signed & Blockchain Anchored
+                            </span>
+                          ) : isTested ? (
+                            `${details.tests_run || 0} Probes Tested · ${details.passed || 0} Passed · ${details.failed || 0} Flagged`
+                          ) : hasNoLibraryProbes ? (
+                            <span className="text-gray-400 font-medium">No Probe Coverage Available · Test probes pending authoring in evaluation library</span>
+                          ) : (
+                            <span className="text-gray-400 font-medium">Not Tested This Run · Category excluded in audit launch scope</span>
+                          )}
+                        </p>
                       </div>
                     </div>
-                  )
-                })}
-              </div>
-              <p className="text-xs text-gray-600 mt-3">
-                💡 Counterfactual explanations answer: <em>"What is the minimum change needed to get a different outcome?"</em> — required by GDPR Article 22 and EU AI Act Article 13.
-              </p>
-            </div>
-          )}
+
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        {isTested ? (
+                          <>
+                            <div className="text-xl font-black" style={{ color: SCORE_COLOR(dim.score) }}>
+                              {dim.score.toFixed(1)} / 100
+                            </div>
+                            <div className="text-[10px] text-gray-500">
+                              Threshold: {((dim.threshold || (isTabular ? 0.1 : 0.7)) * 100).toFixed(0)}%
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-xs font-semibold text-gray-400">
+                            {hasNoLibraryProbes ? 'No Coverage' : 'Not Evaluated'}
+                          </div>
+                        )}
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                        !isTested
+                          ? 'bg-white/5 text-gray-400 border border-white/10'
+                          : dim.passed
+                          ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                          : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                      }`}>
+                        {!isTested ? (hasNoLibraryProbes ? 'NO COVERAGE' : 'NOT EVALUATED') : dim.passed ? 'COMPLIANT' : 'VULNERABLE'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Failure notes or tabular breakdown if any */}
+                  {details.notes && details.notes.length > 0 && isTested && (
+                    <div className="mt-3 pt-3 border-t border-white/5 text-xs text-red-300/90 bg-red-500/5 p-3 rounded-xl">
+                      <span className="font-bold text-red-400">Vulnerability Detected: </span>
+                      {details.notes.join(' | ')}
+                    </div>
+                  )}
+
+                  {isTabular && !dim.passed && (
+                    <div className="mt-3 pt-3 border-t border-white/5 text-xs text-amber-300/90 bg-amber-500/5 p-3 rounded-xl">
+                      <span className="font-bold text-amber-400">Fairness Disparity Detected: </span>
+                      Measured disparity of {(dim.metric_value || 0).toFixed(4)} exceeds the permissible {((dim.threshold || 0.1) * 100).toFixed(0)}% tolerance threshold.
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
-      {/* COMPLIANCE */}
-      {activeTab === 'compliance' && (
-        <div className="space-y-4">
-          {Object.entries(complianceByStandard).map(([standard, checks]) => {
-            const passed = checks.filter(c => c.passed).length
-            const pct = Math.round((passed / checks.length) * 100)
-            return (
-              <div key={standard} className="glass rounded-2xl p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-white">{STANDARDS[standard] || standard}</h3>
-                  <div className="flex items-center gap-3">
-                    <div className="w-24 bg-white/5 rounded-full h-2">
-                      <div className="h-2 rounded-full" style={{ width: `${pct}%`, background: pct === 100 ? '#00B894' : pct >= 50 ? '#FDCB6E' : '#E94560' }} />
+      {/* ========================================================================= */}
+      {/* TAB 3: PROMPT INSPECTOR (Detailed Probes & Redaction Protection) */}
+      {/* ========================================================================= */}
+      {activeTab === 'probes' && (
+        <div className="space-y-4 animate-fade-in">
+          {/* Controls Bar */}
+          <div className="glass rounded-2xl p-4 border border-white/10 flex items-center justify-between gap-3 flex-wrap text-xs">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Language Filter */}
+              <select
+                value={inspectorLang}
+                onChange={(e) => setInspectorLang(e.target.value)}
+                className="bg-black/50 border border-white/10 text-white rounded-xl px-3 py-2 outline-none"
+              >
+                <option value="all">All Languages ({probe_results?.length || 0})</option>
+                <option value="en">English (EN)</option>
+                <option value="hi">Hindi (HI)</option>
+                <option value="ta">Tamil (TA)</option>
+              </select>
+
+              {/* Category Filter */}
+              <select
+                value={inspectorCat}
+                onChange={(e) => setInspectorCat(e.target.value)}
+                className="bg-black/50 border border-white/10 text-white rounded-xl px-3 py-2 outline-none"
+              >
+                <option value="all">All Categories</option>
+                <option value="caste_representation">Caste Representation</option>
+                <option value="gender_occupational">Gender & Occupational</option>
+                <option value="regional_religious">Regional & Religious</option>
+                <option value="safety_guidelines">Adversarial Jailbreaks</option>
+              </select>
+
+              {/* Status Filter */}
+              <select
+                value={inspectorStatus}
+                onChange={(e) => setInspectorStatus(e.target.value)}
+                className="bg-black/50 border border-white/10 text-white rounded-xl px-3 py-2 outline-none"
+              >
+                <option value="all">All Outcomes</option>
+                <option value="compliant">Compliant (Passed)</option>
+                <option value="flagged">Flagged (Violations)</option>
+              </select>
+            </div>
+
+            {/* Search Input */}
+            <div className="relative min-w-64">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search prompt, model response or notes..."
+                className="w-full bg-white/5 border border-white/10 text-white rounded-xl pl-8 pr-3 py-2 outline-none placeholder-gray-500 focus:border-[#6C63FF]"
+              />
+              <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-3" />
+            </div>
+          </div>
+
+          {/* Inspector Master-Detail Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            {/* Left Probe List */}
+            <div className="lg:col-span-5 space-y-2 max-h-[640px] overflow-y-auto pr-1">
+              {filteredProbes.length === 0 ? (
+                <div className="glass rounded-2xl p-8 text-center text-gray-400 text-xs">
+                  No evaluation test cases matched the selected filter.
+                </div>
+              ) : (
+                filteredProbes.map((probe) => {
+                  const isSelected = selectedProbe?.id === probe.id
+                  const isUnsupported = probe.compliant === null || probe.evaluation_score === null || probe.evaluation_notes?.includes('LANGUAGE UNSUPPORTED')
+                  const isFallback = probe.evaluation_notes?.includes('FALLBACK') || probe.meta_info?.evaluator?.includes('fallback')
+
+                  return (
+                    <button
+                      key={probe.id}
+                      type="button"
+                      onClick={() => setSelectedProbe(probe)}
+                      className={`w-full text-left p-3.5 rounded-2xl border transition-all ${
+                        isSelected
+                          ? 'border-[#6C63FF] bg-[#6C63FF]/20 shadow-[0_0_15px_rgba(108,99,255,0.2)]'
+                          : isUnsupported
+                          ? 'border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10'
+                          : probe.compliant
+                          ? 'border-white/5 bg-white/3 hover:bg-white/6 hover:border-white/15'
+                          : 'border-red-500/30 bg-red-500/5 hover:bg-red-500/10'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="font-bold text-xs text-white truncate">
+                          {getProbeTitle(probe)}
+                        </span>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-black/40 text-gray-300 border border-white/5">
+                            {LANGUAGE_META[probe.language]?.flag || '🌐'} {probe.language?.toUpperCase()}
+                          </span>
+                          <span
+                            className="text-[10px] font-black px-2 py-0.5 rounded-full"
+                            style={{
+                              background: isUnsupported ? '#F59E0B20' : probe.compliant ? '#00B89420' : '#E9456020',
+                              color: isUnsupported ? '#F59E0B' : probe.compliant ? '#00B894' : '#E94560'
+                            }}
+                          >
+                            {isUnsupported ? 'UNAVAILABLE' : probe.compliant ? 'PASS' : 'FAIL'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="text-[11px] text-gray-400 line-clamp-2 mt-1">
+                        {probe.prompt_text}
+                      </div>
+
+                      <div className="mt-2 flex items-center justify-between text-[10px] text-gray-500">
+                        <span className="font-semibold" style={{ color: CATEGORY_META[probe.category]?.color || '#9ca3af' }}>
+                          {CATEGORY_META[probe.category]?.label || probe.category}
+                        </span>
+                        <span className="font-mono opacity-50">ID: {probe.test_id}</span>
+                      </div>
+
+                      {isUnsupported ? (
+                        <div className="mt-1.5 text-[10px] font-semibold text-amber-400 flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3 text-amber-400" /> Offline evaluator does not support language
+                        </div>
+                      ) : isFallback ? (
+                        <div className="mt-1.5 text-[10px] font-semibold text-yellow-400/90 flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" /> Fallback evaluator used
+                        </div>
+                      ) : null}
+                    </button>
+                  )
+                })
+              )}
+            </div>
+
+            {/* Right Detail Pane */}
+            <div className="lg:col-span-7">
+              {selectedProbe ? (
+                <div className="glass rounded-3xl p-6 border border-white/10 space-y-5">
+                  {/* Header: Human-Readable Label & Category Metadata */}
+                  <div className="flex items-start justify-between gap-3 pb-3 border-b border-white/5">
+                    <div>
+                      <h4 className="font-bold text-white text-base leading-snug">
+                        {getProbeTitle(selectedProbe)}
+                      </h4>
+                      <div className="flex items-center gap-2 flex-wrap mt-1.5 text-xs text-gray-400">
+                        <span
+                          className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                          style={{
+                            background: CATEGORY_META[selectedProbe.category]?.bg || 'rgba(108,99,255,0.15)',
+                            color: CATEGORY_META[selectedProbe.category]?.color || '#a78bfa',
+                            border: `1px solid ${CATEGORY_META[selectedProbe.category]?.color || '#6C63FF'}40`
+                          }}
+                        >
+                          {CATEGORY_META[selectedProbe.category]?.label || selectedProbe.category}
+                        </span>
+                        <span className="text-gray-600">·</span>
+                        <span className="text-gray-300 font-medium">
+                          Language: <strong className="text-white">{LANGUAGE_META[selectedProbe.language]?.flag || '🌐'} {LANGUAGE_META[selectedProbe.language]?.label || selectedProbe.language?.toUpperCase()}</strong>
+                        </span>
+                        <span className="text-gray-600">·</span>
+                        <span className="font-mono text-[10px] text-gray-500 bg-black/40 px-2 py-0.5 rounded border border-white/5">
+                          Test ID: {selectedProbe.test_id}
+                        </span>
+                      </div>
                     </div>
-                    <span className={`text-sm font-bold ${passed === checks.length ? 'text-green-400' : 'text-yellow-400'}`}>{passed}/{checks.length}</span>
+
+                    <div className="text-right flex-shrink-0">
+                      {selectedProbe.evaluation_score !== null && selectedProbe.evaluation_score !== undefined ? (
+                        <div
+                          className="text-2xl font-black"
+                          style={{ color: SCORE_COLOR(selectedProbe.evaluation_score) }}
+                        >
+                          {selectedProbe.evaluation_score.toFixed(1)}
+                          <span className="text-xs text-gray-500 font-normal"> / 100</span>
+                        </div>
+                      ) : (
+                        <div className="text-2xl font-black text-amber-400/80">
+                          N/A
+                          <span className="text-xs text-gray-500 font-normal"> (Offline)</span>
+                        </div>
+                      )}
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full inline-block mt-0.5 ${
+                        selectedProbe.compliant === true
+                          ? 'bg-green-500/20 text-green-400'
+                          : selectedProbe.compliant === false
+                          ? 'bg-red-500/20 text-red-400'
+                          : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                      }`}>
+                        {selectedProbe.compliant === true
+                          ? 'COMPLIANT'
+                          : selectedProbe.compliant === false
+                          ? 'VIOLATION DETECTED'
+                          : 'RESULT UNAVAILABLE'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Test Prompt */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5">
+                      Adversarial / Test Probe Prompt
+                    </label>
+                    <div className="text-xs text-gray-200 bg-black/40 p-4 rounded-2xl border border-white/5 font-sans leading-relaxed whitespace-pre-wrap">
+                      {selectedProbe.prompt_text}
+                    </div>
+                  </div>
+
+                  {/* Target Model Response with Redaction Defense */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                        <Terminal className="w-3.5 h-3.5 text-[#00B894]" /> Target Model Output
+                      </label>
+                      {!selectedProbe.compliant && selectedProbe.category === 'safety_guidelines' && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1">
+                          <Lock className="w-3 h-3" /> Hazardous Payload Redacted
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-300 bg-black/50 p-4 rounded-2xl border border-white/5 font-mono leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
+                      {clientSideRedact(
+                        selectedProbe.target_model_response,
+                        selectedProbe.category,
+                        selectedProbe.compliant
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Judge Evaluation Notes */}
+                  <div className="space-y-1.5 bg-[#6C63FF]/5 p-4 rounded-2xl border border-[#6C63FF]/20">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-[#a78bfa] flex items-center gap-1.5">
+                        <Shield className="w-3.5 h-3.5" /> IndiaAI Judge Reasoning
+                      </span>
+                      {selectedProbe.evaluation_notes?.includes('LANGUAGE UNSUPPORTED') || selectedProbe.compliant === null ? (
+                        <span className="text-[10px] font-bold text-amber-400 px-2.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 flex items-center gap-1 shadow-sm">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> Offline evaluator does not support this language — result unavailable
+                        </span>
+                      ) : selectedProbe.evaluation_notes?.includes('FALLBACK') ? (
+                        <span className="text-[10px] font-bold text-yellow-400 px-2 py-0.5 rounded bg-yellow-500/10 border border-yellow-500/20">
+                          Fallback Evaluator
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="text-xs text-gray-300 leading-relaxed">
+                      {selectedProbe.evaluation_notes}
+                    </p>
                   </div>
                 </div>
-                <div className="space-y-2">
+              ) : (
+                <div className="glass rounded-3xl p-12 text-center text-gray-400 text-sm border border-white/10">
+                  Select a probe from the left pane to inspect prompt, model response, and judge reasoning.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 4: COMPLIANCE MATRIX */}
+      {/* ========================================================================= */}
+      {activeTab === 'compliance' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-white text-base">Regulatory & Legal Compliance Matrix</h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Automated mapping to IndiaAI Safety Institute, MeitY GenAI Advisory, and DPDP Act 2023
+              </p>
+            </div>
+            <div className="text-xs font-bold text-green-400 bg-green-500/10 px-3 py-1 rounded-full border border-green-500/20">
+              {compliance_checks?.filter(c => c.passed).length || 0} / {compliance_checks?.length || 0} Checks Passed
+            </div>
+          </div>
+
+          <div className="space-y-5">
+            {Object.entries(complianceByStandard).map(([standardKey, checks]) => (
+              <div key={standardKey} className="glass rounded-3xl p-5 border border-white/10 space-y-3">
+                <h4 className="font-bold text-sm text-[#a78bfa] uppercase tracking-wider flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-[#6C63FF]" />
+                  {STANDARD_NAMES[standardKey] || standardKey}
+                </h4>
+
+                <div className="divide-y divide-white/5">
                   {checks.map((c, i) => (
-                    <div key={i} className="flex items-start gap-2">
-                      {c.passed ? <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
-                                : <XCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />}
-                      <p className="text-sm text-gray-300">{c.requirement}</p>
+                    <div key={i} className="py-3 flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="font-semibold text-white text-xs">{c.requirement}</div>
+                        <div className="text-[11px] text-gray-400">{c.notes}</div>
+                      </div>
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex-shrink-0 ${
+                        c.passed === true
+                          ? 'bg-green-500/15 text-green-400 border border-green-500/30'
+                          : c.passed === false
+                          ? 'bg-red-500/15 text-red-400 border border-red-500/30'
+                          : 'bg-white/5 text-gray-400 border border-white/10'
+                      }`}>
+                        {c.passed === true ? 'COMPLIANT' : c.passed === false ? 'NON-COMPLIANT' : 'NOT EVALUATED'}
+                      </span>
                     </div>
                   ))}
                 </div>
               </div>
-            )
-          })}
-          <div className="glass rounded-xl p-4 border border-[#6C63FF]/20 text-center text-xs text-gray-400">
-            Mapped to <span className="text-purple-400">EU AI Act 2026</span> Art. 10,13,14,15 ·{' '}
-            <span className="text-green-400">India DPDP Act</span> Sec. 4,11,16 ·{' '}
-            <span className="text-yellow-400">ISO/IEC 42001</span> Cl. 6.1.2, 8.4, 9.1
+            ))}
           </div>
-
-          {/* Blockchain Certificate */}
-          {audit.blockchain_tx && (() => {
-            const parts = (audit.blockchain_tx || '').split('|')
-            const provider = parts[0] || 'JCCS'
-            const network  = parts[1] || 'SHA256-ChainedProof'
-            const certId   = parts[2] || ''
-            const anchored = parts[3] || ''
-            const isReal   = provider === 'OriginStamp'
-            return (
-              <div className="glass rounded-xl p-5 border border-green-500/30">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-white flex items-center gap-2 text-sm">
-                    <span>⛓</span> Blockchain Audit Certificate
-                  </h3>
-                  <span className={`text-xs font-bold px-2 py-1 rounded-full ${isReal ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                    {isReal ? '🌐 BITCOIN ANCHORED' : '🔐 CRYPTOGRAPHIC PROOF'}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-3 mb-4 text-xs">
-                  <div className="glass rounded-lg p-3">
-                    <div className="text-gray-500 mb-1">Provider</div>
-                    <div className="text-green-400 font-bold font-mono">{provider}</div>
-                  </div>
-                  <div className="glass rounded-lg p-3">
-                    <div className="text-gray-500 mb-1">Network</div>
-                    <div className="text-white font-mono">{network}</div>
-                  </div>
-                  <div className="glass rounded-lg p-3">
-                    <div className="text-gray-500 mb-1">Certificate ID</div>
-                    <div className="text-white font-mono break-all">{certId.slice(0,20)}...</div>
-                  </div>
-                  <div className="glass rounded-lg p-3">
-                    <div className="text-gray-500 mb-1">Anchored At</div>
-                    <div className="text-white font-mono">{anchored}</div>
-                  </div>
-                </div>
-                <div className="bg-white/5 rounded-lg p-3 mb-3">
-                  <div className="text-xs text-gray-500 mb-1">SHA-256 Dataset Hash</div>
-                  <div className="text-xs text-gray-300 font-mono break-all leading-relaxed">{audit.hash_sha256}</div>
-                </div>
-                {isReal && (
-                  <a href={`https://app.originstamp.com/verify/${audit.hash_sha256}`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-xs text-green-400 hover:text-green-300 transition-colors">
-                    🔗 Verify on Bitcoin blockchain →
-                  </a>
-                )}
-                <p className="text-xs text-gray-500 mt-3 leading-relaxed">
-                  This hash uniquely fingerprints your dataset. Any modification produces a completely different hash — making tampering instantly detectable. Meets EU AI Act Article 12 audit trail requirements.
-                </p>
-              </div>
-            )
-          })()}
-          {/* Digital Signature */}
-          {digital_signature?.valid && (
-            <div className="glass rounded-xl p-5 border border-purple-500/20">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-white flex items-center gap-2 text-sm">
-                  <span>🔐</span> Digital Signature Certificate
-                </h3>
-                <span className="text-xs font-bold px-2 py-1 rounded-full bg-purple-500/20 text-purple-400">
-                  ✅ VERIFIED
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-3 mb-3 text-xs">
-                <div className="glass rounded-lg p-3">
-                  <div className="text-gray-500 mb-1">Certificate Serial</div>
-                  <div className="text-white font-mono font-bold">{digital_signature.certificate_serial}</div>
-                </div>
-                <div className="glass rounded-lg p-3">
-                  <div className="text-gray-500 mb-1">Algorithm</div>
-                  <div className="text-purple-400 font-bold font-mono">{digital_signature.signature_algorithm}</div>
-                </div>
-                <div className="glass rounded-lg p-3">
-                  <div className="text-gray-500 mb-1">Key Fingerprint</div>
-                  <div className="text-white font-mono break-all">{digital_signature.key_fingerprint?.slice(0,16)}...</div>
-                </div>
-                <div className="glass rounded-lg p-3">
-                  <div className="text-gray-500 mb-1">Issued At</div>
-                  <div className="text-white font-mono">{digital_signature.issued_at?.slice(0,19)}</div>
-                </div>
-              </div>
-              <div className="bg-white/5 rounded-lg p-3 mb-3">
-                <div className="text-xs text-gray-500 mb-1">Signature (HMAC-SHA256)</div>
-                <div className="text-xs text-gray-300 font-mono break-all leading-relaxed">
-                  {digital_signature.signature?.slice(0, 44)}...
-                </div>
-              </div>
-              <p className="text-xs text-gray-500 leading-relaxed">
-                This digital signature cryptographically proves this certificate was issued by JCCS and has not been modified. Any change to the audit results would invalidate this signature. Uses HMAC-SHA256 — the same algorithm used in JWT tokens and TLS certificates.
-              </p>
-            </div>
-          )}
         </div>
       )}
 
-      {/* REMEDIATION */}
-      {activeTab === 'remediation' && (
-        <div className="space-y-4">
+      {/* ========================================================================= */}
+      {/* TAB 5: GUARDRAIL PATCHES / REMEDIATIONS */}
+      {/* ========================================================================= */}
+      {activeTab === 'guardrails' && (
+        <div className="space-y-6 animate-fade-in">
+          <div>
+            <h3 className="font-bold text-white text-base">
+              {isTabular ? 'Recommended Bias Mitigation Techniques' : 'Actionable System Prompt Guardrail Patches'}
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {isTabular
+                ? 'Algorithmic and post-processing mitigation strategies to reduce disparity while preserving model performance.'
+                : 'Drop-in system prompt constraints and output filters addressing detected vulnerabilities.'
+              }
+            </p>
+          </div>
 
-          {/* Enhanced AI Remediation Plan */}
-          {explanations?.remediation_plan && (
-            <div className="glass rounded-2xl p-6 border border-[#6C63FF]/30"
-              style={{ background: 'rgba(108,99,255,0.04)' }}>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: 'linear-gradient(135deg, #6C63FF, #8B5CF6)' }}>
-                  <Shield className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h3 className="font-black text-white text-base">AI Remediation Plan</h3>
-                  <p className="text-xs text-gray-500">Generated based on your dataset domain and failed dimensions</p>
-                </div>
-              </div>
-              <div className="rounded-xl p-4 border border-white/5"
-                style={{ background: 'rgba(255,255,255,0.02)' }}>
-                <p className="text-gray-200 text-sm leading-relaxed">{explanations.remediation_plan}</p>
-              </div>
-            </div>
-          )}
+          {remediations && remediations.length > 0 ? (
+            <div className="space-y-4">
+              {remediations.map((rem, idx) => {
+                const dimLabel = DIMENSION_LABELS[rem.dimension] || rem.dimension?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Fairness Dimension'
+                const codeObj = isTabular ? TABULAR_TECHNIQUE_SNIPPETS[rem.dimension] : null
+                const codeSnippetIdx = `code_${idx}`
 
-          {/* Per-dimension remediation cards */}
-          {remediations?.length > 0 ? (
-            <div className="space-y-3">
-              <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest px-1">
-                Per-Dimension Fix Plan — {remediations.length} action{remediations.length > 1 ? 's' : ''} required
-              </h3>
-              {remediations.map((r, i) => {
-                const techniques = {
-                  demographic_parity:     { label: 'Reweighing + Fairness Constraints', color: '#6C63FF', icon: '⚖️' },
-                  equal_opportunity:      { label: 'Threshold Adjustment', color: '#00B894', icon: '🎯' },
-                  calibration:            { label: 'Platt Scaling', color: '#FDCB6E', icon: '📐' },
-                  individual_fairness:    { label: 'Fairness Regularization', color: '#a78bfa', icon: '👤' },
-                  counterfactual_fairness:{ label: 'Causal Analysis', color: '#E94560', icon: '🔄' },
-                  privacy:                { label: 'PII Removal + Anonymization', color: '#06B6D4', icon: '🔒' },
-                  robustness:             { label: 'Data Augmentation + Noise Testing', color: '#F97316', icon: '🛡️' },
-                  accountability:         { label: 'Audit Trail Enhancement', color: '#84CC16', icon: '📋' },
-                }
-                const tech = techniques[r.dimension] || { label: 'Mitigation', color: '#6C63FF', icon: '🔧' }
                 return (
-                  <div key={i} className={`glass rounded-xl p-5 border ${
-                    r.priority === 'high' ? 'border-red-500/30' :
-                    r.priority === 'medium' ? 'border-yellow-500/30' : 'border-green-500/30'
-                  }`}>
-                    {/* Header */}
-                    <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">{tech.icon}</span>
-                        <span className="text-sm font-black text-white capitalize">
-                          {r.dimension?.replace(/_/g, ' ')}
+                  <div key={idx} className="glass rounded-3xl p-6 border border-[#6C63FF]/30 space-y-4 bg-[#6C63FF]/5">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="font-bold text-white text-sm">
+                          {isTabular ? `Mitigation for ${dimLabel}` : `Fix for ${dimLabel}`}
+                        </span>
+                        <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border ${getPriorityBadgeClass(rem.priority)}`}>
+                          {rem.priority || 'MEDIUM'} Priority
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs px-2 py-0.5 rounded-full font-bold"
-                          style={{ background: tech.color + '20', color: tech.color }}>
-                          {tech.label}
+
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="text-green-400 font-semibold flex items-center gap-1.5">
+                          ~{rem.estimated_bias_reduction}% {isTabular ? 'Estimated Disparity Reduction' : 'Estimated Risk Reduction'}
+                          {rem.estimated_accuracy_loss != null && rem.estimated_accuracy_loss > 0 && (
+                            <span className="text-gray-400 font-normal text-[10px]">
+                              (~{rem.estimated_accuracy_loss}% acc loss)
+                            </span>
+                          )}
                         </span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full uppercase font-bold ${
-                          r.priority === 'high' ? 'bg-red-500/20 text-red-400' :
-                          r.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                          'bg-green-500/20 text-green-400'
-                        }`}>{r.priority} priority</span>
+
+                        {!isTabular && (
+                          <button
+                            type="button"
+                            onClick={() => copyGuardrail(rem.suggestion, idx)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold transition-all shadow-sm"
+                            title="Copy clean system prompt constraint"
+                          >
+                            {copiedPatch === idx ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            {copiedPatch === idx ? 'Copied Patch' : 'Copy Patch'}
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    {/* Suggestion text */}
-                    <p className="text-gray-300 text-sm leading-relaxed mb-4">{r.suggestion}</p>
-
-                    {/* Impact metrics */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-lg p-3 border border-green-500/20"
-                        style={{ background: 'rgba(0,184,148,0.05)' }}>
-                        <div className="text-xs text-gray-500 mb-1">Expected Bias Reduction</div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 rounded-full bg-white/5">
-                            <div className="h-1.5 rounded-full"
-                              style={{ width: `${r.estimated_bias_reduction}%`, background: '#00B894' }} />
-                          </div>
-                          <span className="text-sm font-black text-green-400">~{r.estimated_bias_reduction}%</span>
-                        </div>
-                      </div>
-                      <div className="rounded-lg p-3 border border-yellow-500/20"
-                        style={{ background: 'rgba(253,203,110,0.05)' }}>
-                        <div className="text-xs text-gray-500 mb-1">Accuracy Trade-off</div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 rounded-full bg-white/5">
-                            <div className="h-1.5 rounded-full"
-                              style={{ width: `${r.estimated_accuracy_loss * 10}%`, background: '#FDCB6E' }} />
-                          </div>
-                          <span className="text-sm font-black text-yellow-400">~{r.estimated_accuracy_loss}%</span>
-                        </div>
-                      </div>
+                    <div className={`p-4 rounded-2xl border border-white/5 text-xs leading-relaxed ${
+                      isTabular
+                        ? 'bg-black/40 text-gray-200 font-sans'
+                        : 'bg-black/50 font-mono text-purple-200'
+                    }`}>
+                      {rem.suggestion}
                     </div>
+
+                    {isTabular && codeObj && (
+                      <div className="space-y-2 pt-1 border-t border-white/5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold text-purple-300 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#6C63FF]"></span>
+                            Implementation Reference: <span className="text-white font-mono">{codeObj.framework}</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => copyGuardrail(codeObj.code, codeSnippetIdx, true)}
+                            className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-white px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+                          >
+                            {copiedPatch === codeSnippetIdx ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                            {copiedPatch === codeSnippetIdx ? 'Copied Code' : 'Copy Code'}
+                          </button>
+                        </div>
+                        <pre className="bg-black/60 p-3 rounded-xl border border-white/5 font-mono text-[11px] text-green-300/90 overflow-x-auto leading-relaxed">
+                          {codeObj.code}
+                        </pre>
+                      </div>
+                    )}
                   </div>
                 )
               })}
             </div>
           ) : (
-            <div className="glass rounded-xl p-8 text-center">
-              <CheckCircle className="w-10 h-10 text-green-400 mx-auto mb-3" />
-              <p className="text-white font-medium">No remediations needed!</p>
-              <p className="text-gray-400 text-sm">All fairness dimensions passed their thresholds.</p>
-            </div>
-          )}
-
-          {/* Automated Debiasing */}
-          {remediations?.length > 0 && (
-            <div className="glass rounded-2xl p-6 border border-[#6C63FF]/30"
-              style={{ background: 'rgba(108,99,255,0.03)' }}>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg, #6C63FF, #E94560)' }}>
-                  <span className="text-white text-base">🤖</span>
-                </div>
-                <div>
-                  <h3 className="font-black text-white">Automated Debiasing</h3>
-                  <p className="text-xs text-gray-500">Simulate applying a fix — human approval required before production</p>
-                </div>
-              </div>
-
-              {debiasState === 'idle' && (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { key: 'reweighing',          label: '⚖️ Reweighing',    desc: 'Balance group weights' },
-                      { key: 'fairness_constraints', label: '🔒 Constraints',    desc: 'Fairlearn ExponentiatedGradient' },
-                      { key: 'threshold',            label: '🎯 Threshold',      desc: 'Per-group thresholds' },
-                      { key: 'suppression',          label: '🔇 Suppression',    desc: 'Remove biased features' },
-                    ].map(m => (
-                      <button key={m.key} onClick={() => setDebiasMethod(m.key)}
-                        className="p-3 rounded-xl text-xs font-bold transition-all border"
-                        style={{
-                          background: debiasMethod === m.key ? 'rgba(108,99,255,0.2)' : 'rgba(255,255,255,0.03)',
-                          borderColor: debiasMethod === m.key ? '#6C63FF' : 'rgba(255,255,255,0.08)',
-                          color: debiasMethod === m.key ? '#a78bfa' : '#9ca3af'
-                        }}>
-                        <div>{m.label}</div>
-                        <div className="font-normal text-gray-600 mt-0.5">{m.desc}</div>
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    onClick={async () => {
-                      setDebiasState('loading')
-                      try {
-                        const res = await fetch(`${import.meta.env.VITE_API_URL || 'https://jccs-ai-ethics.onrender.com'}/audit/${id}/debias?method=${debiasMethod}&approved=false`, { method: 'POST' })
-                        const data = await res.json()
-                        setDebiasResult(data)
-                        setDebiasState('preview')
-                      } catch (e) {
-                        setDebiasState('idle')
-                      }
-                    }}
-                    className="w-full py-2.5 rounded-xl font-black text-white text-sm transition-all hover:scale-[1.01]"
-                    style={{ background: 'linear-gradient(135deg, #6C63FF, #8B5CF6)' }}>
-                    🔬 Simulate {debiasMethod.charAt(0).toUpperCase() + debiasMethod.slice(1)} Debiasing
-                  </button>
-                </div>
-              )}
-
-              {debiasState === 'loading' && (
-                <div className="text-center py-4">
-                  <div className="w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                  <p className="text-gray-400 text-sm">Simulating debiasing...</p>
-                </div>
-              )}
-
-              {debiasState === 'preview' && debiasResult && (
-                <div className="space-y-3">
-                  <div className="rounded-xl p-3 border border-yellow-500/20" style={{ background: 'rgba(253,203,110,0.06)' }}>
-                    <div className="text-yellow-400 font-black text-xs mb-1">⚠️ SIMULATION PREVIEW — Human Approval Required</div>
-                    <p className="text-gray-300 text-xs">{debiasResult.method_description}</p>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3 text-center">
-                    <div className="rounded-xl p-3 border border-red-500/20" style={{ background: 'rgba(233,69,96,0.05)' }}>
-                      <div className="text-xs text-gray-500 mb-1">Current</div>
-                      <div className="text-2xl font-black" style={{ color: SCORE_COLOR(debiasResult.current?.overall_score) }}>{debiasResult.current?.overall_score}</div>
-                    </div>
-                    <div className="rounded-xl p-3 border border-purple-500/20 flex flex-col items-center justify-center" style={{ background: 'rgba(108,99,255,0.05)' }}>
-                      <div className="text-lg font-black text-purple-400">+{debiasResult.projected?.score_improvement}</div>
-                      <div className="text-xs text-gray-600">projected gain</div>
-                    </div>
-                    <div className="rounded-xl p-3 border border-green-500/20" style={{ background: 'rgba(0,184,148,0.05)' }}>
-                      <div className="text-xs text-gray-500 mb-1">Projected</div>
-                      <div className="text-2xl font-black" style={{ color: SCORE_COLOR(debiasResult.projected?.overall_score) }}>{debiasResult.projected?.overall_score}</div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={async () => {
-                        setDebiasState('loading')
-                        try {
-                          const res = await fetch(`${import.meta.env.VITE_API_URL || 'https://jccs-ai-ethics.onrender.com'}/audit/${id}/debias?method=${debiasMethod}&approved=true`, { method: 'POST' })
-                          const data = await res.json()
-                          setDebiasResult(data)
-                          setDebiasState('approved')
-                        } catch { setDebiasState('preview') }
-                      }}
-                      className="flex-1 py-2.5 rounded-xl font-black text-white text-sm"
-                      style={{ background: 'linear-gradient(135deg, #00B894, #00cec9)' }}>
-                      ✅ Approve & Get Implementation Guide
-                    </button>
-                    <button onClick={() => setDebiasState('idle')}
-                      className="px-4 py-2.5 rounded-xl text-sm text-gray-400 border border-white/10 hover:border-white/20 transition-all">
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {debiasState === 'approved' && debiasResult && (
-                <div className="space-y-3">
-                  <div className="rounded-xl p-4 border border-green-500/20" style={{ background: 'rgba(0,184,148,0.06)' }}>
-                    <div className="text-green-400 font-black mb-2">✅ {debiasResult.message}</div>
-                    <div className="text-xs text-gray-300 font-black mb-2">Implementation Steps:</div>
-                    {debiasResult.next_steps?.map((step, i) => (
-                      <div key={i} className="text-xs text-gray-300 mb-1">{step}</div>
-                    ))}
-                  </div>
-                  <button onClick={() => { setDebiasState('idle'); setDebiasResult(null) }}
-                    className="w-full py-2 rounded-xl text-sm text-gray-400 border border-white/10 hover:border-white/20 transition-all">
-                    Try Another Method
-                  </button>
-                </div>
-              )}
+            <div className="glass rounded-3xl p-12 text-center text-gray-400 border border-white/10 space-y-2">
+              <CheckCircle className="w-10 h-10 text-green-400 mx-auto" />
+              <h4 className="font-bold text-white text-base">
+                {isTabular ? 'No Bias Mitigation Required' : 'No Guardrail Patches Required'}
+              </h4>
+              <p className="text-xs text-gray-400">
+                {isTabular
+                  ? 'The evaluated tabular model satisfied all fairness and statistical parity thresholds.'
+                  : 'The evaluated model satisfied all IndiaAI Safety Institute thresholds.'
+                }
+              </p>
             </div>
           )}
         </div>
       )}
-
-      {/* STAKEHOLDER REPORTS */}
-      {activeTab === 'stakeholders' && (
-        <div className="space-y-4">
-          {(() => {
-            const score = Math.round(audit?.overall_score || 0)
-            const risk = audit?.risk_level || 'unknown'
-            const passedCount = fairness_results?.filter(r => r.passed).length || 0
-            const failedCount = fairness_results?.filter(r => !r.passed).length || 0
-            const failedDims = fairness_results?.filter(r => !r.passed).map(r => r.dimension_label) || []
-            return (
-              <div className="space-y-4">
-                {/* View selector */}
-                <div className="flex gap-2 flex-wrap">
-                  {[
-                    { key: 'executive', label: '👔 Executive', color: '#6C63FF' },
-                    { key: 'developer', label: '💻 Developer', color: '#00B894' },
-                    { key: 'regulator', label: '⚖️ Regulator', color: '#FDCB6E' },
-                    { key: 'enduser',   label: '👤 End User',   color: '#E94560' },
-                  ].map(v => (
-                    <button key={v.key} onClick={() => setStakeholderView(v.key)}
-                      className="px-4 py-2 rounded-xl text-sm font-bold transition-all"
-                      style={{
-                        background: stakeholderView === v.key ? v.color + '25' : 'rgba(255,255,255,0.03)',
-                        border: `1px solid ${stakeholderView === v.key ? v.color : 'rgba(255,255,255,0.08)'}`,
-                        color: stakeholderView === v.key ? v.color : '#9ca3af'
-                      }}>
-                      {v.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Executive Report */}
-                {stakeholderView === 'executive' && (
-                  <div className="space-y-4">
-                    <div className="glass rounded-2xl p-6 border border-[#6C63FF]/20">
-                      <h3 className="font-black text-white text-lg mb-1">Executive Summary</h3>
-                      <p className="text-gray-400 text-xs mb-4">High-level risk assessment for leadership and board</p>
-                      <div className="grid grid-cols-3 gap-4 mb-5">
-                        <div className="text-center rounded-xl p-4" style={{ background: 'rgba(108,99,255,0.08)', border: '1px solid rgba(108,99,255,0.2)' }}>
-                          <div className="text-3xl font-black" style={{ color: SCORE_COLOR(score) }}>{score}</div>
-                          <div className="text-xs text-gray-500 mt-1">Ethics Score / 100</div>
-                        </div>
-                        <div className="text-center rounded-xl p-4" style={{ background: 'rgba(0,184,148,0.08)', border: '1px solid rgba(0,184,148,0.2)' }}>
-                          <div className="text-3xl font-black text-green-400">{passedCount}</div>
-                          <div className="text-xs text-gray-500 mt-1">Checks Passed</div>
-                        </div>
-                        <div className="text-center rounded-xl p-4" style={{ background: 'rgba(233,69,96,0.08)', border: '1px solid rgba(233,69,96,0.2)' }}>
-                          <div className="text-3xl font-black text-red-400">{failedCount}</div>
-                          <div className="text-xs text-gray-500 mt-1">Issues Found</div>
-                        </div>
-                      </div>
-                      <div className="rounded-xl p-4 mb-3" style={{ background: risk === 'critical' || risk === 'high' ? 'rgba(233,69,96,0.08)' : 'rgba(0,184,148,0.08)', border: `1px solid ${risk === 'critical' || risk === 'high' ? 'rgba(233,69,96,0.2)' : 'rgba(0,184,148,0.2)'}` }}>
-                        <div className="font-black text-white mb-1">
-                          {risk === 'critical' ? '🔴 DO NOT DEPLOY' : risk === 'high' ? '🟠 HIGH RISK — Review Required' : risk === 'medium' ? '🟡 MEDIUM RISK — Monitor Closely' : '🟢 LOW RISK — Safe to Deploy'}
-                        </div>
-                        <p className="text-gray-300 text-sm">
-                          {risk === 'critical' || risk === 'high'
-                            ? `This AI model has significant fairness issues that could expose the organization to legal liability under EU AI Act 2026 and India DPDP Act. Deployment is not recommended until ${failedCount} identified issues are resolved.`
-                            : `This AI model meets minimum fairness standards. ${passedCount} of ${passedCount + failedCount} checks passed. Continue monitoring post-deployment for fairness drift.`
-                          }
-                        </p>
-                      </div>
-                      <p className="text-gray-500 text-xs">
-                        Audit ID: #{audit?.id} · {audit?.file_name} · {audit?.row_count?.toLocaleString()} rows analyzed · {new Date(audit?.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Developer Report */}
-                {stakeholderView === 'developer' && (
-                  <div className="space-y-3">
-                    <div className="glass rounded-2xl p-6 border border-green-500/20">
-                      <h3 className="font-black text-white text-lg mb-1">Developer Technical Report</h3>
-                      <p className="text-gray-400 text-xs mb-4">Code-level metrics and implementation suggestions</p>
-                      <div className="space-y-3">
-                        {failedDims.length > 0 && (
-                          <div className="rounded-xl p-4" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div className="text-xs font-black text-green-400 mb-2">// Failed Dimensions — Fix Priority</div>
-                            {fairness_results?.filter(r => !r.passed).map((r, i) => (
-                              <div key={i} className="text-xs font-mono text-gray-300 mb-1">
-                                <span className="text-red-400">✗</span> {r.dimension} — score: {Math.round(r.score)}/100, disparity: {r.metric_value?.toFixed(4)}, threshold: {r.threshold}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        <div className="rounded-xl p-4" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                          <div className="text-xs font-black text-green-400 mb-2">// Top Feature Driving Bias (SHAP)</div>
-                          {shap_results?.slice(0, 5).map((s, i) => (
-                            <div key={i} className="text-xs font-mono text-gray-300 mb-1">
-                              <span className="text-yellow-400">→</span> {s.feature_name}: {(s.shap_importance * 100).toFixed(1)}% importance
-                            </div>
-                          ))}
-                        </div>
-                        <div className="rounded-xl p-4" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                          <div className="text-xs font-black text-green-400 mb-2">// Recommended Libraries</div>
-                          <div className="text-xs font-mono text-gray-300 space-y-1">
-                            <div><span className="text-purple-400">pip install</span> fairlearn  <span className="text-gray-600"># ExponentiatedGradient, ThresholdOptimizer</span></div>
-                            <div><span className="text-purple-400">pip install</span> aif360     <span className="text-gray-600"># Reweighing, AdversarialDebiasing</span></div>
-                            <div><span className="text-purple-400">pip install</span> shap       <span className="text-gray-600"># TreeExplainer for feature attribution</span></div>
-                          </div>
-                        </div>
-                        <div className="rounded-xl p-4" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                          <div className="text-xs font-black text-green-400 mb-2">// SHA-256 Audit Hash</div>
-                          <div className="text-xs font-mono text-gray-400 break-all">{audit?.hash_sha256}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Regulator Report */}
-                {stakeholderView === 'regulator' && (
-                  <div className="space-y-3">
-                    <div className="glass rounded-2xl p-6 border border-yellow-500/20">
-                      <h3 className="font-black text-white text-lg mb-1">Regulatory Compliance Report</h3>
-                      <p className="text-gray-400 text-xs mb-4">Formal compliance status for regulatory submission</p>
-                      {Object.entries(
-                        compliance_checks?.reduce((acc, c) => {
-                          if (!acc[c.standard]) acc[c.standard] = []
-                          acc[c.standard].push(c)
-                          return acc
-                        }, {}) || {}
-                      ).map(([std, checks]) => {
-                        const passed = checks.filter(c => c.passed).length
-                        const total = checks.length
-                        const stdNames = { EU_AI_ACT: 'EU AI Act 2026', DPDP: 'India DPDP Act 2025-26', ISO_42001: 'ISO/IEC 42001' }
-                        return (
-                          <div key={std} className="mb-4 rounded-xl p-4 border border-white/5" style={{ background: 'rgba(255,255,255,0.02)' }}>
-                            <div className="flex items-center justify-between mb-3">
-                              <span className="font-black text-white text-sm">{stdNames[std] || std}</span>
-                              <span className={`text-sm font-black ${passed === total ? 'text-green-400' : 'text-yellow-400'}`}>{passed}/{total} COMPLIANT</span>
-                            </div>
-                            {checks.map((c, i) => (
-                              <div key={i} className="flex items-start gap-2 mb-1.5">
-                                {c.passed ? <CheckCircle className="w-3.5 h-3.5 text-green-400 mt-0.5 flex-shrink-0" /> : <XCircle className="w-3.5 h-3.5 text-red-400 mt-0.5 flex-shrink-0" />}
-                                <span className="text-xs text-gray-300">{c.requirement}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )
-                      })}
-                      <div className="rounded-xl p-3 border border-white/5 text-xs text-gray-500 text-center">
-                        Audit ID #{audit?.id} · Blockchain: {audit?.blockchain_tx?.split('|')[0]} · {new Date(audit?.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* End User Report */}
-                {stakeholderView === 'enduser' && (
-                  <div className="space-y-3">
-                    <div className="glass rounded-2xl p-6 border border-red-500/20">
-                      <h3 className="font-black text-white text-lg mb-1">Plain Language Report</h3>
-                      <p className="text-gray-400 text-xs mb-4">Simple explanation of how this AI model may affect you</p>
-                      <div className="space-y-3">
-                        <div className="rounded-xl p-4" style={{ background: risk === 'critical' || risk === 'high' ? 'rgba(233,69,96,0.08)' : 'rgba(0,184,148,0.08)', border: `1px solid ${risk === 'critical' || risk === 'high' ? 'rgba(233,69,96,0.2)' : 'rgba(0,184,148,0.2)'}` }}>
-                          <div className="font-black text-white mb-2">
-                            {risk === 'critical' ? '⚠️ This AI model may be treating people unfairly' : risk === 'high' ? '⚠️ This AI model has some fairness concerns' : '✅ This AI model appears to be reasonably fair'}
-                          </div>
-                          <p className="text-gray-300 text-sm leading-relaxed">
-                            {risk === 'critical'
-                              ? `Our analysis found that this AI model treats different groups of people unequally. If you were denied a service, loan, job, or healthcare by this system, the decision may have been influenced by your age, gender, or race — not just your qualifications or circumstances.`
-                              : risk === 'high'
-                              ? `This AI model shows some signs of unequal treatment across demographic groups. While not severely biased, there is a meaningful chance that decisions could be influenced by protected characteristics.`
-                              : `This AI model shows relatively equal treatment across different demographic groups. Decisions appear to be based primarily on relevant factors rather than protected characteristics.`
-                            }
-                          </p>
-                        </div>
-                        <div className="rounded-xl p-4 border border-white/5" style={{ background: 'rgba(255,255,255,0.02)' }}>
-                          <div className="font-bold text-white text-sm mb-2">🔍 What most influences decisions in this model:</div>
-                          {shap_results?.slice(0, 3).map((s, i) => (
-                            <div key={i} className="flex items-center gap-3 mb-2">
-                              <span className="text-sm">{i === 0 ? '1️⃣' : i === 1 ? '2️⃣' : '3️⃣'}</span>
-                              <div className="flex-1">
-                                <div className="text-sm text-white font-medium">{s.feature_name?.replace(/_/g, ' ')}</div>
-                                <div className="w-full h-1.5 rounded-full bg-white/5 mt-1">
-                                  <div className="h-1.5 rounded-full" style={{ width: `${s.shap_importance * 100}%`, background: i === 0 ? '#E94560' : i === 1 ? '#FDCB6E' : '#6C63FF' }} />
-                                </div>
-                              </div>
-                              <span className="text-xs text-gray-400">{(s.shap_importance * 100).toFixed(0)}%</span>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="rounded-xl p-4 border border-purple-500/20" style={{ background: 'rgba(108,99,255,0.05)' }}>
-                          <div className="font-bold text-white text-sm mb-2">📋 Your Rights</div>
-                          <p className="text-gray-300 text-xs leading-relaxed">Under the India DPDP Act Section 11, you have the right to an explanation for any automated decision that affects you. Under EU AI Act Article 13, AI systems must be transparent about how they make decisions. This audit certificate (ID #{audit?.id}) can be used as evidence in a formal complaint.</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )
-          })()}
-        </div>
-      )}
-
-      {/* BEFORE / AFTER */}
-      {activeTab === 'beforeafter' && (
-        <div className="space-y-4">
-          <div className="glass rounded-2xl p-6 border border-[#6C63FF]/20">
-            <h3 className="font-black text-white text-lg mb-1 flex items-center gap-2">
-              📈 Projected After Remediation
-            </h3>
-            <p className="text-gray-400 text-xs mb-5">Estimated scores if all recommended fixes are applied. Based on academic benchmarks for each mitigation technique.</p>
-
-            {/* Overall score before/after */}
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="rounded-xl p-5 text-center border border-red-500/20" style={{ background: 'rgba(233,69,96,0.05)' }}>
-                <div className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2">Current Score</div>
-                <div className="text-5xl font-black mb-1" style={{ color: SCORE_COLOR(Math.round(audit?.overall_score || 0)) }}>
-                  {Math.round(audit?.overall_score || 0)}
-                </div>
-                <div className="text-xs font-black uppercase" style={{ color: SCORE_COLOR(Math.round(audit?.overall_score || 0)) }}>
-                  {audit?.risk_level} risk
-                </div>
-              </div>
-              <div className="rounded-xl p-5 text-center border border-green-500/20" style={{ background: 'rgba(0,184,148,0.05)' }}>
-                <div className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2">Projected Score</div>
-                {(() => {
-                  const current = Math.round(audit?.overall_score || 0)
-                  const totalReduction = remediations?.reduce((sum, r) => sum + (r.estimated_bias_reduction || 0), 0) || 0
-                  const avgReduction = remediations?.length > 0 ? totalReduction / remediations.length : 0
-                  const projected = Math.min(100, Math.round(current + (100 - current) * (avgReduction / 100)))
-                  const projRisk = projected >= 80 ? 'low' : projected >= 60 ? 'medium' : projected >= 40 ? 'high' : 'critical'
-                  return (
-                    <>
-                      <div className="text-5xl font-black mb-1" style={{ color: SCORE_COLOR(projected) }}>{projected}</div>
-                      <div className="text-xs font-black uppercase" style={{ color: SCORE_COLOR(projected) }}>{projRisk} risk</div>
-                    </>
-                  )
-                })()}
-              </div>
-            </div>
-
-            {/* Per-dimension before/after bars */}
-            <div className="space-y-4">
-              <div className="text-xs font-black text-gray-500 uppercase tracking-widest">Per-Dimension Improvement</div>
-              {fairness_results?.filter(r => !r.passed).map((r, i) => {
-                const rem = remediations?.find(rem => rem.dimension === r.dimension)
-                const projected = rem ? Math.min(100, Math.round(r.score + (100 - r.score) * (rem.estimated_bias_reduction / 100))) : Math.round(r.score)
-                return (
-                  <div key={i} className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-gray-300 font-medium capitalize">{r.dimension_label}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-red-400 font-bold">{Math.round(r.score)}</span>
-                        <span className="text-gray-600">→</span>
-                        <span className="text-green-400 font-bold">~{projected}</span>
-                      </div>
-                    </div>
-                    {/* Before bar */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-600 w-12">Before</span>
-                      <div className="flex-1 h-2 rounded-full bg-white/5">
-                        <div className="h-2 rounded-full transition-all duration-1000"
-                          style={{ width: `${r.score}%`, background: '#E94560' }} />
-                      </div>
-                    </div>
-                    {/* After bar */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-600 w-12">After</span>
-                      <div className="flex-1 h-2 rounded-full bg-white/5">
-                        <div className="h-2 rounded-full transition-all duration-1000"
-                          style={{ width: `${projected}%`, background: '#00B894' }} />
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-              {fairness_results?.filter(r => r.passed).map((r, i) => (
-                <div key={i} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-500 font-medium capitalize">{r.dimension_label}</span>
-                    <span className="text-green-400 font-bold text-xs">✅ Already passing — {Math.round(r.score)}/100</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Accuracy trade-off warning */}
-            {remediations?.length > 0 && (
-              <div className="mt-5 rounded-xl p-4 border border-yellow-500/20" style={{ background: 'rgba(253,203,110,0.05)' }}>
-                <div className="text-yellow-400 font-black text-sm mb-1">⚡ Accuracy Trade-off</div>
-                <p className="text-gray-300 text-xs leading-relaxed">
-                  Applying all {remediations.length} recommended fixes is estimated to reduce accuracy by ~{remediations.reduce((sum, r) => sum + (r.estimated_accuracy_loss || 0), 0).toFixed(1)}% total.
-                  This is the standard fairness-accuracy trade-off documented in academic literature.
-                  Human approval is required before applying any automated debiasing.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
     </div>
   )
 }

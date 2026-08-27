@@ -30,13 +30,36 @@ class AuditRun(Base):
     created_at = Column(TIMESTAMP, server_default=func.now())
     completed_at = Column(TIMESTAMP, nullable=True)
 
+    target_model_name = Column(String(255), nullable=True)         # e.g., llama-3-8b, sarvam-2b, mistral-7b
+    target_model_provider = Column(String(100), nullable=True)     # e.g., groq, openai, ollama, custom
+    target_model_url = Column(String(255), nullable=True)          # base url endpoint
+    
     organization = relationship("Organization", back_populates="audits")
     fairness_results = relationship("FairnessResult", back_populates="audit", cascade="all, delete")
+    evaluation_results = relationship("PromptEvaluationResult", back_populates="audit", cascade="all, delete")
     shap_results = relationship("ShapResult", back_populates="audit", cascade="all, delete")
     lime_results = relationship("LimeResult", back_populates="audit", cascade="all, delete")
     ai_explanations = relationship("AiExplanation", back_populates="audit", cascade="all, delete")
     remediations = relationship("Remediation", back_populates="audit", cascade="all, delete")
     compliance_checks = relationship("ComplianceCheck", back_populates="audit", cascade="all, delete")
+
+class PromptEvaluationResult(Base):
+    __tablename__ = "prompt_evaluation_results"
+    id = Column(Integer, primary_key=True, index=True)
+    audit_id = Column(Integer, ForeignKey("audit_runs.id"), nullable=False)
+    test_id = Column(String(100), nullable=True)
+    prompt_text = Column(Text, nullable=False)
+    language = Column(String(20), default="en")                    # en / hi / ta
+    category = Column(String(100), nullable=False)                 # caste_representation, gender_occupational, regional_religious, safety_guidelines, cross_lingual
+    dimension = Column(String(100), nullable=False)                # caste_equity, gender_fairness, communal_harmony, guideline_adherence, etc.
+    target_model_response = Column(Text, nullable=True)
+    evaluation_score = Column(Float, nullable=True)                # 0-100
+    evaluation_notes = Column(Text, nullable=True)
+    concern_category = Column(String(100), nullable=True)
+    compliant = Column(Boolean, nullable=True, default=None)
+    meta_info = Column(JSON, nullable=True)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    audit = relationship("AuditRun", back_populates="evaluation_results")
 
 class FairnessResult(Base):
     __tablename__ = "fairness_results"
@@ -44,8 +67,8 @@ class FairnessResult(Base):
     audit_id = Column(Integer, ForeignKey("audit_runs.id"), nullable=False)
     dimension = Column(String(100), nullable=False)
     dimension_label = Column(String(100), nullable=False)
-    score = Column(Float, nullable=False)
-    passed = Column(Boolean, nullable=False)
+    score = Column(Float, nullable=True)
+    passed = Column(Boolean, nullable=True)
     sensitive_attribute = Column(String(100))
     metric_value = Column(Float)
     threshold = Column(Float)
@@ -104,7 +127,7 @@ class ComplianceCheck(Base):
     audit_id = Column(Integer, ForeignKey("audit_runs.id"), nullable=False)
     standard = Column(String(50), nullable=False)
     requirement = Column(String(255), nullable=False)
-    passed = Column(Boolean, nullable=False)
+    passed = Column(Boolean, nullable=True)
     notes = Column(Text)
     created_at = Column(TIMESTAMP, server_default=func.now())
     audit = relationship("AuditRun", back_populates="compliance_checks")

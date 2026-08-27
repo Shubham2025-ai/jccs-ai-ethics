@@ -1,19 +1,22 @@
 import { useState, useEffect } from 'react'
 import { Upload, BarChart2, RefreshCw, Zap, CheckCircle, XCircle, Trophy } from 'lucide-react'
-
-const API = import.meta.env.VITE_API_URL || 'https://jccs-ai-ethics.onrender.com'
+import { BASE_URL as API } from '../utils/api'
 
 const RISK_COLOR = {
   'Critical Risk': '#E94560',
   'High Risk':     '#E17055',
   'Medium Risk':   '#FDCB6E',
   'Low Risk':      '#00B894',
+  'critical':      '#E94560',
+  'high':          '#E17055',
+  'medium':        '#FDCB6E',
+  'low':           '#00B894',
 }
 
 const DIM_COLOR = (score) => {
-  if (score >= 70) return '#00B894'
-  if (score >= 50) return '#FDCB6E'
-  if (score >= 30) return '#E17055'
+  if (score >= 80) return '#00B894'
+  if (score >= 65) return '#FDCB6E'
+  if (score >= 50) return '#E17055'
   return '#E94560'
 }
 
@@ -467,7 +470,10 @@ export default function ComparePage() {
 
         {/* Header */}
         <div className="mb-8">
-          <div className="text-xs font-bold text-[#6C63FF] uppercase tracking-widest mb-2">Bonus Feature</div>
+          <div className="text-xs font-bold text-[#6C63FF] uppercase tracking-widest mb-2 flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-gray-400 font-semibold">Tabular ML Mode</span>
+            Benchmark Comparison
+          </div>
           <h1 className="text-3xl md:text-4xl font-black text-white mb-2">
             Multi-Model Comparison
           </h1>

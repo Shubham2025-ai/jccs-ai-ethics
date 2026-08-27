@@ -1,103 +1,81 @@
 # 🛡️ JCCS — Jedi Code Compliance System
 
-**Ethical AI Auditing Framework — HackVenture 2026**
+**Comprehensive AI Ethics, Fairness & IndiaAI LLM Safety Auditing Platform — HackVenture 2026**
 
 > *"The Force will be with you, always — but your AI model? That needs an audit."*
 
-🌐 **Live Demo:** [jccs-ai-ethics.vercel.app](https://jccs-ai-ethics.vercel.app) &nbsp;|&nbsp; 🔗 **Backend:** [jccs-ai-ethics.onrender.com](https://jccs-ai-ethics.onrender.com/health) &nbsp;|&nbsp; 🎬 **Demo:** [youtu.be/-OjU0iuaYBY](https://youtu.be/-OjU0iuaYBY)
+🌐 **Live Platform:** [jccs-ai-ethics.vercel.app](https://jccs-ai-ethics.vercel.app) &nbsp;|&nbsp; 🔗 **Backend API:** [jccs-ai-ethics.onrender.com](https://jccs-ai-ethics.onrender.com/docs) &nbsp;|&nbsp; 🎬 **Demo:** [youtu.be/-OjU0iuaYBY](https://youtu.be/-OjU0iuaYBY)
 
 ---
 
-## 🎬 Demo Video
+## 📌 Problem Statement & Overview
 
-▶️ **[Watch 4-Minute Demo on YouTube](https://youtu.be/-OjU0iuaYBY)**
+AI systems and Foundation LLMs are making high-stakes decisions across hiring, judicial assessment, credit risk, governance, and public service delivery in India. However, most organizations lack an automated, tamper-evident framework to audit foundation models and tabular ML models for socio-cultural bias, regional fairness, DPDP compliance, and adversarial jailbreak vulnerabilities.
 
----
-
-## 📌 Problem Statement
-
-**Jedi Code Compliance System: Ethical AI Auditing Framework**
-
-AI systems are making life-altering decisions in hiring, healthcare, criminal justice, and credit scoring — yet most organisations have no way to audit these systems for bias or fairness.
-
-**JCCS solves this:** upload any AI model's predictions as a CSV and get a complete, blockchain-certified bias audit report in **under 60 seconds** — no code required.
+**JCCS solves this with a dual-engine architecture:**
+1. **IndiaAI LLM Safety & Red-Teaming Engine:** Automated adversarial execution of 44 curated probes across **English, Hindi, and Tamil** evaluating foundation models against **9 IndiaAI Safety Dimensions**, MeitY GenAI Advisories, and the DPDP Act 2023.
+2. **Tabular ML Fairness Engine:** Deep disparity detection across **5 statistical fairness dimensions** (Demographic Parity, Equal Opportunity, Calibration, Individual Fairness, Counterfactual Fairness) with SHAP/LIME explainability, IF-THEN rule extraction, and drop-in bias mitigation patches.
+3. **Cryptographic Proof of Audit:** Every audit produces a verifiable **HMAC-SHA256 digital certificate** anchored to a tamper-proof **Bitcoin blockchain proof (OriginStamp)** with one-click **PDF and JSON export**.
 
 ---
 
-## ✨ Features
+## ✨ Features & Capabilities
 
-### Mandatory PS9 Deliverables — All Implemented
-
-| Requirement | Status | Implementation |
+### 1. Dual Auditing Engines
+| Capability | IndiaAI LLM Safety Mode | Tabular ML Fairness Mode |
 |---|---|---|
-| Hiring / Healthcare / Criminal Justice domains | ✅ | 4 domains: Income, Credit, COMPAS, Healthcare |
-| Demographic Parity | ✅ | Fairlearn statistical gap analysis |
-| Equal Opportunity | ✅ | True positive rate parity across groups |
-| Calibration | ✅ | Confidence-outcome alignment (AIF360) |
-| Privacy Preservation | ✅ | PII detection + data leakage checks |
-| Transparency / Interpretability | ✅ | SHAP (global) + LIME (local) XAI |
-| Show WHY model made specific decisions | ✅ | Per-prediction LIME feature attribution |
-| Feature Importance Visualization | ✅ | Interactive SHAP bar + LIME charts |
-| Visual Scorecard (Pass / Fail) | ✅ | Per-criterion compliance cards |
-| Bias Instances Highlighted | ✅ | Top-3 most discriminatory features flagged |
-| Recommendations for Improvement | ✅ | Domain-specific remediation per violation |
+| **Target Input** | OpenAI-compatible API (Groq, Gemini, Ollama, Sarvam) | Prediction CSV (Hiring, Credit, COMPAS, Healthcare) |
+| **Languages / Data** | English, Hindi, Tamil (Indic Contextualization) | Multi-column tabular features & sensitive attributes |
+| **Evaluation Method** | LLM-as-a-Judge (Groq LLaMA 3.3 70B) + Redaction Defense | Fairlearn + AIF360 Statistical Gap Analysis |
+| **Audit Dimensions** | 9 Foundation Dimensions (Caste, Gender, Regional, etc.) | 5 Algorithmic Fairness Dimensions + XAI |
+| **Remediations** | Drop-in System Prompt Guardrail Patches | Reweighing, Threshold Optimization & Python Code |
 
-### Round 3 Additions — All Implemented ⭐
+### 2. The 9 IndiaAI Foundation Safety Dimensions
+1. **Caste Representation & Equity:** Counterfactual surname swapping evaluating equal merit in hiring, credit, and tenancy.
+2. **Gender & Occupational Parity:** Probing occupational stereotyping and Indic grammatical gender defaults (Doctor/Nurse, ICU leadership).
+3. **Regional & Communal Harmony:** North-South workplace tropes, Northeast integration, and communal coexistence.
+4. **Indic Linguistic Rights & Parity:** Parity across 8th Schedule languages without default English favoritism.
+5. **Adversarial Jailbreak Resistance:** DevMode evasion, persona hijacking, and fraud bypass prevention.
+6. **Hate Speech & Abuse Prevention:** Zero-tolerance detection for communal slurs and defamation.
+7. **DPDP Personal Data Privacy:** Synthetic PII harvesting defense for 12-digit Aadhaar and 10-digit PAN numbers.
+8. **Refusal Calibration & Helpfulness:** Distinguishing malicious exploits from benign constitutional / educational inquiries.
+9. **Cryptographic Audit Trail & Integrity:** Tamper-evident HMAC-SHA256 signature and blockchain proof.
 
-| Requirement | Status | Implementation |
-|---|---|---|
-| Multi-Dimensional Ethical Scoring (9 dimensions) | ✅ | Fairness + Privacy + Robustness + Accountability |
-| Automated Testing Pipeline with CI/CD gates | ✅ | BLOCKED/APPROVED deployment gates |
-| Regression Testing | ✅ | Baseline vs improved model comparison |
-| Deep Explainability — Counterfactuals | ✅ | "What would change your outcome?" |
-| Decision Tree Rule Extraction | ✅ | IF-THEN human-readable rules |
-| Bias Remediation Toolkit | ✅ | Reweighing, Threshold, Suppression |
-| Before/After Metrics | ✅ | Projected score improvement per dimension |
-| Automated Debiasing + Human Approval | ✅ | Simulate → Review → Approve workflow |
-| Stakeholder Reports (4 views) | ✅ | Executive, Developer, Regulator, End-User |
-| Continuous Monitoring + Drift Detection | ✅ | Trend chart, Improving/Degrading alerts |
-| Digital Signatures + Verification | ✅ | HMAC-SHA256 certificate signing |
-| Certification System | ✅ | PDF + Blockchain + Digital Signature |
-
-### Bonus Points — Both Achieved ⭐⭐
-
-| Bonus | Status | How |
-|---|---|---|
-| Test multiple AI models simultaneously | ✅ | Upload 2–10 CSVs → all audited in parallel threads |
-| Automated testing pipeline | ✅ | One click → auto-fetches 4 datasets → CI/CD pipeline report |
+### 3. Legal & Regulatory Compliance Mapping
+* **MeitY GenAI Due Diligence Advisory (March 2024 / IT Rules 2021):** Rule 3(1)(b) bias prevention & anti-fraud verification.
+* **India DPDP Act 2023:** Sections 4, 6 & 8 purpose limitation and personal data protection.
+* **IndiaAI Safety Institute Mandate:** Safe & Trusted AI Pillar socio-cultural evaluation benchmarks.
+* **ISO/IEC 42001 (AI Management System):** Clause 8.4 bias risk treatment & Clause 9.3 cryptographic traceability.
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                  JCCS Full Stack                         │
-├─────────────────────────────────────────────────────────┤
-│  Frontend  React 18 + Vite + TailwindCSS                 │
-│  ├── HomePage      — Live bias preview card              │
-│  ├── UploadPage    — CSV upload + progress bar           │
-│  ├── ResultsPage   — 7 tabs: Overview, Fairness,        │
-│  │                   Explainability, Compliance,         │
-│  │                   Remediation, Reports, Before/After  │
-│  ├── HistoryPage   — Continuous monitoring dashboard     │
-│  ├── ComparePage   — Multi-model comparison + CI/CD      │
-│  └── RegressionPage — Baseline vs improved testing       │
-├─────────────────────────────────────────────────────────┤
-│  Backend  FastAPI + Python 3.11                          │
-│  ├── bias_engine.py        — 9 fairness dimensions       │
-│  ├── audit_service.py      — Full pipeline orchestration │
-│  ├── groq_service.py       — AI summaries (LLaMA 3)     │
-│  ├── batch_audit.py        — Parallel + regression test  │
-│  └── blockchain_service.py — SHA-256 + Digital Signature │
-├─────────────────────────────────────────────────────────┤
-│  Database  PostgreSQL (prod) / SQLite (local)            │
-│  ML        Fairlearn · AIF360 · SHAP · LIME              │
-│            DecisionTreeClassifier (Rule Extraction)      │
-│  AI        Groq API (LLaMA 3 70B)                        │
-│  Chain     SHA-256 + OriginStamp Bitcoin blockchain      │
-│  Crypto    HMAC-SHA256 Digital Signatures                │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                      JCCS Full Stack                         │
+├─────────────────────────────────────────────────────────────┤
+│  Frontend: React 18 + Vite + TailwindCSS                    │
+│  ├── /           — Live Scorecard Preview, Hero & Metrics   │
+│  ├── /upload     — Dual Mode Audit Launcher + 9-Stage Loader│
+│  ├── /results/:id— 5 Tabs: Overview, Dimensions, Probes,    │
+│  │                 Compliance Matrix, Remediations (PDF/JSON)│
+│  ├── /history    — Audit Trail & Continuous Monitoring       │
+│  ├── /compare    — Multi-Model Batch CI/CD Testing          │
+│  └── /regression — Baseline vs Improved Regression Testing  │
+├─────────────────────────────────────────────────────────────┤
+│  Backend: FastAPI + Python 3.11                             │
+│  ├── llm_safety_engine.py   — 9 IndiaAI Dimensions + Matrix │
+│  ├── evaluation_prompts.py  — 44 Curated Indic Probes       │
+│  ├── bias_engine.py         — Fairlearn / AIF360 / SHAP     │
+│  ├── audit_service.py       — Dual Pipeline Orchestrator    │
+│  ├── groq_service.py        — LLaMA 3.3 70B IndiaAI Judge   │
+│  ├── blockchain_service.py  — HMAC-SHA256 + OriginStamp     │
+│  └── batch_audit.py         — Parallel & Regression Runners │
+├─────────────────────────────────────────────────────────────┤
+│  Security & Cryptography: HMAC-SHA256 · SHA-256 Digest     │
+│  Storage & Database: SQLite / MySQL / PostgreSQL            │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---

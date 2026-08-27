@@ -1,9 +1,11 @@
 import axios from 'axios'
 
-// Automatically uses Render backend in production, localhost in development
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+export const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
 
-const api = axios.create({ baseURL: BASE_URL })
+export const api = axios.create({ baseURL: BASE_URL })
+
+export const startRedTeamAudit = (payload) =>
+  api.post('/audit/red-team', payload)
 
 export const uploadAudit = (formData, onProgress) =>
   api.post('/audit/upload', formData, {
@@ -15,3 +17,6 @@ export const getAudit = (id) => api.get(`/audit/${id}`)
 export const listAudits = () => api.get('/audits/list')
 export const deleteAudit = (id) => api.delete(`/audit/${id}`)
 export const healthCheck = () => api.get('/health')
+export const verifySignature = (id) => api.get(`/audit/${id}/verify`)
+
+export default api

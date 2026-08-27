@@ -1,63 +1,109 @@
 """
-API Routes — Audit endpoints
+API Routes — LLM Safety & Red-Teaming Audit Endpoints
 """
+
 import io
+import json
+import threading
 import pandas as pd
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from pydantic import BaseModel
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Body
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from app.core.database import get_db, SessionLocal
 from app.core.config import settings
-from app.models.models import AuditRun, FairnessResult, ShapResult, LimeResult, AiExplanation, Remediation, ComplianceCheck
-from app.services.audit_service import process_audit
+from app.models.models import (
+    AuditRun,
+    PromptEvaluationResult,
+    FairnessResult,
+    AiExplanation,
+    Remediation,
+    ComplianceCheck,
+    ShapResult,
+    LimeResult,
+)
+from app.services.audit_service import process_llm_safety_audit, process_audit
 
 router = APIRouter(prefix="/audit", tags=["Audit"])
 
 
-def run_audit_sync(audit_id: int, df: pd.DataFrame, run_name: str):
-    """Run audit in a fresh DB session (fixes background task session issue)."""
+def run_llm_audit_sync(
+    audit_id: int,
+    target_model_name: str,
+    target_model_provider: str,
+    target_model_url: Optional[str],
+    api_key: Optional[str],
+    selected_languages: List[str],
+    selected_categories: List[str],
+    run_name: str
+):
+    """Executes LLM safety audit in isolated background DB session."""
     db = SessionLocal()
     try:
-        process_audit(db, audit_id, df, run_name)
+        process_llm_safety_audit(
+            db=db,
+            audit_id=audit_id,
+            target_model_name=target_model_name,
+            target_model_provider=target_model_provider,
+            target_model_url=target_model_url,
+            api_key=api_key,
+            selected_languages=selected_languages,
+            selected_categories=selected_categories,
+            run_name=run_name
+        )
     except Exception as e:
-        print(f"Audit {audit_id} failed: {e}")
+        print(f"❌ LLM Safety Audit {audit_id} failed: {e}")
     finally:
         db.close()
 
 
-@router.post("/upload")
-async def upload_and_audit(
-    file: UploadFile = File(...),
-    run_name: str = Form(default="Audit Run"),
-    model_type: str = Form(default="classification"),
-    org_id: Optional[int] = Form(default=None),
+def run_tabular_audit_sync(audit_id: int, df: pd.DataFrame, run_name: str):
+    """Legacy tabular background worker."""
+    db = SessionLocal()
+    try:
+        process_audit(db, audit_id, df, run_name)
+    except Exception as e:
+        print(f"❌ Tabular Audit {audit_id} failed: {e}")
+    finally:
+        db.close()
+
+
+# =========================================================================
+# 1. NEW ENDPOINT: /audit/red-team (LLM Safety Audit)
+# =========================================================================
+
+class RedTeamAuditRequest(BaseModel):
+    run_name: Optional[str] = "IndiaAI Safety Audit"
+    target_model_name: str = "llama-3.1-8b-instant"
+    target_model_provider: str = "groq"
+    target_model_url: Optional[str] = None
+    api_key: Optional[str] = None
+    selected_languages: Optional[List[str]] = ["en", "hi", "ta"]
+    selected_categories: Optional[List[str]] = ["caste_representation", "gender_occupational", "regional_religious", "safety_guidelines"]
+    org_id: Optional[int] = None
+
+
+@router.post("/red-team")
+def start_red_team_audit(
+    req: RedTeamAuditRequest = Body(...),
     db: Session = Depends(get_db)
 ):
-    """Upload CSV and trigger full bias audit synchronously."""
-    if not file.filename.endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Only CSV files are supported.")
+    """
+    Launches an automated IndiaAI red-teaming audit against a target LLM.
+    Evaluates across Caste, Gender, Regional/Religious harmony, and Jailbreaks in 3 Indic languages.
+    """
+    run_name = req.run_name or f"{req.target_model_name} Safety Audit"
 
-    content = await file.read()
-    if len(content) > settings.MAX_FILE_SIZE_MB * 1024 * 1024:
-        raise HTTPException(status_code=400, detail=f"File too large. Max {settings.MAX_FILE_SIZE_MB}MB.")
-
-    try:
-        df = pd.read_csv(io.BytesIO(content))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not parse CSV: {str(e)}")
-
-    if df.empty or len(df.columns) < 2:
-        raise HTTPException(status_code=400, detail="CSV must have at least 2 columns.")
-
-    # Create audit record
     audit = AuditRun(
         run_name=run_name,
-        model_type=model_type,
+        model_type="llm_safety",
+        target_model_name=req.target_model_name,
+        target_model_provider=req.target_model_provider,
+        target_model_url=req.target_model_url,
+        file_name=f"live://{req.target_model_provider}/{req.target_model_name}",
         status="pending",
-        file_name=file.filename,
-        row_count=len(df),
-        org_id=org_id
+        org_id=req.org_id
     )
     db.add(audit)
     db.commit()
@@ -65,35 +111,58 @@ async def upload_and_audit(
     audit_id = audit.id
     db.close()
 
-    # Run audit synchronously in a fresh session
-    import threading
-    thread = threading.Thread(target=run_audit_sync, args=(audit_id, df, run_name), daemon=True)
-    thread.start()
-    # Don't block request — audit runs in background, client polls /audit/{id}
+    # Launch background thread
+    t = threading.Thread(
+        target=run_llm_audit_sync,
+        args=(
+            audit_id,
+            req.target_model_name,
+            req.target_model_provider,
+            req.target_model_url,
+            req.api_key,
+            req.selected_languages or ["en", "hi", "ta"],
+            req.selected_categories or ["caste_representation", "gender_occupational", "regional_religious", "safety_guidelines"],
+            run_name
+        ),
+        daemon=True
+    )
+    t.start()
 
     return {
-        "message": "Audit started successfully",
+        "message": f"✅ IndiaAI Safety Red-Team audit started for {req.target_model_name}",
         "audit_id": audit_id,
         "run_name": run_name,
-        "row_count": len(df),
-        "columns_detected": list(df.columns),
-        "status": "processing"
+        "target_model": req.target_model_name,
+        "provider": req.target_model_provider,
+        "status": "processing",
+        "languages_tested": req.selected_languages,
+        "categories_tested": req.selected_categories
     }
 
 
+# =========================================================================
+# 2. GET AUDIT RESULTS (Compatible with both LLM & Tabular Scorecards)
+# =========================================================================
+
 @router.get("/{audit_id}")
 def get_audit_result(audit_id: int, db: Session = Depends(get_db)):
-    """Get complete audit results by ID."""
+    """Get complete audit results & IndiaAI scorecard by ID."""
     audit = db.query(AuditRun).filter(AuditRun.id == audit_id).first()
     if not audit:
         raise HTTPException(status_code=404, detail=f"Audit {audit_id} not found.")
 
     fairness = db.query(FairnessResult).filter(FairnessResult.audit_id == audit_id).all()
-    shap = db.query(ShapResult).filter(ShapResult.audit_id == audit_id).order_by(ShapResult.rank_order).all()
-    lime = db.query(LimeResult).filter(LimeResult.audit_id == audit_id).order_by(LimeResult.rank_order).all()
+    probes = db.query(PromptEvaluationResult).filter(PromptEvaluationResult.audit_id == audit_id).order_by(PromptEvaluationResult.created_at.asc()).all()
     explanations = db.query(AiExplanation).filter(AiExplanation.audit_id == audit_id).all()
     remediations = db.query(Remediation).filter(Remediation.audit_id == audit_id).all()
     compliance = db.query(ComplianceCheck).filter(ComplianceCheck.audit_id == audit_id).all()
+
+    # Digitize digital signature if present
+    sig_raw = next((e.content for e in explanations if e.explanation_type == "digital_signature"), "{}")
+    try:
+        digital_signature = json.loads(sig_raw)
+    except Exception:
+        digital_signature = {"valid": False}
 
     return {
         "audit": {
@@ -101,6 +170,8 @@ def get_audit_result(audit_id: int, db: Session = Depends(get_db)):
             "run_name": audit.run_name,
             "status": audit.status,
             "model_type": audit.model_type,
+            "target_model_name": audit.target_model_name,
+            "target_model_provider": audit.target_model_provider,
             "file_name": audit.file_name,
             "row_count": audit.row_count,
             "overall_score": audit.overall_score,
@@ -116,35 +187,32 @@ def get_audit_result(audit_id: int, db: Session = Depends(get_db)):
                 "dimension_label": r.dimension_label,
                 "score": r.score,
                 "passed": r.passed,
-                "sensitive_attribute": r.sensitive_attribute,
                 "metric_value": r.metric_value,
                 "threshold": r.threshold,
                 "details": r.details
             } for r in fairness
         ],
-        "shap_results": [
+        "probe_results": [
             {
-                "feature_name": s.feature_name,
-                "shap_importance": s.shap_importance,
-                "rank_order": s.rank_order
-            } for s in shap[:15]
-        ],
-        "lime_results": [
-            {
-                "feature_name": l.feature_name,
-                "lime_importance": l.lime_importance,
-                "rank_order": l.rank_order,
-                "explanation": l.explanation
-            } for l in lime[:10]
+                "id": p.id,
+                "test_id": p.test_id,
+                "prompt_text": p.prompt_text,
+                "language": p.language,
+                "category": p.category,
+                "dimension": p.dimension,
+                "target_model_response": p.target_model_response,
+                "evaluation_score": p.evaluation_score,
+                "evaluation_notes": p.evaluation_notes,
+                "concern_category": p.concern_category,
+                "compliant": p.compliant,
+                "meta_info": p.meta_info
+            } for p in probes
         ],
         "explanations": {
             "summary": next((e.content for e in explanations if e.explanation_type == "summary"), ""),
             "remediation_plan": next((e.content for e in explanations if e.explanation_type == "remediation"), ""),
-            "bias_findings": [e.content for e in explanations if e.explanation_type == "bias_finding"]
         },
-        "model_metrics": __import__('json').loads(next((e.content for e in explanations if e.explanation_type == "model_metrics"), "{}")),
-        "decision_rules": __import__('json').loads(next((e.content for e in explanations if e.explanation_type == "decision_rules"), "{}")),
-        "digital_signature": __import__('json').loads(next((e.content for e in explanations if e.explanation_type == "digital_signature"), "{}")),
+        "digital_signature": digital_signature,
         "remediations": [
             {
                 "dimension": r.dimension,
@@ -165,6 +233,10 @@ def get_audit_result(audit_id: int, db: Session = Depends(get_db)):
     }
 
 
+# =========================================================================
+# 3. LIST, DELETE & VERIFICATION ENDPOINTS
+# =========================================================================
+
 @router.get("s/list")
 def list_audits(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
     """List all audit runs."""
@@ -175,6 +247,8 @@ def list_audits(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
                 "id": a.id,
                 "run_name": a.run_name,
                 "status": a.status,
+                "model_type": a.model_type,
+                "target_model_name": a.target_model_name,
                 "overall_score": a.overall_score,
                 "risk_level": a.risk_level,
                 "row_count": a.row_count,
@@ -222,75 +296,15 @@ def verify_audit_blockchain(audit_id: int, db: Session = Depends(get_db)):
         "message": result.get("message", "Verification complete.")
     }
 
-@router.get("/monitor/trend")
-def get_fairness_trend(run_name: str = None, limit: int = 10, db: Session = Depends(get_db)):
-    """
-    Continuous Monitoring — track fairness scores over time.
-    Returns trend data showing if model is improving or degrading.
-    """
-    query = db.query(AuditRun).filter(AuditRun.status == "completed")
-    if run_name:
-        query = query.filter(AuditRun.run_name.ilike(f"%{run_name}%"))
-    audits = query.order_by(AuditRun.created_at.desc()).limit(limit).all()
-    audits = list(reversed(audits))  # oldest first for trend
-
-    if len(audits) < 2:
-        return {
-            "trend": "insufficient_data",
-            "message": "Need at least 2 audits of the same model to detect drift.",
-            "data": []
-        }
-
-    scores = [a.overall_score for a in audits if a.overall_score]
-    if not scores:
-        return {"trend": "no_scores", "data": []}
-
-    # Detect trend
-    first_half = sum(scores[:len(scores)//2]) / (len(scores)//2)
-    second_half = sum(scores[len(scores)//2:]) / (len(scores) - len(scores)//2)
-    diff = second_half - first_half
-
-    if diff > 5:
-        trend = "improving"
-        trend_msg = f"✅ Fairness is improving (+{diff:.1f} points). Model bias is decreasing over time."
-    elif diff < -5:
-        trend = "degrading"
-        trend_msg = f"⚠️ Fairness is DEGRADING ({diff:.1f} points). Model bias is increasing — action required!"
-    else:
-        trend = "stable"
-        trend_msg = f"📊 Fairness is stable (±{abs(diff):.1f} points). Continue monitoring."
-
-    return {
-        "trend": trend,
-        "trend_message": trend_msg,
-        "score_change": round(diff, 2),
-        "first_score": round(scores[0], 2),
-        "latest_score": round(scores[-1], 2),
-        "data": [
-            {
-                "id": a.id,
-                "run_name": a.run_name,
-                "score": round(a.overall_score, 2) if a.overall_score else None,
-                "risk_level": a.risk_level,
-                "created_at": str(a.created_at)
-            } for a in audits
-        ]
-    }
 
 @router.post("/{audit_id}/verify-signature")
 def verify_audit_signature(audit_id: int, db: Session = Depends(get_db)):
-    """
-    Verify the digital signature of an audit certificate.
-    Proves the certificate is authentic and has not been tampered with.
-    """
+    """Verify the digital signature of an audit certificate."""
     from app.services import blockchain_service
     audit = db.query(AuditRun).filter(AuditRun.id == audit_id).first()
     if not audit:
         raise HTTPException(status_code=404, detail=f"Audit {audit_id} not found.")
 
-    # Get stored signature
-    from app.models.models import AiExplanation
-    import json
     sig_record = db.query(AiExplanation).filter(
         AiExplanation.audit_id == audit_id,
         AiExplanation.explanation_type == "digital_signature"
@@ -325,109 +339,56 @@ def verify_audit_signature(audit_id: int, db: Session = Depends(get_db)):
         "certificate_text": sig_data.get("certificate_text")
     }
 
-@router.post("/{audit_id}/debias")
-async def apply_debiasing(
-    audit_id: int,
-    method: str = "reweighing",
-    approved: bool = False,
+
+# =========================================================================
+# 4. LEGACY CSV UPLOAD (Retained for Backward Compatibility)
+# =========================================================================
+
+@router.post("/upload")
+async def upload_and_audit(
+    file: UploadFile = File(...),
+    run_name: str = Form(default="Tabular Audit Run"),
+    model_type: str = Form(default="classification"),
+    org_id: Optional[int] = Form(default=None),
     db: Session = Depends(get_db)
 ):
-    """
-    Automated Debiasing with Human Approval Gate.
-    
-    Step 1: Call with approved=False to get simulation/preview
-    Step 2: Review the projected improvements
-    Step 3: Call again with approved=True to confirm
-    
-    Methods: reweighing | threshold | suppression
-    """
-    from app.services import bias_engine as be
-    import pandas as pd
+    """Upload CSV and trigger tabular bias audit."""
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Only CSV files are supported.")
 
-    audit = db.query(AuditRun).filter(AuditRun.id == audit_id).first()
-    if not audit:
-        raise HTTPException(status_code=404, detail=f"Audit {audit_id} not found.")
-    if audit.status != "completed":
-        raise HTTPException(status_code=400, detail="Audit must be completed before debiasing.")
+    content = await file.read()
+    if len(content) > settings.MAX_FILE_SIZE_MB * 1024 * 1024:
+        raise HTTPException(status_code=400, detail=f"File too large. Max {settings.MAX_FILE_SIZE_MB}MB.")
 
-    # Get fairness results to reconstruct context
-    fairness = db.query(FairnessResult).filter(FairnessResult.audit_id == audit_id).all()
-    if not fairness:
-        raise HTTPException(status_code=404, detail="No fairness results found.")
+    try:
+        df = pd.read_csv(io.BytesIO(content))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not parse CSV: {str(e)}")
 
-    sensitive_attrs = list(set([
-        r.sensitive_attribute for r in fairness
-        if r.sensitive_attribute
-    ]))
+    if df.empty or len(df.columns) < 2:
+        raise HTTPException(status_code=400, detail="CSV must have at least 2 columns.")
 
-    # Get current scores
-    dim_scores = {r.dimension: r.score for r in fairness}
+    audit = AuditRun(
+        run_name=run_name,
+        model_type=model_type,
+        status="pending",
+        file_name=file.filename,
+        row_count=len(df),
+        org_id=org_id
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(audit)
+    audit_id = audit.id
+    db.close()
 
-    # Simulate debiasing effect based on method
-    method_impacts = {
-        "reweighing":            {"demographic_parity": 0.55, "equal_opportunity": 0.40, "calibration": 0.25},
-        "fairness_constraints":  {"demographic_parity": 0.65, "equal_opportunity": 0.55, "calibration": 0.35},
-        "threshold":             {"demographic_parity": 0.35, "equal_opportunity": 0.60, "calibration": 0.30},
-        "suppression":           {"demographic_parity": 0.45, "equal_opportunity": 0.35, "calibration": 0.20},
+    thread = threading.Thread(target=run_tabular_audit_sync, args=(audit_id, df, run_name), daemon=True)
+    thread.start()
+
+    return {
+        "message": "Tabular audit started successfully",
+        "audit_id": audit_id,
+        "run_name": run_name,
+        "row_count": len(df),
+        "status": "processing"
     }
-    impacts = method_impacts.get(method, method_impacts["reweighing"])
-
-    projected_scores = {}
-    for dim, current_score in dim_scores.items():
-        impact = impacts.get(dim, 0.15)
-        projected = min(100, current_score + (100 - current_score) * impact)
-        projected_scores[dim] = round(projected, 2)
-
-    current_overall = audit.overall_score or 0
-    projected_overall = min(100, round(
-        sum(projected_scores.values()) / len(projected_scores), 2
-    ))
-
-    method_descriptions = {
-        "reweighing":           "Assigns higher sample weights to underrepresented groups during model training. Implements Fairlearn reweighing algorithm. Best for fixing demographic parity.",
-        "fairness_constraints": "Applies Fairlearn ExponentiatedGradient with DemographicParity constraint during training. Forces the model to satisfy fairness constraints. Best for demographic parity and equal opportunity simultaneously.",
-        "threshold":            "Sets different decision thresholds per demographic group to equalize true positive rates. Uses Fairlearn ThresholdOptimizer with EqualizedOdds. Best for equal opportunity.",
-        "suppression":          "Removes features that correlate with sensitive attributes to prevent indirect discrimination. Best for counterfactual fairness.",
-    }
-
-    if not approved:
-        # Preview mode — show what WOULD happen
-        return {
-            "status": "preview",
-            "audit_id": audit_id,
-            "method": method,
-            "method_description": method_descriptions.get(method, ""),
-            "requires_approval": True,
-            "approval_prompt": f"Review the projected improvements below. Call this endpoint again with approved=true to confirm applying {method} debiasing.",
-            "current": {
-                "overall_score": round(current_overall, 2),
-                "risk_level": audit.risk_level,
-                "dimension_scores": dim_scores,
-            },
-            "projected": {
-                "overall_score": projected_overall,
-                "risk_level": "low" if projected_overall >= 80 else "medium" if projected_overall >= 60 else "high" if projected_overall >= 40 else "critical",
-                "dimension_scores": projected_scores,
-                "score_improvement": round(projected_overall - current_overall, 2),
-            },
-            "sensitive_attributes": sensitive_attrs,
-            "warning": "This is a SIMULATION. Human approval required before applying to production."
-        }
-    else:
-        # Approved — record the debiasing decision
-        return {
-            "status": "approved",
-            "audit_id": audit_id,
-            "method": method,
-            "message": f"✅ Debiasing method '{method}' approved by human reviewer.",
-            "next_steps": [
-                f"1. Apply {method} to your original training pipeline",
-                "2. Retrain the model with the fix applied",
-                "3. Upload the new model CSV to JCCS for regression testing",
-                "4. Use /regression-test to confirm bias was reduced",
-            ],
-            "implementation_guide": method_descriptions.get(method, ""),
-            "projected_improvement": round(projected_overall - current_overall, 2),
-            "approved_at": __import__('datetime').datetime.utcnow().isoformat(),
-            "approved_by": "human_reviewer"
-        }

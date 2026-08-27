@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -7,47 +7,102 @@
 * { box-sizing: border-box; }
 
 body {
-  background-color: #080810;
-  color: #e2e8f0;
-  font-family: 'Space Grotesk', sans-serif;
+  background-color: #080811;
+  color: #f1f5f9;
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   min-height: 100vh;
+  overflow-x: hidden;
+  letter-spacing: -0.01em;
 }
 
-/* Animated background grid */
+/* Subtle futuristic background grid with radial depth */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   background-image:
-    linear-gradient(rgba(108,99,255,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(108,99,255,0.03) 1px, transparent 1px);
-  background-size: 40px 40px;
+    radial-gradient(circle at 50% 0%, rgba(108, 99, 255, 0.08) 0%, transparent 60%),
+    linear-gradient(rgba(108, 99, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(108, 99, 255, 0.025) 1px, transparent 1px);
+  background-size: 100% 100%, 48px 48px, 48px 48px;
   pointer-events: none;
   z-index: 0;
 }
 
-#root { position: relative; z-index: 1; }
-
-.glass {
-  background: rgba(255,255,255,0.04);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.08);
+#root {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
-.score-ring { filter: drop-shadow(0 0 20px #6C63FF88); }
+/* Premium frosted glassmorphism */
+.glass {
+  background: rgba(18, 18, 30, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.25);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
 
-.risk-low    { color: #00B894; }
-.risk-medium { color: #FDCB6E; }
-.risk-high   { color: #E17055; }
+.glass-interactive {
+  background: rgba(18, 18, 30, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-interactive:hover {
+  border-color: rgba(108, 99, 255, 0.35);
+  box-shadow: 0 8px 32px -4px rgba(108, 99, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.glass-interactive:active {
+  transform: translateY(0px) scale(0.995);
+}
+
+/* Glowing effects */
+.score-ring { filter: drop-shadow(0 0 24px rgba(108, 99, 255, 0.4)); }
+.glow-purple { box-shadow: 0 0 30px rgba(108, 99, 255, 0.25); }
+.glow-green  { box-shadow: 0 0 30px rgba(0, 184, 148, 0.25); }
+
+/* Unified Risk Tier Palette */
+.risk-low      { color: #00B894; }
+.risk-medium   { color: #FDCB6E; }
+.risk-high     { color: #E17055; }
 .risk-critical { color: #E94560; }
-.passed { color: #00B894; }
-.failed { color: #E94560; }
+.passed        { color: #00B894; }
+.failed        { color: #E94560; }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #080810; }
-::-webkit-scrollbar-thumb { background: #6C63FF44; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #6C63FF88; }
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(8, 8, 17, 0.8); }
+::-webkit-scrollbar-thumb { background: rgba(108, 99, 255, 0.3); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(108, 99, 255, 0.6); }
 
-/* Mono for hashes */
+/* Monospace font */
 .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+/* Micro-animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(1.05); }
+}
+
+.pulse-glow {
+  animation: pulseGlow 2.5s infinite ease-in-out;
+}

@@ -40,6 +40,7 @@ class Settings(BaseSettings):
         return f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
     class Config:
-        env_file = ".env"
+        env_file = [".env", "backend/.env"]
+        extra = "ignore"
 
 settings = Settings()

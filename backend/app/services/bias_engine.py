@@ -1184,13 +1184,15 @@ def generate_remediations(fairness_results: List[Dict], run_name: str = "") -> L
     }
 
     for r in fairness_results:
-        if not r["passed"]:
-            dim = r["dimension"]
+        if r.get("passed") is False or (not r.get("passed", True) and r.get("score") is not None):
+            dim = r.get("dimension")
             if dim not in _meta:
                 continue
             meta = _meta[dim]
             suggestions = _REMEDIATIONS.get(dim, {})
             suggestion_text = suggestions.get(domain, suggestions.get("general", ""))
+            if not suggestion_text:
+                suggestion_text = f"Apply algorithmic debiasing and threshold optimization to mitigate {dim.replace('_', ' ')} disparity."
             remediations.append({
                 "dimension": dim,
                 "suggestion": suggestion_text,

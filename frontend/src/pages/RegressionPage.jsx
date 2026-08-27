@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { RefreshCw, Upload, CheckCircle, XCircle, TrendingUp, TrendingDown, Minus, AlertTriangle } from 'lucide-react'
+import { BASE_URL as API } from '../utils/api'
 
-const API = import.meta.env.VITE_API_URL || 'https://jccs-ai-ethics.onrender.com'
-const SCORE_COLOR = (s) => s >= 80 ? '#00B894' : s >= 60 ? '#FDCB6E' : s >= 40 ? '#E17055' : '#E94560'
+const SCORE_COLOR = (s) => s >= 80 ? '#00B894' : s >= 65 ? '#FDCB6E' : s >= 50 ? '#E17055' : '#E94560'
 
 export default function RegressionPage() {
   const [baselineFile, setBaselineFile] = useState(null)
@@ -60,9 +60,12 @@ export default function RegressionPage() {
 
         {/* Header */}
         <div>
-          <div className="text-xs font-bold text-[#6C63FF] uppercase tracking-widest mb-2">Round 3 Feature</div>
-          <h1 className="text-3xl md:text-4xl font-black text-white mb-2">Regression Testing</h1>
-          <p className="text-gray-400 text-sm">Upload your baseline model and improved model — JCCS will tell you if your changes actually reduced bias or made things worse.</p>
+          <div className="text-xs font-bold text-[#6C63FF] uppercase tracking-widest mb-2 flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-gray-400">Tabular ML Mode</span>
+            Regression Testing
+          </div>
+          <h1 className="text-3xl md:text-4xl font-black text-white mb-2">Tabular Model Regression Testing</h1>
+          <p className="text-gray-400 text-sm">Upload your baseline model and improved model CSVs — compare whether bias mitigations caused performance or fairness regressions.</p>
         </div>
 
         {/* Upload section */}

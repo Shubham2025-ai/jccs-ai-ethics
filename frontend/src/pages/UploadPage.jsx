@@ -1,78 +1,181 @@
-import { useState, useCallback } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useDropzone } from 'react-dropzone'
-import { Upload, FileText, CheckCircle, Loader, Info, X } from 'lucide-react'
+import { Shield, Sparkles, Server, Key, Globe, Layers, Play, CheckCircle, Loader, Info, ChevronDown, ChevronUp, Lock, Check, Zap, AlertTriangle, ExternalLink } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { uploadAudit, getAudit } from '../utils/api'
+import { startRedTeamAudit, uploadAudit, getAudit } from '../utils/api'
 
-const STEPS = [
-  { label: 'Uploading file', icon: '📤', detail: 'Sending CSV to server...' },
-  { label: 'Detecting columns', icon: '🔍', detail: 'Auto-detecting label, prediction & sensitive attributes...' },
-  { label: 'Running fairness analysis', icon: '⚖️', detail: 'Running 6 dimensions in parallel with Fairlearn + AIF360...' },
-  { label: 'Computing SHAP values', icon: '🧠', detail: 'TreeExplainer building global feature attribution...' },
-  { label: 'Running LIME analysis', icon: '🔬', detail: 'Perturbation-based local explanations for individual decisions...' },
-  { label: 'Generating AI summary', icon: '✍️', detail: 'Groq + Llama 3 writing plain-English findings...' },
-  { label: 'Mapping compliance', icon: '📋', detail: 'Mapping results to EU AI Act, DPDP, ISO 42001...' },
-  { label: 'Anchoring blockchain', icon: '⛓️', detail: 'SHA-256 hash being committed to immutable audit trail...' },
-  { label: 'Finalising report', icon: '✅', detail: 'Almost done — building your compliance certificate...' },
+const EVALUATION_STEPS = [
+  { label: 'Connecting to target model', icon: '⚡', detail: 'Establishing secure async API connection...' },
+  { label: 'Probing Caste Equity (EN/HI/TA)', icon: '👥', detail: 'Evaluating counterfactual surname pairs across hiring, credit & tenancy...' },
+  { label: 'Probing Gender Assumptions', icon: '⚖️', detail: 'Testing occupational roles & grammatical gender defaults in Hindi/Tamil...' },
+  { label: 'Testing Regional & Communal Harmony', icon: '🏛️', detail: 'Evaluating North-South workplace tropes & 8th Schedule linguistic parity...' },
+  { label: 'Executing Adversarial Jailbreak Tests', icon: '🛡️', detail: 'Probing DevMode evasion, OTP fraud refusal & DPDP PII protection...' },
+  { label: 'LLM-as-a-Judge Evaluating Verdicts', icon: '🤖', detail: 'Groq LLaMA 3.3 70B scoring compliance against IndiaAI rubrics...' },
+  { label: 'Aggregating 9 IndiaAI Dimensions', icon: '📊', detail: 'Computing continuous safety scores, disparity metrics & risk tier...' },
+  { label: 'Mapping MeitY & DPDP Compliance', icon: '📋', detail: 'Verifying adherence to IndiaAI Institute & DPDP Act 2023 mandates...' },
+  { label: 'Anchoring Cryptographic Audit Trail', icon: '⛓️', detail: 'Committing HMAC-SHA256 signature to Bitcoin/OriginStamp proof...' },
 ]
 
-function LoadingScreen({ statusMsg, progress }) {
-  const stepIndex = Math.min(Math.floor((progress / 100) * STEPS.length), STEPS.length - 1)
-  const currentStep = STEPS[stepIndex]
+const PRESET_MODELS = [
+  {
+    id: 'baseline-simulated',
+    title: 'Indic LLM 7B (Unaligned Baseline)',
+    provider: 'demo',
+    modelName: 'indic-base-7b-simulated',
+    desc: 'Simulated unaligned baseline model to test and detect demographic variances across Indian cultural contexts.',
+    badge: '⚠️ Unguardrailed — For Testing',
+    badgeBg: 'rgba(253, 203, 110, 0.12)',
+    badgeBorder: 'rgba(253, 203, 110, 0.3)',
+    badgeColor: '#FDCB6E',
+    borderColor: '#FDCB6E',
+    cardBg: 'rgba(253, 203, 110, 0.04)'
+  },
+  {
+    id: 'guardrailed-simulated',
+    title: 'Indic LLM 7B (Safety Guardrailed)',
+    provider: 'demo',
+    modelName: 'indic-guardrailed-7b-simulated',
+    desc: 'Simulated model with cultural guardrails and calibrated refusal boundaries applied.',
+    badge: '🛡️ Aligned Model (Simulated)',
+    badgeBg: 'rgba(0, 184, 148, 0.12)',
+    badgeBorder: 'rgba(0, 184, 148, 0.3)',
+    badgeColor: '#00B894',
+    borderColor: '#00B894',
+    cardBg: 'rgba(0, 184, 148, 0.04)'
+  },
+  {
+    id: 'groq-live',
+    title: 'Live Cloud Endpoint (Groq LLaMA 3.1)',
+    provider: 'groq',
+    modelName: 'llama-3.1-8b-instant',
+    desc: 'Real-time inference against Meta LLaMA 3.1 8B Instant hosted on Groq Cloud.',
+    badge: '⚡ Live Real-Time API',
+    badgeBg: 'rgba(108, 99, 255, 0.15)',
+    badgeBorder: 'rgba(108, 99, 255, 0.35)',
+    badgeColor: '#a78bfa',
+    borderColor: '#6C63FF',
+    cardBg: 'rgba(108, 99, 255, 0.05)',
+    isLive: true
+  }
+]
+
+const PROVIDER_CONFIGS = {
+  groq: {
+    id: 'groq',
+    name: 'Groq Cloud',
+    badge: '⚡ Fast Free Tier',
+    badgeColor: '#6C63FF',
+    keyLink: 'https://console.groq.com/keys',
+    keyLinkText: 'console.groq.com/keys',
+    keyDesc: 'Get a free API key at console.groq.com/keys — generous free tier with high rate limits.',
+    modelDefault: 'llama-3.1-8b-instant',
+    modelHint: 'Recommended: llama-3.3-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768',
+    urlDefault: 'https://api.groq.com/openai/v1',
+    serverKeyStatus: '✓ Server default Groq key active — leave API Key blank to use pre-configured key.',
+    isServerKeyAvailable: true,
+  },
+  google: {
+    id: 'google',
+    name: 'Google AI Studio (Gemini)',
+    badge: '✨ 100% Free Tier',
+    badgeColor: '#4285F4',
+    keyLink: 'https://aistudio.google.com/apikey',
+    keyLinkText: 'aistudio.google.com/apikey',
+    keyDesc: 'Get a free API key at aistudio.google.com/apikey — no credit card required.',
+    modelDefault: 'gemini-2.5-flash',
+    modelHint: 'Supported IDs: gemini-2.5-flash, gemini-2.5-flash-lite, gemini-1.5-flash',
+    urlDefault: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+    serverKeyStatus: 'ⓘ Enter personal Google AI Studio key (ephemeral — not stored on server).',
+    isServerKeyAvailable: false,
+  },
+  openrouter: {
+    id: 'openrouter',
+    name: 'OpenRouter (Free-Tier Router)',
+    badge: '🌐 Free Models',
+    badgeColor: '#00B894',
+    keyLink: 'https://openrouter.ai/keys',
+    keyLinkText: 'openrouter.ai/keys',
+    keyDesc: 'Get a free API key at openrouter.ai/keys — free-tier models with zero credit card required.',
+    modelDefault: 'meta-llama/llama-3.3-70b-instruct:free',
+    modelHint: 'Free model IDs end in :free (e.g. meta-llama/llama-3.3-70b-instruct:free)',
+    rotationNotice: 'Free model availability changes over time — browse active free models at openrouter.ai/models?max_price=0.',
+    rotationLink: 'https://openrouter.ai/models?max_price=0',
+    urlDefault: 'https://openrouter.ai/api/v1',
+    serverKeyStatus: 'ⓘ Enter personal OpenRouter key (ephemeral — not stored on server).',
+    isServerKeyAvailable: false,
+  },
+  custom: {
+    id: 'custom',
+    name: 'Custom Endpoint (vLLM / Sarvam / Krutrim)',
+    badge: '⚙️ BYO / Self-Hosted',
+    badgeColor: '#FDCB6E',
+    keyLink: 'https://api.sarvam.ai',
+    keyLinkText: 'api.sarvam.ai',
+    keyDesc: 'Requires provider API key and base URL supporting /v1/chat/completions standard.',
+    modelDefault: 'sarvam-indic-2b',
+    modelHint: 'Enter provider model ID (e.g. sarvam-indic-2b, mistral-7b-instruct).',
+    urlDefault: 'https://api.sarvam.ai/v1',
+    serverKeyStatus: 'ⓘ Custom endpoint — enter provider base URL and authorization key.',
+    isServerKeyAvailable: false,
+  }
+}
+
+const PROBE_CATALOG = [
+  { id: 'caste_representation', title: 'Caste Representation & Equity', desc: 'Hiring, credit & tenancy counterfactual surname swapping', counts: { en: 4, hi: 4, ta: 4 } },
+  { id: 'gender_occupational', title: 'Gender & Occupational Roles', desc: 'Stereotype defaults in STEM, ICU leadership & wage negotiation', counts: { en: 4, hi: 4, ta: 4 } },
+  { id: 'regional_religious', title: 'Regional & Religious Harmony', desc: 'North-South workplace tropes, linguistic rights & coexistence', counts: { en: 3, hi: 3, ta: 4 } },
+  { id: 'safety_guidelines', title: 'Adversarial Jailbreaks & DPDP', desc: 'UPI OTP exploits, fraudulent templates & PII leakage defense', counts: { en: 4, hi: 3, ta: 3 } },
+]
+
+function LoadingScreen({ progress }) {
+  const stepIndex = Math.min(Math.floor((progress / 100) * EVALUATION_STEPS.length), EVALUATION_STEPS.length - 1)
+  const currentStep = EVALUATION_STEPS[stepIndex]
 
   return (
-    <div className="max-w-lg mx-auto py-16 text-center space-y-8">
-      {/* Animated ring */}
-      <div className="relative w-32 h-32 mx-auto">
+    <div className="max-w-lg mx-auto py-8 text-center space-y-5 animate-fadeIn">
+      <div className="relative w-24 h-24 mx-auto">
         <svg className="w-full h-full -rotate-90" viewBox="0 0 128 128">
           <circle cx="64" cy="64" r="54" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
           <circle cx="64" cy="64" r="54" fill="none" strokeWidth="8"
             stroke="url(#grad)" strokeLinecap="round"
             strokeDasharray={2 * Math.PI * 54}
             strokeDashoffset={2 * Math.PI * 54 * (1 - progress / 100)}
-            style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+            style={{ transition: 'stroke-dashoffset 0.5s ease' }}
           />
           <defs>
             <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stopColor="#6C63FF" />
-              <stop offset="100%" stopColor="#E94560" />
+              <stop offset="100%" stopColor="#00B894" />
             </linearGradient>
           </defs>
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-3xl">{currentStep.icon}</span>
-          <span className="text-white font-black text-lg">{Math.round(progress)}%</span>
+          <span className="text-xl">{currentStep.icon}</span>
+          <span className="text-white font-black text-sm">{Math.round(progress)}%</span>
         </div>
       </div>
 
-      <div className="space-y-2">
-        <h2 className="text-2xl font-black text-white">{currentStep.label}</h2>
-        <p className="text-gray-400 text-sm">{currentStep.detail}</p>
+      <div className="space-y-1">
+        <h2 className="text-lg font-black text-white">{currentStep.label}</h2>
+        <p className="text-gray-400 text-xs">{currentStep.detail}</p>
       </div>
 
-      {/* Step progress dots */}
-      <div className="flex items-center justify-center gap-2 flex-wrap px-4">
-        {STEPS.map((s, i) => (
-          <div key={i} className="flex items-center gap-1">
-            <div className={`w-2 h-2 rounded-full transition-all duration-500 ${
-              i < stepIndex ? 'bg-green-400 scale-100' :
-              i === stepIndex ? 'scale-125' : 'bg-white/10'
-            }`}
-              style={i === stepIndex ? { background: '#6C63FF', boxShadow: '0 0 8px #6C63FF' } : {}}
-            />
-          </div>
+      <div className="flex items-center justify-center gap-1.5 flex-wrap px-4">
+        {EVALUATION_STEPS.map((s, i) => (
+          <div key={i} className={`w-2 h-2 rounded-full transition-all duration-300 ${
+            i < stepIndex ? 'bg-green-400' :
+            i === stepIndex ? 'bg-[#6C63FF] scale-125 shadow-[0_0_8px_#6C63FF]' : 'bg-white/10'
+          }`} />
         ))}
       </div>
 
-      {/* Step list */}
-      <div className="glass rounded-2xl p-4 text-left space-y-2">
-        {STEPS.map((s, i) => (
-          <div key={i} className={`flex items-center gap-3 text-sm transition-all ${
-            i < stepIndex ? 'opacity-40' : i === stepIndex ? 'opacity-100' : 'opacity-20'
+      <div className="glass rounded-2xl p-3 text-left space-y-1.5 text-xs max-h-44 overflow-y-auto">
+        {EVALUATION_STEPS.map((s, i) => (
+          <div key={i} className={`flex items-center gap-2.5 transition-all ${
+            i < stepIndex ? 'opacity-40' : i === stepIndex ? 'opacity-100 font-semibold' : 'opacity-20'
           }`}>
-            <span className="text-base">{i < stepIndex ? '✅' : i === stepIndex ? <Loader className="w-4 h-4 animate-spin inline" style={{ color: '#6C63FF' }} /> : '○'}</span>
-            <span className={i === stepIndex ? 'text-white font-semibold' : 'text-gray-400'}>{s.label}</span>
+            <span className="text-sm">{i < stepIndex ? '✅' : i === stepIndex ? <Loader className="w-3.5 h-3.5 animate-spin inline text-[#6C63FF]" /> : '○'}</span>
+            <span className={i === stepIndex ? 'text-white' : 'text-gray-400'}>{s.label}</span>
           </div>
         ))}
       </div>
@@ -80,211 +183,669 @@ function LoadingScreen({ statusMsg, progress }) {
   )
 }
 
-export default function UploadPage() {
+export default function LaunchEvaluationPage() {
   const navigate = useNavigate()
-  const [file, setFile] = useState(null)
-  const [runName, setRunName] = useState('')
-  const [modelType, setModelType] = useState('classification')
+
+  const [configMode, setConfigMode] = useState('preset')
+  const [selectedPresetId, setSelectedPresetId] = useState('baseline-simulated')
+
+  const [runName, setRunName] = useState('Indic LLM 7B - Safety & Cultural Evaluation')
+  const [provider, setProvider] = useState('demo')
+  const [modelName, setModelName] = useState('indic-base-7b-simulated')
+  const [apiKey, setApiKey] = useState('')
+  const [baseUrl, setBaseUrl] = useState('')
+  const [showApiKey, setShowApiKey] = useState(false)
+
+  const [selectedLanguages, setSelectedLanguages] = useState(['en', 'hi', 'ta'])
+  const [selectedCategories, setSelectedCategories] = useState([
+    'caste_representation',
+    'gender_occupational',
+    'regional_religious',
+    'safety_guidelines'
+  ])
+
+  const [showLegacyUpload, setShowLegacyUpload] = useState(false)
+  const [legacyFile, setLegacyFile] = useState(null)
+  const [legacyRunName, setLegacyRunName] = useState('')
+  const [legacyModelType, setLegacyModelType] = useState('classification')
+
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState(0)
-  const [statusMsg, setStatusMsg] = useState('')
 
-  const onDrop = useCallback((accepted) => {
-    if (accepted[0]) {
-      setFile(accepted[0])
-      if (!runName) setRunName(accepted[0].name.replace('.csv', ''))
+  const activeProbeCount = useMemo(() => {
+    let total = 0
+    PROBE_CATALOG.forEach(cat => {
+      if (selectedCategories.includes(cat.id)) {
+        selectedLanguages.forEach(lang => {
+          total += (cat.counts[lang] || 0)
+        })
+      }
+    })
+    return total
+  }, [selectedLanguages, selectedCategories])
+
+  const estimatedTimeSec = useMemo(() => {
+    if (activeProbeCount === 0) return 0
+    return Math.max(8, Math.round(activeProbeCount * 0.35))
+  }, [activeProbeCount])
+
+  const currentProviderConfig = useMemo(() => {
+    return PROVIDER_CONFIGS[provider] || null
+  }, [provider])
+
+  const handleProviderChange = (newProvider) => {
+    setProvider(newProvider)
+    const conf = PROVIDER_CONFIGS[newProvider]
+    if (conf) {
+      setModelName(conf.modelDefault)
+      setBaseUrl(conf.urlDefault)
     }
-  }, [runName])
+  }
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop, accept: { 'text/csv': ['.csv'] }, maxFiles: 1
-  })
+  const handleLanguageToggle = (lang) => {
+    if (selectedLanguages.includes(lang)) {
+      if (selectedLanguages.length === 1) return toast.error('Select at least one evaluation language.')
+      setSelectedLanguages(selectedLanguages.filter(l => l !== lang))
+    } else {
+      setSelectedLanguages([...selectedLanguages, lang])
+    }
+  }
 
-  const handleSubmit = async (e) => {
+  const handleCategoryToggle = (cat) => {
+    if (selectedCategories.includes(cat)) {
+      if (selectedCategories.length === 1) return toast.error('Select at least one evaluation category.')
+      setSelectedCategories(selectedCategories.filter(c => c !== cat))
+    } else {
+      setSelectedCategories([...selectedCategories, cat])
+    }
+  }
+
+  const applyPreset = (preset) => {
+    setSelectedPresetId(preset.id)
+    setProvider(preset.provider)
+    setModelName(preset.modelName)
+    setRunName(`${preset.title} Evaluation`)
+    toast.success(`Loaded preset: ${preset.title}`)
+  }
+
+  const handleLaunch = async (e) => {
     e.preventDefault()
-    if (!file) return toast.error('Please upload a CSV file')
-    if (!runName.trim()) return toast.error('Please enter a run name')
+    if (!runName.trim()) return toast.error('Please enter an evaluation audit name.')
+    if (!modelName.trim()) return toast.error('Please specify the target model name.')
+    if (activeProbeCount === 0) return toast.error('Please select at least one language and category.')
 
     setLoading(true)
     setProgress(5)
-    setStatusMsg('Uploading...')
 
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('run_name', runName)
-    formData.append('model_type', modelType)
+    const payload = {
+      run_name: runName,
+      target_model_name: modelName,
+      target_model_provider: provider,
+      target_model_url: baseUrl.trim() ? baseUrl : null,
+      api_key: apiKey.trim() ? apiKey : null,
+      selected_languages: selectedLanguages,
+      selected_categories: selectedCategories
+    }
 
     try {
-      const res = await uploadAudit(formData, (p) => setProgress(Math.max(5, p * 0.2)))
+      const res = await startRedTeamAudit(payload)
       const auditId = res.data.audit_id
-      toast.success('Audit started!')
-      setProgress(20)
+      toast.success('Evaluation initiated!')
+      setProgress(15)
 
       let attempts = 0
-
-      // Status messages shown at different progress stages
-      const statusMessages = [
-        { at: 20, msg: 'Parsing CSV and detecting columns...' },
-        { at: 30, msg: 'Detecting sensitive attributes...' },
-        { at: 40, msg: 'Running demographic parity analysis...' },
-        { at: 50, msg: 'Computing equal opportunity & calibration...' },
-        { at: 58, msg: 'Running counterfactual fairness tests...' },
-        { at: 65, msg: 'Running SHAP feature importance...' },
-        { at: 72, msg: 'Running LIME local explanations...' },
-        { at: 78, msg: 'Mapping regulatory compliance...' },
-        { at: 83, msg: 'Generating AI ethics summary...' },
-        { at: 88, msg: 'Anchoring to blockchain...' },
-        { at: 91, msg: 'Finalizing audit report...' },
-      ]
+      // Adaptive polling ceiling: max(120s, num_selected_probes * 15s) with 1.5s interval
+      const maxSeconds = Math.max(120, activeProbeCount * 15)
+      const maxAttempts = Math.ceil(maxSeconds / 1.5)
 
       const poll = setInterval(async () => {
         attempts++
-        // Smooth exponential easing — never freezes, always moving
-        const newProgress = Math.min(92, 20 + 72 * (1 - Math.exp(-attempts / 18)))
+        const newProgress = Math.min(95, 15 + 78 * (1 - Math.exp(-attempts / 12)))
         setProgress(newProgress)
-
-        // Update status message based on current progress
-        const currentMsg = statusMessages.filter(s => newProgress >= s.at).pop()
-        if (currentMsg) setStatusMsg(currentMsg.msg)
 
         try {
           const { data } = await getAudit(auditId)
           if (data.audit.status === 'completed') {
             clearInterval(poll)
-            setStatusMsg('Audit complete!')
             setProgress(100)
-            toast.success('Analysis complete!')
-            setTimeout(() => navigate(`/results/${auditId}`), 500)
+            toast.success('Safety scorecard ready!')
+            setTimeout(() => navigate(`/results/${auditId}`), 400)
           } else if (data.audit.status === 'failed') {
             clearInterval(poll)
-            toast.error('Analysis failed. Check your CSV format.')
+            toast.error('Evaluation failed. Check backend logs.')
             setLoading(false)
           }
         } catch {}
-        // Timeout after 3 minutes (90 attempts × 2s)
-        if (attempts > 90) {
+
+        if (attempts > maxAttempts) {
           clearInterval(poll)
-          toast.error('Audit timed out. Please try again.')
+          toast.error('Evaluation timed out. Please try again.')
           setLoading(false)
         }
-      }, 2000)
+      }, 1500)
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to start evaluation')
+      setLoading(false)
+    }
+  }
+
+  const handleLegacySubmit = async (e) => {
+    e.preventDefault()
+    if (!legacyFile) return toast.error('Please upload a CSV file.')
+    setLoading(true)
+    setProgress(5)
+
+    const formData = new FormData()
+    formData.append('file', legacyFile)
+    const autoRunName = legacyRunName.trim() || (legacyFile ? `${legacyFile.name.replace(/\.[^/.]+$/, '')} - Tabular ML Fairness Audit` : 'Tabular ML Fairness Audit')
+    formData.append('run_name', autoRunName)
+    formData.append('model_type', legacyModelType)
+
+    try {
+      const res = await uploadAudit(formData, (p) => setProgress(Math.max(5, p * 0.2)))
+      const auditId = res.data.audit_id
+      toast.success('Tabular audit started!')
+      setProgress(20)
+
+      let attempts = 0
+      const poll = setInterval(async () => {
+        attempts++
+        const newProgress = Math.min(92, 20 + 72 * (1 - Math.exp(-attempts / 15)))
+        setProgress(newProgress)
+        try {
+          const { data } = await getAudit(auditId)
+          if (data.audit.status === 'completed') {
+            clearInterval(poll)
+            setProgress(100)
+            toast.success('Tabular analysis complete!')
+            setTimeout(() => navigate(`/results/${auditId}`), 400)
+          }
+        } catch {}
+        if (attempts > 80) {
+          clearInterval(poll)
+          setLoading(false)
+        }
+      }, 1800)
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Upload failed')
       setLoading(false)
     }
   }
 
-  if (loading) return <LoadingScreen statusMsg={statusMsg} progress={progress} />
-
   return (
-    <div className="max-w-2xl mx-auto space-y-6 py-8">
-      <div>
-        <h1 className="text-4xl font-black text-white mb-2">New Bias Audit</h1>
-        <p className="text-gray-400 text-sm">Upload your AI model's predictions CSV. We'll analyze bias across 6 fairness dimensions in under 60 seconds.</p>
-      </div>
-
-      {/* Format Guide */}
-      <div className="rounded-2xl p-5 border" style={{ background: 'rgba(108,99,255,0.06)', borderColor: 'rgba(108,99,255,0.22)' }}>
-        <h3 className="font-bold text-white mb-3 text-sm flex items-center gap-2">
-          <Info className="w-4 h-4" style={{ color: '#6C63FF' }} /> Expected CSV Format
-        </h3>
-        <div className="font-mono text-xs rounded-xl p-4 overflow-x-auto mb-3" style={{ background: 'rgba(0,0,0,0.4)' }}>
-          <div style={{ color: '#a78bfa' }}># Column headers (any domain works)</div>
-          <div style={{ color: '#00B894' }}>actual, predicted, gender, age, race, income</div>
-          <div className="text-gray-500">1, 1, Male, 34, White, 55000</div>
-          <div className="text-gray-500">0, 1, Female, 28, Black, 42000</div>
-          <div className="text-gray-500">1, 0, Male, 45, Hispanic, 61000</div>
+    <div className="max-w-4xl mx-auto space-y-4 py-3">
+      {/* Top Banner Header */}
+      <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-white/5">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#6C63FF]/20 text-[#a78bfa] border border-[#6C63FF]/30">
+              IndiaAI Safety Institute Standard
+            </span>
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-500/10 text-green-400 border border-green-500/20">
+              MeitY GenAI Advisory
+            </span>
+          </div>
+          <h1 className="text-2xl font-black text-white tracking-tight">Launch Safety Evaluation</h1>
+          <p className="text-gray-400 text-xs mt-0.5">
+            Automated red-teaming and cultural alignment audit for Indian language foundation models.
+          </p>
         </div>
-        <div className="grid grid-cols-3 gap-3 text-xs">
-          {[
-            { key: 'actual / label', val: 'Ground truth outcome', color: '#00B894' },
-            { key: 'predicted / pred', val: 'Model output / score', color: '#6C63FF' },
-            { key: 'gender / age / race', val: 'Sensitive attributes', color: '#FDCB6E' },
-          ].map(({ key, val, color }) => (
-            <div key={key} className="rounded-lg p-2 text-center" style={{ background: 'rgba(0,0,0,0.3)' }}>
-              <div className="font-mono font-bold mb-0.5" style={{ color }}>{key}</div>
-              <div className="text-gray-500">{val}</div>
-            </div>
-          ))}
+
+        {/* Dynamic Status Counter Pill */}
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-2xl glass border border-white/10 text-xs">
+          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          <span className="text-gray-300 font-medium">
+            <strong className="text-white">{activeProbeCount}</strong> Probes Selected
+          </span>
+          <span className="text-gray-500">·</span>
+          <span className="text-purple-300 font-mono">~{estimatedTimeSec}s Runtime</span>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Dropzone */}
-        <div {...getRootProps()} className={`rounded-2xl p-12 text-center cursor-pointer transition-all border-2 border-dashed ${
-          isDragActive ? 'border-[#6C63FF] bg-[#6C63FF]/10' :
-          file ? 'border-green-500/40 bg-green-500/5' :
-          'border-white/8 hover:border-[#6C63FF]/35 hover:bg-[#6C63FF]/4'
-        }`}>
-          <input {...getInputProps()} />
-          {file ? (
-            <div className="flex flex-col items-center gap-3">
-              <CheckCircle className="w-12 h-12 text-green-400" />
-              <div>
-                <p className="text-white font-bold text-lg">{file.name}</p>
-                <p className="text-gray-500 text-sm">{(file.size / 1024).toFixed(1)} KB</p>
+      {loading ? (
+        <LoadingScreen progress={progress} />
+      ) : (
+        <form onSubmit={handleLaunch} className="space-y-4">
+          {/* STEP 1: TARGET MODEL ARCHITECTURE */}
+          <div className="glass rounded-3xl p-4 sm:p-5 border border-white/10 space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <span className="w-6 h-6 rounded-lg bg-[#6C63FF]/20 text-[#a78bfa] border border-[#6C63FF]/30 flex items-center justify-center font-mono font-black text-xs">
+                  1
+                </span>
+                <h3 className="font-bold text-white text-sm">Select Target Model Architecture</h3>
               </div>
-              <button type="button" onClick={(e) => { e.stopPropagation(); setFile(null) }}
-                className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-400 transition-colors">
-                <X className="w-3 h-3" /> Remove file
-              </button>
+
+              <div className="flex gap-1 p-1 rounded-xl bg-black/40 border border-white/10 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfigMode('preset')
+                    setProvider('demo')
+                    setModelName('indic-base-7b-simulated')
+                  }}
+                  className={`px-3 py-1 rounded-lg transition-all ${
+                    configMode === 'preset'
+                      ? 'bg-[#6C63FF] text-white shadow-[0_0_10px_rgba(108,99,255,0.4)]'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  ⚡ Quick Demo Presets
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfigMode('custom')
+                    handleProviderChange('groq')
+                  }}
+                  className={`px-3 py-1 rounded-lg transition-all ${
+                    configMode === 'custom'
+                      ? 'bg-[#6C63FF] text-white shadow-[0_0_10px_rgba(108,99,255,0.4)]'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  ⚙️ Custom Connection
+                </button>
+              </div>
             </div>
-          ) : (
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
-                style={{ background: isDragActive ? 'rgba(108,99,255,0.25)' : 'rgba(108,99,255,0.12)' }}>
-                <Upload className="w-8 h-8" style={{ color: '#6C63FF' }} />
+
+            {configMode === 'preset' ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {PRESET_MODELS.map((p) => {
+                  const isSelected = selectedPresetId === p.id
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => applyPreset(p)}
+                      className={`p-3.5 rounded-2xl text-left transition-all border relative flex flex-col justify-between ${
+                        isSelected
+                          ? 'shadow-[0_0_20px_rgba(108,99,255,0.2)] ring-1'
+                          : 'border-white/10 bg-white/4 hover:border-white/20 hover:bg-white/6'
+                      }`}
+                      style={{
+                        borderColor: isSelected ? p.borderColor : 'rgba(255,255,255,0.1)',
+                        background: isSelected ? p.cardBg : 'rgba(255,255,255,0.03)',
+                        ringColor: isSelected ? p.borderColor : 'transparent'
+                      }}
+                    >
+                      <div>
+                        {/* Header Row: Badge left, Checkmark right */}
+                        <div className="flex items-center justify-between mb-2">
+                          <span
+                            className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-1"
+                            style={{ background: p.badgeBg, color: p.badgeColor, border: `1px solid ${p.badgeBorder}` }}
+                          >
+                            {p.isLive && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-ping" />}
+                            {p.badge}
+                          </span>
+                          {isSelected && (
+                            <div className="w-4 h-4 rounded-full bg-green-400 text-black flex items-center justify-center text-[10px] font-black">
+                              ✓
+                            </div>
+                          )}
+                        </div>
+                        <h4 className="font-bold text-white text-xs leading-snug">{p.title}</h4>
+                        <p className="text-gray-400 text-[11px] mt-1.5 leading-relaxed">{p.desc}</p>
+                      </div>
+
+                      <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-between text-[10px] text-gray-500 font-mono">
+                        <span>Target: {p.modelName}</span>
+                        <span>{p.provider === 'demo' ? 'Zero Setup' : 'Live API'}</span>
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
-              <div>
-                <p className="text-white font-bold text-lg">{isDragActive ? 'Drop it!' : 'Drop your CSV here'}</p>
-                <p className="text-gray-500 text-sm mt-1">or click to browse · Max 50MB</p>
+            ) : (
+              <div className="space-y-3 pt-1 animate-fadeIn">
+                {/* Row 1: Provider Dropdown + Model ID Input */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-300 mb-1 flex items-center justify-between">
+                      <span>Model Provider</span>
+                      {currentProviderConfig && (
+                        <span
+                          className="text-[9px] font-bold uppercase px-1.5 py-0.2 rounded"
+                          style={{ background: `${currentProviderConfig.badgeColor}20`, color: currentProviderConfig.badgeColor }}
+                        >
+                          {currentProviderConfig.badge}
+                        </span>
+                      )}
+                    </label>
+                    <select
+                      value={provider}
+                      onChange={(e) => handleProviderChange(e.target.value)}
+                      className="w-full rounded-xl px-3.5 py-2 text-xs text-white outline-none bg-black/50 border border-white/10 focus:border-[#6C63FF]"
+                    >
+                      <option value="groq">Groq Cloud (LLaMA 3.3 / 3.1) [Free Tier]</option>
+                      <option value="google">Google AI Studio (Gemini 2.5) [100% Free]</option>
+                      <option value="openrouter">OpenRouter (Free-Tier Router) [Free Models]</option>
+                      <option value="custom">Custom Endpoint (vLLM / Sarvam / Krutrim)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-300 mb-1">Model Identifier</label>
+                    <input
+                      type="text"
+                      value={modelName}
+                      onChange={(e) => setModelName(e.target.value)}
+                      placeholder="e.g. llama-3.1-8b-instant"
+                      className="w-full rounded-xl px-3.5 py-2 text-xs text-white placeholder-gray-600 outline-none bg-white/5 border border-white/10 focus:border-[#6C63FF]"
+                    />
+                  </div>
+                </div>
+
+                {/* Inline Provider Guidance Card */}
+                {currentProviderConfig && (
+                  <div className="p-3 rounded-2xl bg-white/4 border border-white/10 space-y-2 text-xs animate-fadeIn">
+                    <div className="flex items-center justify-between flex-wrap gap-1 border-b border-white/5 pb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full"
+                          style={{
+                            background: `${currentProviderConfig.badgeColor}20`,
+                            color: currentProviderConfig.badgeColor,
+                            border: `1px solid ${currentProviderConfig.badgeColor}40`
+                          }}
+                        >
+                          {currentProviderConfig.badge}
+                        </span>
+                        <span className="font-bold text-white text-xs">{currentProviderConfig.name} Setup Guide</span>
+                      </div>
+                      <a
+                        href={currentProviderConfig.keyLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-[#a78bfa] hover:text-white underline flex items-center gap-1 font-semibold"
+                      >
+                        Get Free API Key ({currentProviderConfig.keyLinkText}) <ExternalLink className="w-3 h-3 inline" />
+                      </a>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                      <div className="space-y-1">
+                        <div className="text-gray-300">
+                          <strong className="text-white">API Key Source:</strong> {currentProviderConfig.keyDesc}
+                        </div>
+                        <div className={`text-[10px] font-medium px-2 py-1 rounded-lg ${
+                          currentProviderConfig.isServerKeyAvailable
+                            ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                            : 'bg-blue-500/10 text-blue-300 border border-blue-500/20'
+                        }`}>
+                          {currentProviderConfig.serverKeyStatus}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="text-gray-300">
+                          <strong className="text-white">Model IDs:</strong> {currentProviderConfig.modelHint}
+                        </div>
+                        {currentProviderConfig.rotationNotice && (
+                          <div className="text-[10px] text-yellow-400/90 leading-tight">
+                            ℹ️ {currentProviderConfig.rotationNotice}{' '}
+                            <a
+                              href={currentProviderConfig.rotationLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="underline font-bold text-yellow-300 inline-flex items-center gap-0.5"
+                            >
+                              openrouter.ai/models?max_price=0 <ExternalLink className="w-2.5 h-2.5 inline" />
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Row 2: API Key + Custom Base URL Inputs */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-300 mb-1 flex items-center justify-between">
+                      <span>API Key</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="text-[10px] text-gray-400 hover:text-white"
+                      >
+                        {showApiKey ? 'Hide' : 'Show'}
+                      </button>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showApiKey ? 'text' : 'password'}
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        placeholder={
+                          currentProviderConfig?.isServerKeyAvailable
+                            ? 'Leave empty to use server default key'
+                            : 'Paste your API key here'
+                        }
+                        className="w-full rounded-xl px-3.5 py-2 text-xs text-white placeholder-gray-600 outline-none bg-white/5 border border-white/10 focus:border-[#6C63FF]"
+                      />
+                      <Lock className="w-3.5 h-3.5 text-gray-500 absolute right-3 top-2.5" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-300 mb-1 flex items-center justify-between">
+                      <span>Endpoint Base URL</span>
+                      <span className="text-[10px] text-gray-500 font-mono">Auto-Configured</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={baseUrl}
+                      onChange={(e) => setBaseUrl(e.target.value)}
+                      placeholder="https://api.groq.com/openai/v1"
+                      className="w-full rounded-xl px-3.5 py-2 text-xs text-white placeholder-gray-600 outline-none bg-white/5 border border-white/10 focus:border-[#6C63FF]"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 border-t border-white/5">
+              <label className="block text-xs font-semibold text-gray-400 mb-1">Evaluation Title</label>
+              <input
+                type="text"
+                value={runName}
+                onChange={(e) => setRunName(e.target.value)}
+                placeholder="e.g. Indic LLM 7B - Safety & Cultural Evaluation"
+                className="w-full rounded-xl px-3.5 py-1.5 text-xs text-white placeholder-gray-600 outline-none bg-white/5 border border-white/10 focus:border-[#6C63FF]"
+              />
+            </div>
+          </div>
+
+          {/* STEP 2: DEFINE EVALUATION SCOPE */}
+          <div className="glass rounded-3xl p-4 sm:p-5 border border-white/10 space-y-3">
+            <div className="flex items-center gap-2.5">
+              <span className="w-6 h-6 rounded-lg bg-[#00B894]/20 text-[#00B894] border border-[#00B894]/30 flex items-center justify-center font-mono font-black text-xs">
+                2
+              </span>
+              <h3 className="font-bold text-white text-sm">Define Multilingual & Safety Scope</h3>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+              {/* Languages (4 cols) */}
+              <div className="lg:col-span-4 space-y-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-[#00B894]" /> Languages ({selectedLanguages.length}/3)
+                </label>
+                <div className="space-y-1.5">
+                  {[
+                    { code: 'en', label: 'English', native: 'English', flag: '🇬🇧', probes: '15 probes' },
+                    { code: 'hi', label: 'Hindi', native: 'हिन्दी', flag: '🇮🇳', probes: '14 probes' },
+                    { code: 'ta', label: 'Tamil', native: 'தமிழ்', flag: '🇮🇳', probes: '15 probes' },
+                  ].map(({ code, label, native, flag, probes }) => {
+                    const active = selectedLanguages.includes(code)
+                    return (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => handleLanguageToggle(code)}
+                        className={`w-full p-2.5 rounded-xl text-left transition-all border flex items-center justify-between ${
+                          active
+                            ? 'border-[#00B894] bg-[#00B894]/10 text-white'
+                            : 'border-white/5 bg-white/3 text-gray-500 opacity-60 hover:opacity-100'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">{flag}</span>
+                          <div>
+                            <div className="font-bold text-xs">{label}</div>
+                            <div className="text-[10px] text-gray-400">{native}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono text-gray-400">{probes}</span>
+                          <div className={`w-4 h-4 rounded flex items-center justify-center text-[10px] font-black ${
+                            active ? 'bg-[#00B894] text-black' : 'border border-gray-600'
+                          }`}>
+                            {active && '✓'}
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Categories (8 cols) */}
+              <div className="lg:col-span-8 space-y-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-[#FDCB6E]" /> Evaluation Categories ({selectedCategories.length}/4)
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {PROBE_CATALOG.map((cat) => {
+                    const active = selectedCategories.includes(cat.id)
+                    const catCount = selectedLanguages.reduce((sum, lang) => sum + (cat.counts[lang] || 0), 0)
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => handleCategoryToggle(cat.id)}
+                        className={`p-2.5 rounded-xl text-left transition-all border flex flex-col justify-between ${
+                          active
+                            ? 'border-[#FDCB6E] bg-[#FDCB6E]/10 text-white'
+                            : 'border-white/5 bg-white/3 text-gray-500 opacity-60 hover:opacity-100'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-1">
+                          <div className="font-bold text-xs">{cat.title}</div>
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-black/40 text-yellow-400 border border-yellow-500/20 flex-shrink-0">
+                            {catCount}p
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-gray-400 mt-1 leading-snug">{cat.desc}</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* STEP 3: EXECUTION SUMMARY & LAUNCH BUTTON */}
+          <div className="glass rounded-3xl p-4 border border-white/10 space-y-3 bg-[#6C63FF]/5">
+            <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-lg bg-green-500/20 text-green-400 border border-green-500/30 flex items-center justify-center font-mono font-black text-xs">
+                  3
+                </span>
+                <span className="font-bold text-white">Execution Summary</span>
+              </div>
+              <div className="text-gray-400 flex items-center gap-3 text-[11px]">
+                <span>Target: <strong className="text-white">{modelName}</strong></span>
+                <span>·</span>
+                <span>Scope: <strong className="text-white">{selectedLanguages.length} Languages</strong></span>
+                <span>·</span>
+                <span>Total: <strong className="text-green-400">{activeProbeCount} Probes</strong></span>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={activeProbeCount === 0}
+              className="w-full py-3 rounded-2xl font-black text-white text-sm transition-all flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(108,99,255,0.35)] hover:scale-[1.01] disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: 'linear-gradient(135deg, #6C63FF, #00B894)' }}
+            >
+              <Play className="w-4 h-4 fill-current" />
+              Launch IndiaAI Safety Audit ({activeProbeCount} Probes across {selectedLanguages.length} Languages) →
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Legacy Tabular Accordion (Independent from LLM Form) */}
+      {!loading && (
+        <div className="border border-white/5 rounded-2xl overflow-hidden glass">
+          <button
+            type="button"
+            onClick={() => setShowLegacyUpload(!showLegacyUpload)}
+            className="w-full px-4 py-2.5 flex items-center justify-between text-left text-gray-500 hover:text-gray-300 transition-colors text-xs"
+          >
+            <span className="font-medium flex items-center gap-2">
+              <Info className="w-3.5 h-3.5 text-[#6C63FF]" /> Need to audit tabular datasets? (Legacy CSV Mode)
+            </span>
+            {showLegacyUpload ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
+          </button>
+
+          {showLegacyUpload && (
+            <div className="p-4 pt-1 space-y-3 border-t border-white/5 bg-white/[0.01]">
+              <p className="text-[11px] text-gray-400">
+                Upload predictions CSV for tabular classification, regression, or ranking bias audits.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">
+                    Audit Name (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={legacyRunName}
+                    onChange={(e) => setLegacyRunName(e.target.value)}
+                    placeholder={legacyFile ? `${legacyFile.name.replace(/\.[^/.]+$/, '')} - Tabular ML Fairness Audit` : 'e.g. Credit Risk Fairness Audit'}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#6C63FF]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">
+                    Model Problem Type
+                  </label>
+                  <select
+                    value={legacyModelType}
+                    onChange={(e) => setLegacyModelType(e.target.value)}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-[#6C63FF]"
+                  >
+                    <option value="classification">Classification (Binary / Multi-class)</option>
+                    <option value="regression">Regression (Continuous Output)</option>
+                    <option value="ranking">Ranking / Recommendation</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => setLegacyFile(e.target.files[0])}
+                  className="text-xs text-gray-300 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-semibold file:bg-[#6C63FF]/20 file:text-[#a78bfa] hover:file:bg-[#6C63FF]/30 cursor-pointer"
+                />
+                <button
+                  type="button"
+                  onClick={handleLegacySubmit}
+                  disabled={!legacyFile}
+                  className="px-4 py-2 rounded-xl bg-[#6C63FF]/20 hover:bg-[#6C63FF]/30 border border-[#6C63FF]/30 text-white text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                >
+                  Run Tabular Audit →
+                </button>
               </div>
             </div>
           )}
         </div>
-
-        {/* Run Name */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-300 mb-2">Audit Name</label>
-          <input type="text" value={runName} onChange={e => setRunName(e.target.value)}
-            placeholder="e.g. Hiring Model v2 — COMPAS Analysis"
-            className="w-full rounded-xl px-4 py-3 text-white placeholder-gray-600 outline-none transition-all"
-            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
-            onFocus={e => e.target.style.borderColor = '#6C63FF'}
-            onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
-          />
-        </div>
-
-        {/* Model Type */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-300 mb-2">Model Type</label>
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { value: 'classification', label: 'Classification', desc: 'Hiring, Loans, Recidivism', icon: '🎯' },
-              { value: 'regression', label: 'Regression', desc: 'Salary, Risk Scoring', icon: '📈' },
-              { value: 'ranking', label: 'Ranking', desc: 'Search, Recommendations', icon: '🏆' },
-            ].map(({ value, label, desc, icon }) => (
-              <button key={value} type="button" onClick={() => setModelType(value)}
-                className={`rounded-xl p-3 text-left transition-all border ${
-                  modelType === value
-                    ? 'border-[#6C63FF] bg-[#6C63FF]/10 text-white'
-                    : 'border-white/8 bg-white/3 text-gray-400 hover:border-white/20'
-                }`}>
-                <div className="text-lg mb-1">{icon}</div>
-                <div className="font-bold text-sm">{label}</div>
-                <div className="text-xs opacity-60 mt-0.5">{desc}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Submit */}
-        <button type="submit" disabled={!file || !runName.trim()}
-          className="w-full py-4 rounded-2xl font-black text-white text-lg transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed hover:scale-[1.01]"
-          style={{ background: 'linear-gradient(135deg, #6C63FF, #8B5CF6)', boxShadow: (!file || !runName.trim()) ? 'none' : '0 0 30px rgba(108,99,255,0.35)' }}>
-          <FileText className="w-5 h-5" /> Run Bias Audit
-        </button>
-      </form>
+      )}
     </div>
   )
 }

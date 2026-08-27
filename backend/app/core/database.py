@@ -10,7 +10,7 @@ if "sqlite" in db_url:
         db_url,
         connect_args={"check_same_thread": False},  # Required for SQLite
         pool_pre_ping=True,
-        echo=settings.DEBUG
+        echo=False
     )
     # Enable foreign keys for SQLite (disabled by default)
     @event.listens_for(engine, "connect")
@@ -23,7 +23,7 @@ else:
         db_url,
         pool_pre_ping=True,
         pool_recycle=300,   # Render free tier drops connections after ~5min
-        echo=settings.DEBUG
+        echo=False
     )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

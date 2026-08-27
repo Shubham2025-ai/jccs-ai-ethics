@@ -6,6 +6,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
+import sys
+
+# Ensure UTF-8 output encoding on Windows
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
 
 from app.core.config import settings
 from app.core.database import engine, Base, test_connection
@@ -16,22 +23,22 @@ from app.routers.batch_audit import router as batch_audit_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    print(f"🚀 Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    print(f"[START] Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
     # Create all MySQL tables
     Base.metadata.create_all(bind=engine)
-    print("✅ MySQL tables initialized")
+    print("[OK] MySQL tables initialized")
 
     if test_connection():
-        print("✅ MySQL connection successful")
+        print("[OK] MySQL connection successful")
     else:
-        print("❌ MySQL connection failed — check your .env DB settings")
+        print("[ERROR] MySQL connection failed -- check your .env DB settings")
 
     yield
 
     # Shutdown
-    print("👋 JCCS Backend shutting down")
+    print("[SHUTDOWN] JCCS Backend shutting down")
 
 
 app = FastAPI(

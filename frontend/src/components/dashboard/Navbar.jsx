@@ -19,8 +19,8 @@ export default function Navbar() {
             style={{ background: 'linear-gradient(135deg, #6C63FF, #E94560)' }}>
             <Shield className="w-4 h-4 text-white" aria-hidden="true" />
           </div>
-          <span className="text-white">JCCS</span>
-          <span className="text-xs text-gray-500 hidden sm:block font-normal">Jedi Code Compliance System</span>
+          <span className="text-white font-black">JCCS</span>
+          <span className="text-xs text-gray-500 hidden sm:block font-normal border-l border-white/10 pl-2">IndiaAI LLM Safety & Red-Teaming</span>
         </Link>
         <div className="flex items-center gap-1" role="list">
           {nav.map(({ to, label, icon: Icon }) => (

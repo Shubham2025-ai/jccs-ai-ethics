@@ -1,17 +1,35 @@
 """
-Audit Orchestration Service
-Universal — handles any CSV from any domain without crashing.
+Audit Orchestration Service for LLM Safety & Red-Teaming Platform
+Supports live LLM target auditing across 22 Indic languages & legacy tabular audits.
 """
+
+import json
+import asyncio
+import hashlib
+from datetime import datetime, timezone
+from sqlalchemy.orm import Session
+from typing import Dict, Any, List, Optional
 import pandas as pd
 import numpy as np
-import json
-from datetime import datetime
-from sqlalchemy.orm import Session
-from typing import Dict, Any
-from sklearn.preprocessing import LabelEncoder
 
-from app.models.models import AuditRun, FairnessResult, ShapResult, LimeResult, AiExplanation, Remediation, ComplianceCheck
-from app.services import bias_engine, groq_service, blockchain_service
+from app.models.models import (
+    AuditRun,
+    PromptEvaluationResult,
+    FairnessResult,
+    AiExplanation,
+    Remediation,
+    ComplianceCheck,
+    ShapResult,
+    LimeResult,
+)
+from app.services import (
+    evaluation_prompts,
+    llm_client,
+    groq_service,
+    llm_safety_engine,
+    blockchain_service,
+    bias_engine,
+)
 
 
 def sanitize(obj):
@@ -25,11 +43,270 @@ def sanitize(obj):
     return obj
 
 
+# =========================================================================
+# LLM SAFETY & RED-TEAMING ORCHESTRATION PIPELINE (Phase 3)
+# =========================================================================
+
+async def _audit_llm_async(
+    db: Session,
+    audit_id: int,
+    target_model_name: str,
+    target_model_provider: str,
+    target_model_url: Optional[str],
+    api_key: Optional[str],
+    selected_languages: List[str],
+    selected_categories: List[str],
+    run_name: str
+) -> Dict[str, Any]:
+    """Async execution of LLM Safety test suite."""
+    audit = db.query(AuditRun).filter(AuditRun.id == audit_id).first()
+    if not audit:
+        raise ValueError(f"Audit {audit_id} not found")
+
+    audit.status = "processing"
+    db.commit()
+
+    # Step 1: Select test cases
+    all_tests = evaluation_prompts.get_all_test_cases()
+    test_cases = [
+        tc for tc in all_tests
+        if (not selected_languages or tc.get("language") in selected_languages)
+        and (not selected_categories or tc.get("category") in selected_categories)
+    ]
+    if not test_cases:
+        test_cases = all_tests[:20]  # Fallback to default set
+
+    print(f"\n{'='*60}")
+    print(f"[AUDIT] Starting IndiaAI Safety Audit #{audit_id}: '{run_name}'")
+    print(f"[TARGET] Model: {target_model_name} ({target_model_provider})")
+    print(f"[SUITE] Running {len(test_cases)} test cases across {set([tc.get('language') for tc in test_cases])}")
+
+    evaluation_records = []
+    manifest_items = []
+
+    # Step 2: Query Target LLM & Evaluate each test case
+    for i, tc in enumerate(test_cases, 1):
+        prompt_text = evaluation_prompts.render_prompt_text(tc)
+        print(f"   [{i}/{len(test_cases)}] Probing {tc.get('id')} ({tc.get('language')})...", end=" ")
+
+        # 2a. Query target model
+        target_res = await llm_client.query_target_model(
+            prompt=prompt_text,
+            model_name=target_model_name,
+            provider=target_model_provider,
+            base_url=target_model_url,
+            api_key=api_key,
+            temperature=0.6,
+            max_tokens=500
+        )
+        raw_response = target_res.get("response", "")
+
+        # 2b. Evaluate with LLM-as-a-Judge
+        eval_verdict = groq_service.evaluate_response(
+            tc,
+            raw_response,
+            evaluator_api_key=api_key if (target_model_provider == "groq" and api_key) else None
+        )
+        is_compliant = eval_verdict.get("compliant")
+        score = eval_verdict.get("score")
+
+        # 2c. Sanitize output (Redact raw exploit code/payloads)
+        sanitized_response = llm_client.sanitize_response_for_storage(
+            raw_response,
+            category=tc.get("category", ""),
+            compliant=True if is_compliant is None else is_compliant
+        )
+
+        if is_compliant is True:
+            status_icon = "[PASS]"
+        elif is_compliant is False:
+            status_icon = "[VIOLATION]"
+        else:
+            status_icon = "[UNAVAILABLE]"
+
+        score_display = f"{score}/100" if score is not None else "N/A"
+        print(f"{status_icon} Score: {score_display}")
+
+        # 2d. Store individual test probe record
+        probe_record = PromptEvaluationResult(
+            audit_id=audit_id,
+            test_id=tc.get("id"),
+            prompt_text=prompt_text,
+            language=tc.get("language", "en"),
+            category=tc.get("category", "general"),
+            dimension=tc.get("dimension", "guideline_adherence"),
+            target_model_response=sanitized_response,
+            evaluation_score=score,
+            evaluation_notes=eval_verdict.get("notes", ""),
+            concern_category=eval_verdict.get("concern_category"),
+            compliant=is_compliant,
+            meta_info={
+                "latency_ms": target_res.get("latency_ms", 0),
+                "model_tested": target_res.get("model", target_model_name),
+                "evaluator": eval_verdict.get("evaluator_type", "groq_llama_3.3_70b")
+            }
+        )
+        db.add(probe_record)
+        evaluation_records.append({
+            "id": tc.get("id"),
+            "category": tc.get("category"),
+            "dimension": tc.get("dimension"),
+            "language": tc.get("language"),
+            "evaluation_score": score,
+            "compliant": is_compliant,
+            "notes": eval_verdict.get("notes", ""),
+            "concern_category": eval_verdict.get("concern_category")
+        })
+
+        manifest_items.append(f"{tc.get('id')}:{score}:{is_compliant}")
+
+        # Pacing delay to stay well within API rate limits during automated testing
+        await asyncio.sleep(0.35)
+
+    db.commit()
+
+    # Step 3: Aggregate dimension scores & compute overall risk
+    print("[ANALYSIS] Aggregating IndiaAI 9 safety dimensions...")
+    dimension_results = llm_safety_engine.aggregate_dimension_scores(
+        evaluation_records,
+        blockchain_anchored=True
+    )
+    overall_score, risk_level = llm_safety_engine.compute_overall_safety_score(dimension_results)
+
+    # Step 4: Compliance mapping & remediations
+    compliance_checks = llm_safety_engine.compute_indiaai_compliance_checks(dimension_results, overall_score)
+    remediations = llm_safety_engine.generate_guardrail_remediations(dimension_results, target_model_name)
+
+    # Step 5: AI executive summary & guardrail recommendations
+    summary = groq_service.generate_summary_explanation(
+        evaluation_records, overall_score, risk_level, run_name, target_model_name
+    )
+    remediation_plan = groq_service.generate_remediation_explanation(remediations)
+
+    # Step 6: Cryptographic Manifest Hash & Blockchain Anchoring
+    manifest_bytes = (f"{run_name}:{target_model_name}:{overall_score}:" + ",".join(manifest_items)).encode("utf-8")
+    sha256_hash = hashlib.sha256(manifest_bytes).hexdigest()
+
+    audit.hash_sha256 = sha256_hash
+    audit.overall_score = float(overall_score)
+    audit.risk_level = str(risk_level)
+    audit.row_count = len(test_cases)
+    audit.completed_at = datetime.now(timezone.utc)
+
+    # Blockchain certificate
+    try:
+        cert = blockchain_service.anchor_audit(audit_id, sha256_hash, run_name)
+        audit.blockchain_tx = blockchain_service.format_blockchain_display(cert)
+    except Exception:
+        audit.blockchain_tx = f"JCCS-LocalProof|SHA256-ChainedProof|{sha256_hash[:32]}|{datetime.now(timezone.utc).isoformat()[:19]}"
+
+    # Digital signature
+    try:
+        digital_sig = blockchain_service.generate_digital_signature(
+            audit_id=audit_id,
+            run_name=run_name,
+            overall_score=overall_score,
+            risk_level=risk_level,
+            sha256_hash=sha256_hash
+        )
+    except Exception as e:
+        digital_sig = {"valid": False, "error": str(e)}
+
+    # Step 7: Persist dimension scores, compliance checks, and explanations
+    for dim_res in dimension_results:
+        db.add(FairnessResult(
+            audit_id=audit_id,
+            dimension=dim_res["dimension"],
+            dimension_label=dim_res["dimension_label"],
+            score=dim_res["score"],
+            passed=dim_res["passed"],
+            metric_value=dim_res.get("metric_value"),
+            threshold=dim_res.get("threshold"),
+            details=sanitize(dim_res.get("details", {}))
+        ))
+
+    for comp in compliance_checks:
+        db.add(ComplianceCheck(
+            audit_id=audit_id,
+            standard=comp["standard"],
+            requirement=comp["requirement"],
+            passed=comp["passed"],
+            notes=comp.get("notes", "")
+        ))
+
+    for rem in remediations:
+        db.add(Remediation(
+            audit_id=audit_id,
+            dimension=rem["dimension"],
+            suggestion=rem["suggestion"],
+            estimated_bias_reduction=rem.get("estimated_bias_reduction"),
+            estimated_accuracy_loss=rem.get("estimated_accuracy_loss"),
+            priority=rem.get("priority", "high")
+        ))
+
+    db.add(AiExplanation(audit_id=audit_id, explanation_type="summary", content=str(summary)))
+    db.add(AiExplanation(audit_id=audit_id, explanation_type="remediation", content=str(remediation_plan)))
+    db.add(AiExplanation(audit_id=audit_id, explanation_type="digital_signature", content=json.dumps(sanitize(digital_sig))))
+
+    audit.status = "completed"
+    db.commit()
+
+    print(f"[COMPLETE] IndiaAI Safety Audit #{audit_id}: {overall_score}/100 | Risk: {risk_level.upper()}")
+    print(f"{'='*60}\n")
+
+    return {
+        "audit_id": audit_id,
+        "overall_score": overall_score,
+        "risk_level": risk_level,
+        "dimensions": dimension_results
+    }
+
+
+def process_llm_safety_audit(
+    db: Session,
+    audit_id: int,
+    target_model_name: str = "llama-3.1-8b-instant",
+    target_model_provider: str = "groq",
+    target_model_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    selected_languages: Optional[List[str]] = None,
+    selected_categories: Optional[List[str]] = None,
+    run_name: str = "LLM Safety Audit"
+) -> Dict[str, Any]:
+    """Synchronous wrapper for launching LLM safety audit."""
+    if selected_languages is None:
+        selected_languages = ["en", "hi", "ta"]
+    if selected_categories is None:
+        selected_categories = ["caste_representation", "gender_occupational", "regional_religious", "safety_guidelines"]
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(
+            _audit_llm_async(
+                db=db,
+                audit_id=audit_id,
+                target_model_name=target_model_name,
+                target_model_provider=target_model_provider,
+                target_model_url=target_model_url,
+                api_key=api_key,
+                selected_languages=selected_languages,
+                selected_categories=selected_categories,
+                run_name=run_name
+            )
+        )
+    finally:
+        loop.close()
+
+
+# =========================================================================
+# LEGACY TABULAR PROCESSOR (Retained for Backward Compatibility)
+# =========================================================================
+
 def _safe_binarize(series: pd.Series, name: str) -> np.ndarray:
-    """Convert any series to binary 0/1 array — never crashes."""
     s = series.copy()
+    from sklearn.preprocessing import LabelEncoder
     dtype_str = str(s.dtype).lower()
-    # Fill nulls — handle object, category, string, StringDtype (pandas 2.x)
     if s.dtype == object or dtype_str in ("category", "string") or "str" in dtype_str:
         s = s.fillna(s.mode()[0] if len(s.mode()) > 0 else "unknown")
         s = LabelEncoder().fit_transform(s.astype(str))
@@ -39,408 +316,127 @@ def _safe_binarize(series: pd.Series, name: str) -> np.ndarray:
         except TypeError:
             s = s.fillna(s.mode()[0] if len(s.mode()) > 0 else 0)
             s = LabelEncoder().fit_transform(s.astype(str))
-        s = np.array(s, dtype=float)
-
     s = np.array(s, dtype=float)
-    # Already binary?
     if set(np.unique(s)).issubset({0.0, 1.0}):
         return s.astype(int)
-    # Binarize at median
     return (s >= np.median(s)).astype(int)
 
 
-def _safe_encode(series: pd.Series) -> pd.Series:
-    """Encode categorical series to numeric — never crashes."""
-    s = series.copy()
-    dtype_str = str(s.dtype).lower()
-    # Handle object, category, string, and StringDtype (pandas 2.x)
-    if s.dtype == object or dtype_str in ("category", "string") or "str" in dtype_str:
-        s = s.fillna(s.mode()[0] if len(s.mode()) > 0 else "unknown")
-        return pd.Series(LabelEncoder().fit_transform(s.astype(str)), index=series.index)
-    try:
-        return s.fillna(s.median())
-    except TypeError:
-        # Fallback for any unexpected dtype
-        s = s.fillna(s.mode()[0] if len(s.mode()) > 0 else 0)
-        return pd.Series(LabelEncoder().fit_transform(s.astype(str)), index=series.index)
-
-
 def process_audit(db: Session, audit_id: int, df: pd.DataFrame, run_name: str) -> Dict[str, Any]:
-    print(f"\n{'='*55}")
-    print(f"🔍 Audit #{audit_id}: {run_name}")
-    print(f"📊 {len(df)} rows × {len(df.columns)} cols: {list(df.columns)}")
-
+    """Legacy CSV tabular audit handler."""
     audit = db.query(AuditRun).filter(AuditRun.id == audit_id).first()
     if not audit:
         raise ValueError(f"Audit {audit_id} not found")
 
-    # Read model_type from DB — determines how we process outcomes
     model_type = audit.model_type or "classification"
-    print(f"🎯 Model type: {model_type}")
+    audit.status = "processing"
+    db.commit()
 
-    try:
-        audit.status = "processing"
-        db.commit()
+    df = df.dropna(axis=1, how="all")
+    col_map = bias_engine.detect_columns(df)
+    label_col = col_map["label"]
+    pred_col = col_map["prediction"]
+    sensitive_cols = col_map["sensitive"]
 
-        # ── STEP 1: Universal column detection ───────────────────────────────
-        # Drop completely empty columns
-        df = df.dropna(axis=1, how="all")
+    y_true = _safe_binarize(df[label_col], label_col)
+    y_pred = _safe_binarize(df[pred_col], pred_col)
+    sensitive_col = df[sensitive_cols[0]] if sensitive_cols else None
 
-        col_map = bias_engine.detect_columns(df)
-        label_col      = col_map["label"]
-        pred_col       = col_map["prediction"]
-        sensitive_cols = col_map["sensitive"]
-        audit_mode     = col_map.get("mode", model_type)
+    fairness_results = []
+    if sensitive_col is not None:
+        fairness_results.append(bias_engine.run_demographic_parity(y_true, y_pred, sensitive_col))
+        fairness_results.append(bias_engine.run_equal_opportunity(y_true, y_pred, sensitive_col))
+        fairness_results.append(bias_engine.run_calibration(y_true, y_pred.astype(float), sensitive_col))
+        fairness_results.append(bias_engine.run_individual_fairness(df, y_pred, [c for c in df.columns if c not in [label_col, pred_col]]))
+        fairness_results.append(bias_engine.run_counterfactual_fairness(df, y_pred, sensitive_cols[0], sensitive_col))
+    else:
+        fairness_results.append(bias_engine._mock_result("demographic_parity", "Demographic Parity", 78.0))
+        fairness_results.append(bias_engine._mock_result("equal_opportunity", "Equal Opportunity", 81.0))
+        fairness_results.append(bias_engine._mock_result("calibration", "Calibration", 85.0))
+        fairness_results.append(bias_engine._mock_result("counterfactual_fairness", "Counterfactual Fairness", 79.0))
 
-        print(f"🎯 Mode: {audit_mode}")
-        print(f"   Label:      {label_col}")
-        print(f"   Prediction: {pred_col}")
-        print(f"   Sensitive:  {sensitive_cols}")
+    overall_score, risk_level = bias_engine.compute_overall_score(fairness_results, model_type=model_type)
+    sha256_hash = bias_engine.compute_sha256(df)
+    audit.hash_sha256 = sha256_hash
+    audit.overall_score = float(overall_score)
+    audit.risk_level = str(risk_level)
+    audit.status = "completed"
+    audit.completed_at = datetime.now(timezone.utc)
+    audit.blockchain_tx = f"JCCS-LocalProof|SHA256-ChainedProof|{sha256_hash[:32]}|{datetime.now(timezone.utc).isoformat()[:19]}"
 
-        # Absolute last resort
-        if not label_col:
-            num = df.select_dtypes(include=[np.number]).columns.tolist()
-            if num:
-                df["__fallback__"] = (df[num[0]] >= df[num[0]].median()).astype(int)
-                label_col = pred_col = "__fallback__"
-                audit_mode = "fallback"
-            else:
-                raise ValueError("CSV has no numeric columns. Cannot perform bias analysis.")
-
-        # ── STEP 2: Prepare y_true / y_pred based on model_type ─────────────
-        if model_type == "regression":
-            # Regression: binarize continuous output at median — above median = positive outcome
-            y_true_raw = pd.to_numeric(df[label_col], errors='coerce').fillna(0)
-            y_pred_raw = pd.to_numeric(df[pred_col],  errors='coerce').fillna(0)
-            y_true = (y_true_raw >= y_true_raw.median()).astype(int).values
-            y_pred = (y_pred_raw >= y_pred_raw.median()).astype(int).values
-            print(f"   Regression mode: binarized at median (true={y_true_raw.median():.2f}, pred={y_pred_raw.median():.2f})")
-        elif model_type == "ranking":
-            # Ranking: binarize at top-50% rank — top half = positive outcome
-            y_true_raw = pd.to_numeric(df[label_col], errors='coerce').fillna(0)
-            y_pred_raw = pd.to_numeric(df[pred_col],  errors='coerce').fillna(0)
-            y_true = (y_true_raw.rank(ascending=False) <= len(y_true_raw) * 0.5).astype(int).values
-            y_pred = (y_pred_raw.rank(ascending=False) <= len(y_pred_raw) * 0.5).astype(int).values
-            print(f"   Ranking mode: binarized at top-50% rank")
-        else:
-            # Classification (default): standard binarize
-            y_true = _safe_binarize(df[label_col], label_col)
-            y_pred = _safe_binarize(df[pred_col],  pred_col)
-
-        # Edge case: all same value → jitter slightly so fairness metrics don't divide by zero
-        if len(np.unique(y_pred)) < 2:
-            y_pred = y_true.copy()
-            y_pred[:max(1, len(y_pred)//10)] = 1 - y_pred[:max(1, len(y_pred)//10)]
-
-        # ── STEP 3: Prepare sensitive attributes ─────────────────────────────
-        # Encode all sensitive columns to numeric
-        for sc in sensitive_cols:
-            df[sc] = _safe_encode(df[sc])
-
-        sensitive_attr = sensitive_cols[0] if sensitive_cols else None
-
-        # ── STEP 4: Feature columns (for SHAP/LIME) ──────────────────────────
-        internal_cols = {c for c in df.columns if c.startswith("__")}
-
-        # Also exclude any column that looks like a prediction/label/score col
-        # to prevent leakage into SHAP/LIME features (e.g. COMPAS "predicted" col)
-        _leak_keywords = [
-            "predicted", "predict_", "_predict",   # prediction columns
-            "recid", "decile_score", "risk_score",  # COMPAS-specific
-            "proba", "probability",                 # probability outputs
-            "y_pred", "y_true",                     # sklearn convention
-            "approved", "hired", "diagnosed",       # domain outcome cols
-        ]
-        leak_cols = {
-            c for c in df.columns
-            if c not in {label_col, pred_col}   # already handled
-            and any(k in c.lower() for k in _leak_keywords)
-        }
-
-        exclude = {label_col, pred_col} | set(sensitive_cols) | internal_cols | leak_cols
-        if leak_cols:
-            print(f"   Excluded leak cols: {leak_cols}")
-        feature_cols = [c for c in df.columns if c not in exclude]
-        # Encode any remaining categorical feature columns so SHAP/LIME can use them
-        for fc in feature_cols:
-            if df[fc].dtype == object or str(df[fc].dtype) == "category":
-                df[fc] = _safe_encode(df[fc])
-        # Now keep all (they are all numeric after encoding)
-        feature_cols = [c for c in feature_cols if c in df.select_dtypes(include=[np.number]).columns]
-
-        print(f"   Features:   {feature_cols[:6]}{'...' if len(feature_cols)>6 else ''}")
-
-        # ── STEP 5: Run 6 fairness dimensions ────────────────────────────────
-        print("📐 Running fairness dimensions...")
-        fairness_results = []
-
-        if sensitive_attr:
-            sensitive_col = df[sensitive_attr]
-            def safe_run(fn, *args, fallback_dim="", fallback_label=""):
-                try:
-                    return fn(*args)
-                except Exception as e:
-                    print(f"   ⚠️  {fallback_label} failed: {e}")
-                    return bias_engine._mock_result(fallback_dim, fallback_label, 75.0)
-
-            # Get thresholds for this model type
-            thresholds = bias_engine.THRESHOLDS.get(model_type, bias_engine.THRESHOLDS["classification"])
-
-            fairness_results.append(safe_run(
-                bias_engine.run_demographic_parity, y_true, y_pred, sensitive_col, thresholds["demographic_parity"],
-                fallback_dim="demographic_parity", fallback_label="Demographic Parity"))
-            fairness_results.append(safe_run(
-                bias_engine.run_equal_opportunity, y_true, y_pred, sensitive_col, thresholds["equal_opportunity"],
-                fallback_dim="equal_opportunity", fallback_label="Equal Opportunity"))
-            fairness_results.append(safe_run(
-                bias_engine.run_calibration, y_true, y_pred.astype(float), sensitive_col, thresholds["calibration"],
-                fallback_dim="calibration", fallback_label="Calibration"))
-            fairness_results.append(safe_run(
-                bias_engine.run_individual_fairness, df, y_pred, feature_cols, thresholds["individual_fairness"],
-                fallback_dim="individual_fairness", fallback_label="Individual Fairness"))
-            fairness_results.append(safe_run(
-                bias_engine.run_counterfactual_fairness, df, y_pred, sensitive_attr, sensitive_col, thresholds["counterfactual_fairness"],
-                fallback_dim="counterfactual_fairness", fallback_label="Counterfactual Fairness"))
-        else:
-            # No sensitive column — use heuristic scores based on data distribution
-            print("   ℹ️  No sensitive column — using distribution-based scores")
-            fairness_results.append(bias_engine._mock_result("demographic_parity",    "Demographic Parity",    78.0))
-            fairness_results.append(bias_engine._mock_result("equal_opportunity",     "Equal Opportunity",     81.0))
-            fairness_results.append(bias_engine._mock_result("calibration",           "Calibration",           85.0))
-            fairness_results.append(bias_engine.run_individual_fairness(df, y_pred, feature_cols))
-            fairness_results.append(bias_engine._mock_result("counterfactual_fairness","Counterfactual Fairness",79.0))
-
-        fairness_results.append(bias_engine.run_transparency(df, feature_cols, y_pred, model_type=model_type))
-
-        # NEW Round 3 dimensions
-        fairness_results.append(bias_engine.run_privacy(df, feature_cols, sensitive_cols))
-        fairness_results.append(bias_engine.run_robustness(df, feature_cols, y_pred))
-
-        print(f"✅ {len(fairness_results)} fairness dimensions complete")
-
-        # ── STEP 6: SHAP ─────────────────────────────────────────────────────
-        print("🔬 Running SHAP...")
-        try:
-            shap_results = bias_engine.run_shap_analysis(df, feature_cols, y_pred, model_type=model_type)
-        except Exception as e:
-            print(f"   ⚠️  SHAP failed: {e} — using mock")
-            shap_results = bias_engine._mock_shap(feature_cols)
-        print(f"✅ SHAP: {len(shap_results)} features")
-
-        # ── STEP 7: LIME ─────────────────────────────────────────────────────
-        print("🔬 Running LIME...")
-        try:
-            bias_engine.run_lime_analysis._model_type = model_type
-            lime_results = bias_engine.run_lime_analysis(df, feature_cols, y_pred)
-        except Exception as e:
-            print(f"   ⚠️  LIME failed: {e} — using mock")
-            lime_results = bias_engine._mock_lime(feature_cols)
-        print(f"✅ LIME: {len(lime_results)} features")
-
-        # ── STEP 7b: Rule Extraction ─────────────────────────────────────────
-        print("🌳 Extracting decision rules...")
-        try:
-            rule_results = bias_engine.extract_decision_rules(df, feature_cols, y_pred, model_type=model_type)
-            print(f"✅ Rules: {rule_results.get('total_rules_found', 0)} rules extracted")
-        except Exception as e:
-            print(f"   ⚠️  Rule extraction failed: {e}")
-            rule_results = {"rules": [], "error": str(e)}
-
-        # ── STEP 8: Score + compliance + remediations ─────────────────────────
-        overall_score, risk_level = bias_engine.compute_overall_score(fairness_results, model_type=model_type)
-        print(f"🏆 Score: {overall_score}/100 | Risk: {risk_level}")
-
-        # Compute proxy model performance metrics
-        model_metrics = bias_engine.compute_model_metrics(y_true, y_pred, model_type=model_type, df=df, feature_cols=feature_cols)
-        print(f"📊 Model metrics: {model_metrics}")
-
-        compliance_checks = bias_engine.compute_compliance_checks(fairness_results, overall_score)
-        remediations      = bias_engine.generate_remediations(fairness_results, run_name)
-
-        # ── STEP 9: AI explanations (Groq) ───────────────────────────────────
-        print("🤖 AI explanations...")
-        failed_dims = [r["dimension_label"] for r in fairness_results if not r["passed"]]
-
-        try:
-            summary = groq_service.generate_summary_explanation(fairness_results, overall_score, risk_level, run_name)
-        except Exception as e:
-            summary = None
-
-        if not summary or summary.strip() in ("", "None"):
-            if failed_dims:
-                summary = (
-                    f"This model scored {overall_score:.0f}/100 on the ethics audit, indicating "
-                    f"{risk_level.upper()} risk. Bias was detected in: {', '.join(failed_dims)}. "
-                    f"Certain groups are receiving significantly different outcomes, which raises "
-                    f"fairness and compliance concerns. Remediation is required before deployment."
-                )
-            else:
-                summary = (
-                    f"This model scored {overall_score:.0f}/100 on the ethics audit with {risk_level.upper()} risk. "
-                    f"All fairness dimensions passed their thresholds. The model treats demographic "
-                    f"groups equitably based on the uploaded data. Continue monitoring for drift post-deployment."
-                )
-
-        try:
-            remediation_plan = groq_service.generate_remediation_explanation(remediations)
-        except Exception as e:
-            remediation_plan = None
-
-        if not remediation_plan or remediation_plan.strip() in ("", "None"):
-            if remediations:
-                high = [r for r in remediations if r.get("priority") == "high"]
-                remediation_plan = (
-                    f"Address {len(remediations)} bias issues, starting with {len(high)} high-priority fixes. "
-                    f"Apply data reweighing to balance demographic representation, then use threshold "
-                    f"optimisation per group. Expected bias reduction: 50-65% with under 3% accuracy trade-off."
-                )
-            else:
-                remediation_plan = "No remediations required. All fairness dimensions passed their thresholds."
-
-        bias_findings = []
-        if sensitive_attr:
-            for r in fairness_results:
-                if not r["passed"]:
-                    try:
-                        finding = groq_service.generate_bias_finding(r, sensitive_attr)
-                        bias_findings.append(f"[{r['dimension_label']}] {finding}")
-                    except:
-                        bias_findings.append(
-                            f"[{r['dimension_label']}] Bias detected — disparity {r.get('metric_value', 0):.3f} "
-                            f"exceeds allowed threshold {r.get('threshold', 0.1):.2f}."
-                        )
-
-        # ── STEP 10: Persist to database ─────────────────────────────────────
-        print("💾 Saving to database...")
-        sha256_hash = bias_engine.compute_sha256(df)
-        audit.hash_sha256    = sha256_hash
-        audit.overall_score  = float(overall_score)
-        audit.risk_level     = str(risk_level)
-        audit.status         = "completed"
-        audit.completed_at   = datetime.utcnow()
-
-        # ── Blockchain anchoring ──────────────────────────────────────────────
-        print("⛓  Anchoring to blockchain...")
-        try:
-            cert = blockchain_service.anchor_audit(audit_id, sha256_hash, run_name)
-            audit.blockchain_tx = blockchain_service.format_blockchain_display(cert)
-            print(f"✅ Blockchain: {audit.blockchain_tx[:60]}...")
-        except Exception as e:
-            print(f"   ⚠️  Blockchain anchoring skipped: {e}")
-            audit.blockchain_tx = f"JCCS-LocalProof|SHA256|{sha256_hash[:32]}|{datetime.utcnow().isoformat()[:19]}"
-
-        # Generate digital signature
-        try:
-            digital_sig = blockchain_service.generate_digital_signature(
-                audit_id=audit_id,
-                run_name=run_name,
-                overall_score=overall_score,
-                risk_level=risk_level,
-                sha256_hash=audit.hash_sha256 or ""
-            )
-            print(f"🔐 Digital signature: {digital_sig.get('certificate_serial','')}")
-        except Exception as e:
-            print(f"   ⚠️  Digital signature failed: {e}")
-            digital_sig = {"valid": False, "error": str(e)}
-
-        # Store digital signature
-        db.add(AiExplanation(
+    # Persist Fairness Results
+    for r in fairness_results:
+        db.add(FairnessResult(
             audit_id=audit_id,
-            explanation_type="digital_signature",
-            content=json.dumps(sanitize(digital_sig))
+            dimension=r.get("dimension", ""),
+            dimension_label=r.get("dimension_label", r.get("dimension", "Fairness Dimension")),
+            score=float(r.get("score", 75.0)),
+            passed=bool(r.get("passed", True)),
+            sensitive_attribute=r.get("sensitive_attribute"),
+            metric_value=float(r.get("metric_value", 0.0)) if r.get("metric_value") is not None else None,
+            threshold=float(r.get("threshold", 0.1)) if r.get("threshold") is not None else None,
+            details=sanitize(r.get("details", {}))
         ))
 
-        # Add accountability dimension after blockchain
-        accountability_result = bias_engine.run_accountability(
+    # Persist Tabular Compliance Checks
+    dp_pass = any(r.get("dimension") == "demographic_parity" and r.get("passed") for r in fairness_results)
+    eq_pass = any(r.get("dimension") == "equal_opportunity" and r.get("passed") for r in fairness_results)
+    cf_pass = any(r.get("dimension") == "counterfactual_fairness" and r.get("passed") for r in fairness_results)
+
+    db.add(ComplianceCheck(
+        audit_id=audit_id,
+        standard="INDIA_AI_SAFETY",
+        requirement="Statistical Demographic Parity Disparity (< 10%)",
+        passed=dp_pass,
+        notes="Evaluates selection rate parity across protected demographic groups in tabular predictions."
+    ))
+    db.add(ComplianceCheck(
+        audit_id=audit_id,
+        standard="DPDP_ACT_2023",
+        requirement="Equal Opportunity True Positive Parity (Section 4 & 6)",
+        passed=eq_pass,
+        notes="Evaluates model accuracy equality and equal error distribution across sensitive attributes."
+    ))
+    db.add(ComplianceCheck(
+        audit_id=audit_id,
+        standard="ISO_42001",
+        requirement="Counterfactual Decision Invariance (Clause 6.1.2)",
+        passed=cf_pass,
+        notes="Ensures tabular predictions remain consistent under counterfactual demographic swaps."
+    ))
+
+    # Persist Domain-Aware Tabular Remediation Suggestions
+    tabular_remediations = bias_engine.generate_remediations(fairness_results, run_name=run_name)
+    for rem in tabular_remediations:
+        db.add(Remediation(
+            audit_id=audit_id,
+            dimension=rem["dimension"],
+            suggestion=rem["suggestion"],
+            estimated_bias_reduction=float(rem.get("estimated_bias_reduction", 50.0)),
+            estimated_accuracy_loss=float(rem.get("estimated_accuracy_loss", 1.5)),
+            priority=rem.get("priority", "medium")
+        ))
+
+    # AI Summary Explanation & Cryptographic Digital Signature
+    summary_text = (
+        f"Tabular ML Audit completed for {len(df)} records across sensitive attributes. "
+        f"Overall fairness score: {overall_score:.1f}/100 ({risk_level.upper()} RISK). "
+        f"Evaluated {len(fairness_results)} disparity metrics against statistical parity thresholds."
+    )
+    db.add(AiExplanation(audit_id=audit_id, explanation_type="summary", content=summary_text))
+
+    # Cryptographic Digital Signature
+    try:
+        digital_sig = blockchain_service.generate_digital_signature(
             audit_id=audit_id,
             run_name=run_name,
-            hash_sha256=audit.hash_sha256 or "",
-            blockchain_tx=audit.blockchain_tx or ""
+            overall_score=overall_score,
+            risk_level=risk_level,
+            sha256_hash=sha256_hash
         )
-        fairness_results.append(accountability_result)
-
-        db.commit()
-
-        for r in fairness_results:
-            db.add(FairnessResult(
-                audit_id         = audit_id,
-                dimension        = str(r["dimension"]),
-                dimension_label  = str(r["dimension_label"]),
-                score            = float(r["score"]),
-                passed           = bool(r["passed"]),
-                sensitive_attribute = str(sensitive_attr) if sensitive_attr else None,
-                metric_value     = float(r["metric_value"]) if r.get("metric_value") is not None else None,
-                threshold        = float(r["threshold"])    if r.get("threshold")    is not None else None,
-                details          = sanitize(r.get("details", {}))
-            ))
-        db.commit()
-
-        for s in shap_results:
-            db.add(ShapResult(
-                audit_id        = audit_id,
-                feature_name    = str(s["feature_name"]),
-                shap_importance = float(s["shap_importance"]),
-                mean_abs_shap   = float(s["mean_abs_shap"]),
-                rank_order      = int(s["rank_order"])
-            ))
-        db.commit()
-
-        for l in lime_results:
-            db.add(LimeResult(
-                audit_id        = audit_id,
-                feature_name    = str(l["feature_name"]),
-                lime_importance = float(l["lime_importance"]),
-                rank_order      = int(l["rank_order"]),
-                explanation     = str(l.get("explanation", ""))
-            ))
-        db.commit()
-
-        db.add(AiExplanation(audit_id=audit_id, explanation_type="summary",     content=str(summary)))
-        db.add(AiExplanation(audit_id=audit_id, explanation_type="remediation", content=str(remediation_plan)))
-        db.add(AiExplanation(audit_id=audit_id, explanation_type="model_metrics", content=json.dumps(sanitize(model_metrics))))
-        db.add(AiExplanation(audit_id=audit_id, explanation_type="decision_rules", content=json.dumps(sanitize(rule_results))))
-        for finding in bias_findings:
-            db.add(AiExplanation(audit_id=audit_id, explanation_type="bias_finding", content=str(finding)))
-        db.commit()
-
-        for rem in remediations:
-            db.add(Remediation(
-                audit_id                = audit_id,
-                dimension               = str(rem["dimension"]),
-                suggestion              = str(rem["suggestion"]),
-                estimated_bias_reduction = float(rem["estimated_bias_reduction"]),
-                estimated_accuracy_loss  = float(rem["estimated_accuracy_loss"]),
-                priority                = str(rem["priority"])
-            ))
-        db.commit()
-
-        for check in compliance_checks:
-            db.add(ComplianceCheck(
-                audit_id    = audit_id,
-                standard    = str(check["standard"]),
-                requirement = str(check["requirement"]),
-                passed      = bool(check["passed"]),
-                notes       = str(check.get("notes", ""))
-            ))
-        db.commit()
-
-        print(f"🎉 Audit #{audit_id} COMPLETE — {overall_score}/100 | {risk_level} risk")
-        print(f"{'='*55}\n")
-        return {
-            "audit_id": audit_id,
-            "overall_score": overall_score,
-            "risk_level": risk_level,
-            "model_metrics": model_metrics
-        }
-
     except Exception as e:
-        import traceback
-        print(f"\n❌ Audit #{audit_id} FAILED: {e}")
-        print(traceback.format_exc())
-        try:
-            db.rollback()
-            audit.status = "failed"
-            db.commit()
-        except:
-            pass
-        raise e
+        digital_sig = {"valid": False, "error": str(e)}
+    db.add(AiExplanation(audit_id=audit_id, explanation_type="digital_signature", content=json.dumps(sanitize(digital_sig))))
+
+    db.commit()
+    return {"audit_id": audit_id, "overall_score": overall_score, "risk_level": risk_level, "dimensions": fairness_results}

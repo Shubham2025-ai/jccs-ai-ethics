@@ -1,5 +1,5 @@
 -- JCCS - Jedi Code Compliance System
--- MySQL 8.0 Database Schema
+-- IndiaAI LLM Safety & Red-Teaming MySQL 8.0 Database Schema
 
 CREATE DATABASE IF NOT EXISTS jccs_db;
 USE jccs_db;
@@ -18,12 +18,15 @@ CREATE TABLE IF NOT EXISTS audit_runs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     org_id INT,
     run_name VARCHAR(255) NOT NULL,
-    model_type ENUM('classification', 'regression', 'ranking') DEFAULT 'classification',
-    status ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
+    model_type VARCHAR(100) DEFAULT 'llm_safety',
+    status VARCHAR(100) DEFAULT 'pending',
+    target_model_name VARCHAR(255) NULL,
+    target_model_provider VARCHAR(100) NULL,
+    target_model_url VARCHAR(500) NULL,
     file_name VARCHAR(255),
     row_count INT,
     overall_score FLOAT,
-    risk_level ENUM('low', 'medium', 'high', 'critical'),
+    risk_level VARCHAR(50),
     hash_sha256 VARCHAR(64),
     blockchain_tx VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -31,23 +34,77 @@ CREATE TABLE IF NOT EXISTS audit_runs (
     FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE SET NULL
 );
 
--- Fairness Dimension Results
-CREATE TABLE IF NOT EXISTS fairness_results (
+-- Prompt Evaluation Results (Detailed LLM Red-Teaming Probes)
+CREATE TABLE IF NOT EXISTS prompt_evaluation_results (
     id INT AUTO_INCREMENT PRIMARY KEY,
     audit_id INT NOT NULL,
-    dimension VARCHAR(100) NOT NULL,         -- e.g. 'demographic_parity'
-    dimension_label VARCHAR(100) NOT NULL,   -- e.g. 'Demographic Parity'
-    score FLOAT NOT NULL,                    -- 0-100
-    passed BOOLEAN NOT NULL,
-    sensitive_attribute VARCHAR(100),        -- e.g. 'gender', 'age'
-    metric_value FLOAT,
-    threshold FLOAT,
-    details JSON,
+    test_id VARCHAR(100) NULL,
+    prompt_text TEXT NOT NULL,
+    language VARCHAR(20) DEFAULT 'en',
+    category VARCHAR(100) NOT NULL,
+    dimension VARCHAR(100) NOT NULL,
+    target_model_response TEXT NULL,
+    evaluation_score FLOAT NULL,
+    evaluation_notes TEXT NULL,
+    concern_category VARCHAR(100) NULL,
+    compliant TINYINT(1) NULL,
+    meta_info JSON NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (audit_id) REFERENCES audit_runs(id) ON DELETE CASCADE
 );
 
--- SHAP Feature Importance
+-- Fairness Dimension Results (IndiaAI 9-Dimension Aggregation)
+CREATE TABLE IF NOT EXISTS fairness_results (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    audit_id INT NOT NULL,
+    dimension VARCHAR(100) NOT NULL,
+    dimension_label VARCHAR(100) NOT NULL,
+    score FLOAT NULL,
+    passed TINYINT(1) NULL,
+    sensitive_attribute VARCHAR(100),
+    metric_value FLOAT NULL,
+    threshold FLOAT NULL,
+    details JSON NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (audit_id) REFERENCES audit_runs(id) ON DELETE CASCADE
+);
+
+-- AI Explanations & Digital Signatures
+CREATE TABLE IF NOT EXISTS ai_explanations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    audit_id INT NOT NULL,
+    explanation_type VARCHAR(100) NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (audit_id) REFERENCES audit_runs(id) ON DELETE CASCADE
+);
+
+-- Remediation Suggestions & Guardrail Patches
+CREATE TABLE IF NOT EXISTS remediations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    audit_id INT NOT NULL,
+    dimension VARCHAR(100),
+    suggestion TEXT NOT NULL,
+    estimated_bias_reduction FLOAT,
+    estimated_accuracy_loss FLOAT,
+    priority VARCHAR(50) DEFAULT 'medium',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (audit_id) REFERENCES audit_runs(id) ON DELETE CASCADE
+);
+
+-- Compliance Checklist (MeitY, DPDP, ISO 42001)
+CREATE TABLE IF NOT EXISTS compliance_checks (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    audit_id INT NOT NULL,
+    standard VARCHAR(100) NOT NULL,
+    requirement VARCHAR(255) NOT NULL,
+    passed TINYINT(1) NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (audit_id) REFERENCES audit_runs(id) ON DELETE CASCADE
+);
+
+-- SHAP / LIME Feature Importance (Tabular Baseline Compatibility)
 CREATE TABLE IF NOT EXISTS shap_results (
     id INT AUTO_INCREMENT PRIMARY KEY,
     audit_id INT NOT NULL,
@@ -59,42 +116,18 @@ CREATE TABLE IF NOT EXISTS shap_results (
     FOREIGN KEY (audit_id) REFERENCES audit_runs(id) ON DELETE CASCADE
 );
 
--- AI Plain Language Explanations
-CREATE TABLE IF NOT EXISTS ai_explanations (
+CREATE TABLE IF NOT EXISTS lime_results (
     id INT AUTO_INCREMENT PRIMARY KEY,
     audit_id INT NOT NULL,
-    explanation_type ENUM('summary', 'bias_finding', 'remediation', 'compliance') NOT NULL,
-    content TEXT NOT NULL,
+    instance_index INT NOT NULL,
+    prediction VARCHAR(50),
+    probability FLOAT,
+    features JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (audit_id) REFERENCES audit_runs(id) ON DELETE CASCADE
 );
 
--- Remediation Suggestions
-CREATE TABLE IF NOT EXISTS remediations (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    audit_id INT NOT NULL,
-    dimension VARCHAR(100),
-    suggestion TEXT NOT NULL,
-    estimated_bias_reduction FLOAT,
-    estimated_accuracy_loss FLOAT,
-    priority ENUM('high', 'medium', 'low') DEFAULT 'medium',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (audit_id) REFERENCES audit_runs(id) ON DELETE CASCADE
-);
-
--- Compliance Checklist
-CREATE TABLE IF NOT EXISTS compliance_checks (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    audit_id INT NOT NULL,
-    standard VARCHAR(50) NOT NULL,   -- 'EU_AI_ACT', 'DPDP', 'ISO_42001'
-    requirement VARCHAR(255) NOT NULL,
-    passed BOOLEAN NOT NULL,
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (audit_id) REFERENCES audit_runs(id) ON DELETE CASCADE
-);
-
--- Insert demo organization
+-- Demo organization seed
 INSERT INTO organizations (name, email, api_key) VALUES
-('Demo Organization', 'demo@jccs.ai', 'demo-api-key-12345')
+('IndiaAI Developer Workspace', 'developer@indiaai.gov.in', 'indiaai-demo-key-2026')
 ON DUPLICATE KEY UPDATE name = name;
