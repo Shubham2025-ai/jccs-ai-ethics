@@ -24,6 +24,7 @@ from app.models.models import (
     LimeResult,
 )
 from app.services.audit_service import process_llm_safety_audit, process_audit
+from app.services import llm_client
 
 router = APIRouter(prefix="/audit", tags=["Audit"])
 
@@ -70,7 +71,33 @@ def run_tabular_audit_sync(audit_id: int, df: pd.DataFrame, run_name: str):
 
 
 # =========================================================================
-# 1. NEW ENDPOINT: /audit/red-team (LLM Safety Audit)
+# 1. NEW ENDPOINT: /audit/test-target-connection (Direct Live Probe)
+# =========================================================================
+
+class TestConnectionRequest(BaseModel):
+    target_model_name: Optional[str] = "sarvam-105b"
+    target_model_provider: str = "sarvam"
+    target_model_url: Optional[str] = None
+    api_key: Optional[str] = None
+
+
+@router.post("/test-target-connection")
+async def test_target_connection(req: TestConnectionRequest = Body(...)):
+    """
+    Directly tests connectivity to a live target LLM endpoint WITHOUT fallback simulation.
+    Returns real HTTP status code and response from the upstream provider.
+    """
+    res = await llm_client.test_direct_connection(
+        model_name=req.target_model_name,
+        provider=req.target_model_provider,
+        base_url=req.target_model_url,
+        api_key=req.api_key
+    )
+    return res
+
+
+# =========================================================================
+# 2. ENDPOINT: /audit/red-team (LLM Safety Audit)
 # =========================================================================
 
 class RedTeamAuditRequest(BaseModel):

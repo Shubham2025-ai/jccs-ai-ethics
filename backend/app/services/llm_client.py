@@ -558,6 +558,12 @@ async def query_target_model(
             endpoint = endpoint.rstrip("/") + "/chat/completions"
         effective_key = api_key or getattr(settings, "GROQ_API_KEY", "")
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 6.0
+    elif provider == "sarvam":
+        endpoint = base_url or "https://api.sarvam.ai/v1/chat/completions"
+        if not endpoint.endswith("/chat/completions"):
+            endpoint = endpoint.rstrip("/") + "/chat/completions"
+        effective_key = api_key or ""
+        effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 20.0
     elif provider == "google":
         endpoint = base_url or "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
         if not endpoint.endswith("/chat/completions"):
@@ -582,7 +588,7 @@ async def query_target_model(
             endpoint = endpoint.rstrip("/") + "/chat/completions"
         effective_key = api_key or "ollama"
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 18.0
-    else:  # Custom BYO endpoint / Sarvam / Krutrim
+    else:  # Custom BYO endpoint / Krutrim / vLLM
         endpoint = base_url or "https://api.sarvam.ai/v1/chat/completions"
         if not endpoint.endswith("/chat/completions"):
             endpoint = endpoint.rstrip("/") + "/chat/completions"
@@ -651,4 +657,110 @@ async def query_target_model(
             "latency_ms": latency,
             "is_live": False,
             "error_detail": str(exc)
+        }
+
+
+async def test_direct_connection(
+    model_name: Optional[str] = None,
+    provider: str = "sarvam",
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    timeout_seconds: float = 12.0
+) -> Dict[str, Any]:
+    """
+    Directly tests connectivity to a live target LLM endpoint WITHOUT fallback.
+    Returns real HTTP status and response from the upstream provider.
+    """
+    start_time = time.time()
+    effective_model = model_name or ("sarvam-105b" if provider == "sarvam" else "llama-3.1-8b-instant")
+
+    if provider in ("demo", "mock", "preset"):
+        return {
+            "success": True,
+            "provider": provider,
+            "model": effective_model,
+            "endpoint": "local://simulation-preset",
+            "latency_ms": 12.0,
+            "message": "Local simulation preset verified."
+        }
+
+    # Resolve endpoint
+    if provider == "groq":
+        endpoint = base_url or "https://api.groq.com/openai/v1/chat/completions"
+        effective_key = api_key or getattr(settings, "GROQ_API_KEY", "")
+    elif provider == "sarvam":
+        endpoint = base_url or "https://api.sarvam.ai/v1/chat/completions"
+        effective_key = api_key or ""
+    elif provider == "google":
+        endpoint = base_url or "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        effective_key = api_key or ""
+    elif provider == "openrouter":
+        endpoint = base_url or "https://openrouter.ai/api/v1/chat/completions"
+        effective_key = api_key or ""
+    elif provider == "openai":
+        endpoint = base_url or "https://api.openai.com/v1/chat/completions"
+        effective_key = api_key or getattr(settings, "OPENAI_API_KEY", "")
+    elif provider == "ollama":
+        endpoint = base_url or "http://localhost:11434/v1/chat/completions"
+        effective_key = api_key or "ollama"
+    else:  # Custom
+        endpoint = base_url or "https://api.sarvam.ai/v1/chat/completions"
+        effective_key = api_key or "Bearer default"
+
+    if not endpoint.endswith("/chat/completions"):
+        endpoint = endpoint.rstrip("/") + "/chat/completions"
+
+    raw_token = effective_key.replace("Bearer ", "").strip() if effective_key else ""
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {raw_token}" if raw_token else "",
+        "api-subscription-key": raw_token,
+        "subscription-key": raw_token,
+        "SARVAM-API-KEY": raw_token
+    }
+    if provider == "openrouter":
+        headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
+        headers["X-Title"] = "IndiaAI Safety Platform"
+
+    payload = {
+        "model": effective_model,
+        "messages": [{"role": "user", "content": "Hello, confirm you are online."}],
+        "max_tokens": 25,
+        "temperature": 0.5
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+            resp = await client.post(endpoint, json=payload, headers=headers)
+            latency = round((time.time() - start_time) * 1000, 1)
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip() or str(data)
+                return {
+                    "success": True,
+                    "provider": provider,
+                    "model": effective_model,
+                    "endpoint": endpoint,
+                    "latency_ms": latency,
+                    "response_sample": content[:150]
+                }
+            else:
+                return {
+                    "success": False,
+                    "provider": provider,
+                    "model": effective_model,
+                    "endpoint": endpoint,
+                    "http_status": resp.status_code,
+                    "error": resp.text[:300]
+                }
+    except Exception as exc:
+        latency = round((time.time() - start_time) * 1000, 1)
+        return {
+            "success": False,
+            "provider": provider,
+            "model": effective_model,
+            "endpoint": endpoint,
+            "latency_ms": latency,
+            "error": str(exc)
         }

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Shield, Sparkles, Server, Key, Globe, Layers, Play, CheckCircle, Loader, Info, ChevronDown, ChevronUp, Lock, Check, Zap, AlertTriangle, ExternalLink } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { startRedTeamAudit, uploadAudit, getAudit } from '../utils/api'
+import { startRedTeamAudit, uploadAudit, getAudit, testTargetConnection } from '../utils/api'
 
 const EVALUATION_STEPS = [
   { label: 'Connecting to target model', icon: '⚡', detail: 'Establishing secure async API connection...' },
@@ -74,6 +74,20 @@ const PROVIDER_CONFIGS = {
     serverKeyStatus: '✓ Server default Groq key active — leave API Key blank to use pre-configured key.',
     isServerKeyAvailable: true,
   },
+  sarvam: {
+    id: 'sarvam',
+    name: 'Sarvam AI (Indic Sovereign LLM)',
+    badge: '🇮🇳 Sovereign Indian AI',
+    badgeColor: '#FF6B6B',
+    keyLink: 'https://dashboard.sarvam.ai/',
+    keyLinkText: 'dashboard.sarvam.ai',
+    keyDesc: 'Get your api-subscription-key at dashboard.sarvam.ai — sovereign Indic foundation models.',
+    modelDefault: 'sarvam-105b',
+    modelHint: 'Supported Cloud Models: sarvam-105b, sarvam-105b-conversations | Local: sarvam-2b',
+    urlDefault: 'https://api.sarvam.ai/v1',
+    serverKeyStatus: 'ⓘ Enter personal Sarvam api-subscription-key (sent via api-subscription-key header).',
+    isServerKeyAvailable: false,
+  },
   google: {
     id: 'google',
     name: 'Google AI Studio (Gemini)',
@@ -106,14 +120,14 @@ const PROVIDER_CONFIGS = {
   },
   custom: {
     id: 'custom',
-    name: 'Custom Endpoint (vLLM / Sarvam / Krutrim)',
+    name: 'Custom Endpoint (vLLM / Ollama / Krutrim)',
     badge: '⚙️ BYO / Self-Hosted',
     badgeColor: '#FDCB6E',
     keyLink: 'https://api.sarvam.ai',
     keyLinkText: 'api.sarvam.ai',
     keyDesc: 'Requires provider API key and base URL supporting /v1/chat/completions standard.',
-    modelDefault: 'sarvam-indic-2b',
-    modelHint: 'Enter provider model ID (e.g. sarvam-indic-2b, mistral-7b-instruct).',
+    modelDefault: 'sarvam-105b',
+    modelHint: 'Enter provider model ID (e.g. sarvam-105b, mistral-7b-instruct, qwen-2.5-7b).',
     urlDefault: 'https://api.sarvam.ai/v1',
     serverKeyStatus: 'ⓘ Custom endpoint — enter provider base URL and authorization key.',
     isServerKeyAvailable: false,
@@ -229,6 +243,35 @@ export default function LaunchEvaluationPage() {
 
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState(0)
+
+  const [testingConnection, setTestingConnection] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState(null)
+
+  const handleTestConnection = async () => {
+    setTestingConnection(true)
+    setConnectionStatus(null)
+    try {
+      const res = await testTargetConnection({
+        target_model_name: modelName,
+        target_model_provider: provider,
+        target_model_url: baseUrl.trim() ? baseUrl : null,
+        api_key: apiKey.trim() ? apiKey : null
+      })
+      setConnectionStatus(res.data)
+      if (res.data.success) {
+        toast.success(`Target Connected: ${res.data.model} (${res.data.latency_ms}ms)`)
+      } else {
+        const errorDetail = res.data.error || `HTTP ${res.data.http_status}`
+        toast.error(`Target connection failed: ${errorDetail}`)
+      }
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || err.message || 'Connection check failed'
+      setConnectionStatus({ success: false, error: errorMsg })
+      toast.error(errorMsg)
+    } finally {
+      setTestingConnection(false)
+    }
+  }
 
   const activeProbeCount = useMemo(() => {
     let total = 0
@@ -537,9 +580,10 @@ export default function LaunchEvaluationPage() {
                       className="w-full rounded-xl px-3.5 py-2 text-xs text-white outline-none bg-black/50 border border-white/10 focus:border-[#6C63FF]"
                     >
                       <option value="groq">Groq Cloud (LLaMA 3.3 / 3.1) [Free Tier]</option>
+                      <option value="sarvam">Sarvam AI (Indic 105B / 2B) [Indian Sovereign LLM]</option>
                       <option value="google">Google AI Studio (Gemini 2.5) [100% Free]</option>
                       <option value="openrouter">OpenRouter (Free-Tier Router) [Free Models]</option>
-                      <option value="custom">Custom Endpoint (vLLM / Sarvam / Krutrim)</option>
+                      <option value="custom">Custom Endpoint (vLLM / Ollama / Krutrim)</option>
                     </select>
                   </div>
 
@@ -660,6 +704,64 @@ export default function LaunchEvaluationPage() {
                       className="w-full rounded-xl px-3.5 py-2 text-xs text-white placeholder-gray-600 outline-none bg-white/5 border border-white/10 focus:border-[#6C63FF]"
                     />
                   </div>
+                </div>
+
+                {/* Row 3: Live Connection Test Action & Result */}
+                <div className="pt-2 border-t border-white/5 space-y-2">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={testingConnection}
+                      onClick={handleTestConnection}
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 bg-white/10 hover:bg-white/15 text-white border border-white/15 hover:border-white/30 disabled:opacity-50"
+                    >
+                      {testingConnection ? (
+                        <>
+                          <Loader className="w-3.5 h-3.5 animate-spin text-[#6C63FF]" />
+                          <span>Pinging Target Model...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-3.5 h-3.5 text-yellow-400" />
+                          <span>⚡ Test Live Target Connection</span>
+                        </>
+                      )}
+                    </button>
+                    <span className="text-[10px] text-gray-500 font-mono">
+                      Sends real inference ping to verify API key & model without running full audit
+                    </span>
+                  </div>
+
+                  {connectionStatus && (
+                    <div
+                      className={`p-2.5 rounded-xl border text-xs animate-fadeIn space-y-1 ${
+                        connectionStatus.success
+                          ? 'bg-green-500/10 border-green-500/30 text-green-300'
+                          : 'bg-red-500/10 border-red-500/30 text-red-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between font-bold">
+                        <span>
+                          {connectionStatus.success ? '✅ Target Endpoint Reachable & Verified' : '❌ Target Endpoint Connection Failed'}
+                        </span>
+                        {connectionStatus.latency_ms && (
+                          <span className="font-mono text-[10px] bg-black/40 px-2 py-0.5 rounded border border-white/10">
+                            {connectionStatus.latency_ms}ms latency
+                          </span>
+                        )}
+                      </div>
+                      {connectionStatus.success ? (
+                        <div className="text-[11px] text-gray-300">
+                          <span className="text-gray-400">Sample Live Response: </span>
+                          <span className="italic">"{connectionStatus.response_sample}"</span>
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-red-200 bg-black/50 p-2 rounded border border-red-500/20 font-mono mt-1 break-all">
+                          {connectionStatus.error || `HTTP ${connectionStatus.http_status}`}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

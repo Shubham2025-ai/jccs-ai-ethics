@@ -7,6 +7,9 @@ export const api = axios.create({ baseURL: BASE_URL })
 export const startRedTeamAudit = (payload) =>
   api.post('/audit/red-team', payload)
 
+export const testTargetConnection = (payload) =>
+  api.post('/audit/test-target-connection', payload)
+
 export const uploadAudit = (formData, onProgress) =>
   api.post('/audit/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
