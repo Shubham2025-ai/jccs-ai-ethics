@@ -603,6 +603,13 @@ async def query_target_model(
     raw_token = effective_key.replace("Bearer ", "").strip() if effective_key else ""
 
     if is_google_native:
+        clean_model = effective_model.replace("models/", "")
+        candidate_endpoints = [
+            (clean_model, f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent"),
+            (clean_model, f"https://generativelanguage.googleapis.com/v1/models/{clean_model}:generateContent"),
+            ("gemini-2.0-flash", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"),
+            ("gemini-1.5-pro", "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent")
+        ]
         headers = {
             "Content-Type": "application/json",
             "x-goog-api-key": raw_token
@@ -614,6 +621,60 @@ async def query_target_model(
                 "maxOutputTokens": max_tokens
             }
         }
+        
+        try:
+            async with httpx.AsyncClient(timeout=effective_timeout) as client:
+                last_resp = None
+                for candidate_model, cand_url in candidate_endpoints:
+                    target_url = f"{cand_url}?key={raw_token}" if raw_token else cand_url
+                    resp = await client.post(target_url, json=payload, headers=headers)
+                    last_resp = resp
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        candidates = data.get("candidates", [])
+                        content = ""
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            if parts:
+                                content = parts[0].get("text", "").strip()
+                        if not content:
+                            content = str(data)
+                        latency = round((time.time() - start_time) * 1000, 1)
+                        return {
+                            "status": "success",
+                            "response": content,
+                            "model": candidate_model,
+                            "latency_ms": latency,
+                            "is_live": True
+                        }
+                    elif resp.status_code != 404:
+                        # If error is not 404 (e.g. 400 invalid key or 429 quota), don't try next model
+                        break
+
+                latency = round((time.time() - start_time) * 1000, 1)
+                err_text = last_resp.text[:300] if last_resp else "Unknown error"
+                print(f"\n   [TARGET MODEL ERROR] HTTP {last_resp.status_code if last_resp else 500} from {endpoint}: {err_text}")
+                demo_fallback = _get_demo_model_response(prompt, effective_model)
+                return {
+                    "status": "fallback",
+                    "response": demo_fallback,
+                    "model": f"{effective_model} (fallback simulation)",
+                    "latency_ms": latency,
+                    "is_live": False,
+                    "error_detail": f"HTTP {last_resp.status_code if last_resp else 500}: {err_text[:150]}"
+                }
+        except Exception as exc:
+            latency = round((time.time() - start_time) * 1000, 1)
+            print(f"\n   [TARGET MODEL CONNECTION ERROR] Failed to connect to {endpoint}: {str(exc)}")
+            demo_fallback = _get_demo_model_response(prompt, effective_model)
+            return {
+                "status": "fallback",
+                "response": demo_fallback,
+                "model": f"{effective_model} (fallback simulation)",
+                "latency_ms": latency,
+                "is_live": False,
+                "error_detail": str(exc)
+            }
     else:
         messages = []
         if system_prompt:
@@ -639,56 +700,45 @@ async def query_target_model(
             "max_tokens": max_tokens
         }
 
-    try:
-        async with httpx.AsyncClient(timeout=effective_timeout) as client:
-            resp = await client.post(endpoint, json=payload, headers=headers)
-            latency = round((time.time() - start_time) * 1000, 1)
+        try:
+            async with httpx.AsyncClient(timeout=effective_timeout) as client:
+                resp = await client.post(endpoint, json=payload, headers=headers)
+                latency = round((time.time() - start_time) * 1000, 1)
 
-            if resp.status_code == 200:
-                data = resp.json()
-                if is_google_native:
-                    candidates = data.get("candidates", [])
-                    content = ""
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        if parts:
-                            content = parts[0].get("text", "").strip()
-                    if not content:
-                        content = str(data)
-                else:
+                if resp.status_code == 200:
+                    data = resp.json()
                     content = data["choices"][0]["message"]["content"].strip()
+                    return {
+                        "status": "success",
+                        "response": content,
+                        "model": effective_model,
+                        "latency_ms": latency,
+                        "is_live": True
+                    }
+                else:
+                    print(f"\n   [TARGET MODEL ERROR] HTTP {resp.status_code} from {endpoint}: {resp.text[:300]}")
+                    demo_fallback = _get_demo_model_response(prompt, effective_model)
+                    return {
+                        "status": "fallback",
+                        "response": demo_fallback,
+                        "model": f"{effective_model} (fallback simulation)",
+                        "latency_ms": latency,
+                        "is_live": False,
+                        "error_detail": f"HTTP {resp.status_code}: {resp.text[:150]}"
+                    }
 
-                return {
-                    "status": "success",
-                    "response": content,
-                    "model": effective_model,
-                    "latency_ms": latency,
-                    "is_live": True
-                }
-            else:
-                print(f"\n   [TARGET MODEL ERROR] HTTP {resp.status_code} from {endpoint}: {resp.text[:300]}")
-                demo_fallback = _get_demo_model_response(prompt, effective_model)
-                return {
-                    "status": "fallback",
-                    "response": demo_fallback,
-                    "model": f"{effective_model} (fallback simulation)",
-                    "latency_ms": latency,
-                    "is_live": False,
-                    "error_detail": f"HTTP {resp.status_code}: {resp.text[:150]}"
-                }
-
-    except Exception as exc:
-        latency = round((time.time() - start_time) * 1000, 1)
-        print(f"\n   [TARGET MODEL CONNECTION ERROR] Failed to connect to {endpoint}: {str(exc)}")
-        demo_fallback = _get_demo_model_response(prompt, effective_model)
-        return {
-            "status": "fallback",
-            "response": demo_fallback,
-            "model": f"{effective_model} (fallback simulation)",
-            "latency_ms": latency,
-            "is_live": False,
-            "error_detail": str(exc)
-        }
+        except Exception as exc:
+            latency = round((time.time() - start_time) * 1000, 1)
+            print(f"\n   [TARGET MODEL CONNECTION ERROR] Failed to connect to {endpoint}: {str(exc)}")
+            demo_fallback = _get_demo_model_response(prompt, effective_model)
+            return {
+                "status": "fallback",
+                "response": demo_fallback,
+                "model": f"{effective_model} (fallback simulation)",
+                "latency_ms": latency,
+                "is_live": False,
+                "error_detail": str(exc)
+            }
 
 
 async def test_direct_connection(
@@ -703,7 +753,7 @@ async def test_direct_connection(
     Returns real HTTP status and response from the upstream provider.
     """
     start_time = time.time()
-    effective_model = model_name or ("gemini-1.5-flash" if provider == "google" else "sarvam-105b" if provider == "sarvam" else "llama-3.1-8b-instant")
+    effective_model = model_name or ("gemini-2.0-flash" if provider == "google" else "sarvam-105b" if provider == "sarvam" else "llama-3.1-8b-instant")
 
     if provider in ("demo", "mock", "preset"):
         return {
@@ -751,6 +801,13 @@ async def test_direct_connection(
     raw_token = effective_key.replace("Bearer ", "").strip() if effective_key else ""
 
     if is_google_native:
+        clean_model = effective_model.replace("models/", "")
+        candidate_endpoints = [
+            (clean_model, f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent"),
+            (clean_model, f"https://generativelanguage.googleapis.com/v1/models/{clean_model}:generateContent"),
+            ("gemini-2.0-flash", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"),
+            ("gemini-1.5-pro", "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent")
+        ]
         headers = {
             "Content-Type": "application/json",
             "x-goog-api-key": raw_token
@@ -759,72 +816,65 @@ async def test_direct_connection(
             "contents": [{"role": "user", "parts": [{"text": "Hello, confirm you are online in 5 words."}]}],
             "generationConfig": {"maxOutputTokens": 25, "temperature": 0.5}
         }
-    else:
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {raw_token}" if raw_token else "",
-            "x-goog-api-key": raw_token,
-            "api-subscription-key": raw_token,
-            "subscription-key": raw_token,
-            "SARVAM-API-KEY": raw_token
-        }
-        if provider == "openrouter":
-            headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
-            headers["X-Title"] = "IndiaAI Safety Platform"
+        
+        try:
+            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                last_resp = None
+                for candidate_model, cand_url in candidate_endpoints:
+                    target_url = f"{cand_url}?key={raw_token}" if raw_token else cand_url
+                    resp = await client.post(target_url, json=payload, headers=headers)
+                    last_resp = resp
+                    latency = round((time.time() - start_time) * 1000, 1)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        candidates = data.get("candidates", [])
+                        content = ""
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            if parts:
+                                content = parts[0].get("text", "").strip()
+                        if not content:
+                            content = str(data)
+                        return {
+                            "success": True,
+                            "provider": provider,
+                            "model": candidate_model,
+                            "endpoint": cand_url,
+                            "latency_ms": latency,
+                            "response_sample": content[:150]
+                        }
+                    elif resp.status_code == 429:
+                        return {
+                            "success": False,
+                            "is_quota_limit": True,
+                            "provider": provider,
+                            "model": candidate_model,
+                            "endpoint": cand_url,
+                            "http_status": 429,
+                            "error": f"HTTP 429 Quota/Rate Limit: API key is VALID and authenticated, but model '{candidate_model}' has exhausted its free requests per minute (RPM) quota on Google AI Studio. Try switching model to 'gemini-2.0-flash' or check console.cloud.google.com quotas."
+                        }
+                    elif resp.status_code != 404:
+                        # Non-404 error (e.g. 400 invalid key) -> return immediately
+                        break
 
-        payload = {
-            "model": effective_model,
-            "messages": [{"role": "user", "content": "Hello, confirm you are online in 5 words."}],
-            "max_tokens": 25,
-            "temperature": 0.5
-        }
-
-    try:
-        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-            resp = await client.post(endpoint, json=payload, headers=headers)
+                return {
+                    "success": False,
+                    "provider": provider,
+                    "model": effective_model,
+                    "endpoint": endpoint,
+                    "http_status": last_resp.status_code if last_resp else 500,
+                    "error": last_resp.text[:300] if last_resp else "Endpoint unreachable"
+                }
+        except Exception as exc:
             latency = round((time.time() - start_time) * 1000, 1)
-            
-            if resp.status_code == 200:
-                data = resp.json()
-                if is_google_native:
-                    candidates = data.get("candidates", [])
-                    content = ""
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        if parts:
-                            content = parts[0].get("text", "").strip()
-                    if not content:
-                        content = str(data)
-                else:
-                    content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip() or str(data)
-
-                return {
-                    "success": True,
-                    "provider": provider,
-                    "model": effective_model,
-                    "endpoint": endpoint,
-                    "latency_ms": latency,
-                    "response_sample": content[:150]
-                }
-            elif resp.status_code == 429:
-                return {
-                    "success": False,
-                    "is_quota_limit": True,
-                    "provider": provider,
-                    "model": effective_model,
-                    "endpoint": endpoint,
-                    "http_status": 429,
-                    "error": f"HTTP 429 Quota/Rate Limit: API key is VALID and authenticated, but model '{effective_model}' has exhausted its free requests per minute (RPM) quota on Google AI Studio. Try switching to 'gemini-1.5-flash' or check console.cloud.google.com quotas."
-                }
-            else:
-                return {
-                    "success": False,
-                    "provider": provider,
-                    "model": effective_model,
-                    "endpoint": endpoint,
-                    "http_status": resp.status_code,
-                    "error": resp.text[:300]
-                }
+            return {
+                "success": False,
+                "provider": provider,
+                "model": effective_model,
+                "endpoint": endpoint,
+                "latency_ms": latency,
+                "error": str(exc)
+            }
     except Exception as exc:
         latency = round((time.time() - start_time) * 1000, 1)
         return {
