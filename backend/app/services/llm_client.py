@@ -600,7 +600,7 @@ async def query_target_model(
         effective_key = api_key or "Bearer default"
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 18.0
 
-    raw_token = effective_key.replace("Bearer ", "").strip() if effective_key else ""
+    raw_token = effective_key.replace("Bearer ", "").strip().strip('"').strip("'") if effective_key else ""
 
     if is_google_native:
         clean_model = effective_model.replace("models/", "").replace("v1beta/", "").replace("v1/", "").strip("/")
@@ -610,7 +610,7 @@ async def query_target_model(
             "x-goog-api-key": raw_token
         }
         payload = {
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
                 "temperature": temperature,
                 "maxOutputTokens": max_tokens
@@ -785,7 +785,7 @@ async def test_direct_connection(
     if not is_google_native and not endpoint.endswith("/chat/completions"):
         endpoint = endpoint.rstrip("/") + "/chat/completions"
 
-    raw_token = effective_key.replace("Bearer ", "").strip() if effective_key else ""
+    raw_token = effective_key.replace("Bearer ", "").strip().strip('"').strip("'") if effective_key else ""
 
     if is_google_native:
         clean_model = effective_model.replace("models/", "").replace("v1beta/", "").replace("v1/", "").strip("/")
@@ -795,7 +795,7 @@ async def test_direct_connection(
             "x-goog-api-key": raw_token
         }
         payload = {
-            "contents": [{"role": "user", "parts": [{"text": "Hello, confirm you are online in 5 words."}]}],
+            "contents": [{"parts": [{"text": "Hello, confirm you are online in 5 words."}]}],
             "generationConfig": {"maxOutputTokens": 25, "temperature": 0.5}
         }
         
