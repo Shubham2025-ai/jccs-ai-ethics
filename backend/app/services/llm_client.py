@@ -582,8 +582,8 @@ async def query_target_model(
             endpoint = endpoint.rstrip("/") + "/chat/completions"
         effective_key = api_key or "ollama"
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 18.0
-    else:
-        endpoint = base_url or "https://api.groq.com/openai/v1/chat/completions"
+    else:  # Custom BYO endpoint / Sarvam / Krutrim
+        endpoint = base_url or "https://api.sarvam.ai/v1/chat/completions"
         if not endpoint.endswith("/chat/completions"):
             endpoint = endpoint.rstrip("/") + "/chat/completions"
         effective_key = api_key or "Bearer default"
@@ -594,9 +594,13 @@ async def query_target_model(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
 
+    raw_token = effective_key.replace("Bearer ", "").strip() if effective_key else ""
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {effective_key}" if not effective_key.startswith("Bearer ") else effective_key
+        "Authorization": f"Bearer {raw_token}" if raw_token else "",
+        "api-subscription-key": raw_token,
+        "subscription-key": raw_token,
+        "SARVAM-API-KEY": raw_token
     }
     if provider == "openrouter":
         headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
@@ -621,24 +625,30 @@ async def query_target_model(
                     "status": "success",
                     "response": content,
                     "model": effective_model,
-                    "latency_ms": latency
+                    "latency_ms": latency,
+                    "is_live": True
                 }
             else:
-                # If target provider returns error / unauthorized, use demo response for seamless audit continuation
+                print(f"\n   [TARGET MODEL ERROR] HTTP {resp.status_code} from {endpoint}: {resp.text[:300]}")
                 demo_fallback = _get_demo_model_response(prompt, effective_model)
                 return {
-                    "status": "success",
+                    "status": "fallback",
                     "response": demo_fallback,
-                    "model": f"{effective_model} (simulation)",
-                    "latency_ms": latency
+                    "model": f"{effective_model} (fallback simulation)",
+                    "latency_ms": latency,
+                    "is_live": False,
+                    "error_detail": f"HTTP {resp.status_code}: {resp.text[:150]}"
                 }
 
-    except Exception:
+    except Exception as exc:
         latency = round((time.time() - start_time) * 1000, 1)
+        print(f"\n   [TARGET MODEL CONNECTION ERROR] Failed to connect to {endpoint}: {str(exc)}")
         demo_fallback = _get_demo_model_response(prompt, effective_model)
         return {
-            "status": "success",
+            "status": "fallback",
             "response": demo_fallback,
-            "model": f"{effective_model} (simulation)",
-            "latency_ms": latency
+            "model": f"{effective_model} (fallback simulation)",
+            "latency_ms": latency,
+            "is_live": False,
+            "error_detail": str(exc)
         }
