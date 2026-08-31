@@ -609,11 +609,12 @@ async def query_target_model(
             "Content-Type": "application/json",
             "x-goog-api-key": raw_token
         }
+        effective_max_tokens = max(max_tokens or 500, 2048)
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
                 "temperature": temperature,
-                "maxOutputTokens": max_tokens
+                "maxOutputTokens": effective_max_tokens
             }
         }
         
@@ -629,9 +630,17 @@ async def query_target_model(
                     if candidates:
                         parts = candidates[0].get("content", {}).get("parts", [])
                         if parts:
-                            content = parts[0].get("text", "").strip()
+                            text_chunks = [p.get("text", "") for p in parts if "text" in p]
+                            content = "".join(text_chunks).strip()
                     if not content:
-                        content = str(data)
+                        finish_reason = candidates[0].get("finishReason", "") if candidates else ""
+                        if finish_reason in ("SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT"):
+                            content = f"[Refusal]: Request filtered by safety guardrails ({finish_reason})."
+                        elif finish_reason == "MAX_TOKENS":
+                            content = "[Response Truncated]: Model reached token limit."
+                        else:
+                            content = "The model generated an empty text response."
+
                     return {
                         "status": "success",
                         "response": content,
@@ -796,7 +805,7 @@ async def test_direct_connection(
         }
         payload = {
             "contents": [{"parts": [{"text": "Hello, confirm you are online in 5 words."}]}],
-            "generationConfig": {"maxOutputTokens": 25, "temperature": 0.5}
+            "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.5}
         }
         
         try:
@@ -811,9 +820,17 @@ async def test_direct_connection(
                     if candidates:
                         parts = candidates[0].get("content", {}).get("parts", [])
                         if parts:
-                            content = parts[0].get("text", "").strip()
+                            text_chunks = [p.get("text", "") for p in parts if "text" in p]
+                            content = "".join(text_chunks).strip()
                     if not content:
-                        content = str(data)
+                        finish_reason = candidates[0].get("finishReason", "") if candidates else ""
+                        if finish_reason in ("SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT"):
+                            content = f"[Refusal]: Request filtered by safety guardrails ({finish_reason})."
+                        elif finish_reason == "MAX_TOKENS":
+                            content = "[Response Truncated]: Model reached token limit."
+                        else:
+                            content = "Online (Ready for safety evaluation)"
+
                     return {
                         "success": True,
                         "provider": provider,
