@@ -603,13 +603,8 @@ async def query_target_model(
     raw_token = effective_key.replace("Bearer ", "").strip() if effective_key else ""
 
     if is_google_native:
-        clean_model = effective_model.replace("models/", "")
-        candidate_endpoints = [
-            (clean_model, f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent"),
-            (clean_model, f"https://generativelanguage.googleapis.com/v1/models/{clean_model}:generateContent"),
-            ("gemini-2.0-flash", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"),
-            ("gemini-1.5-pro", "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent")
-        ]
+        clean_model = effective_model.replace("models/", "").replace("v1beta/", "").replace("v1/", "").strip("/")
+        target_url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent?key={raw_token}"
         headers = {
             "Content-Type": "application/json",
             "x-goog-api-key": raw_token
@@ -624,53 +619,45 @@ async def query_target_model(
         
         try:
             async with httpx.AsyncClient(timeout=effective_timeout) as client:
-                last_resp = None
-                for candidate_model, cand_url in candidate_endpoints:
-                    target_url = f"{cand_url}?key={raw_token}" if raw_token else cand_url
-                    resp = await client.post(target_url, json=payload, headers=headers)
-                    last_resp = resp
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        candidates = data.get("candidates", [])
-                        content = ""
-                        if candidates:
-                            parts = candidates[0].get("content", {}).get("parts", [])
-                            if parts:
-                                content = parts[0].get("text", "").strip()
-                        if not content:
-                            content = str(data)
-                        latency = round((time.time() - start_time) * 1000, 1)
-                        return {
-                            "status": "success",
-                            "response": content,
-                            "model": candidate_model,
-                            "latency_ms": latency,
-                            "is_live": True
-                        }
-                    elif resp.status_code != 404:
-                        # If error is not 404 (e.g. 400 invalid key or 429 quota), don't try next model
-                        break
-
+                resp = await client.post(target_url, json=payload, headers=headers)
                 latency = round((time.time() - start_time) * 1000, 1)
-                err_text = last_resp.text[:300] if last_resp else "Unknown error"
-                print(f"\n   [TARGET MODEL ERROR] HTTP {last_resp.status_code if last_resp else 500} from {endpoint}: {err_text}")
-                demo_fallback = _get_demo_model_response(prompt, effective_model)
-                return {
-                    "status": "fallback",
-                    "response": demo_fallback,
-                    "model": f"{effective_model} (fallback simulation)",
-                    "latency_ms": latency,
-                    "is_live": False,
-                    "error_detail": f"HTTP {last_resp.status_code if last_resp else 500}: {err_text[:150]}"
-                }
+
+                if resp.status_code == 200:
+                    data = resp.json()
+                    candidates = data.get("candidates", [])
+                    content = ""
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            content = parts[0].get("text", "").strip()
+                    if not content:
+                        content = str(data)
+                    return {
+                        "status": "success",
+                        "response": content,
+                        "model": clean_model,
+                        "latency_ms": latency,
+                        "is_live": True
+                    }
+                else:
+                    print(f"\n   [TARGET MODEL ERROR] HTTP {resp.status_code} from {target_url}: {resp.text[:300]}")
+                    demo_fallback = _get_demo_model_response(prompt, clean_model)
+                    return {
+                        "status": "fallback",
+                        "response": demo_fallback,
+                        "model": f"{clean_model} (fallback simulation)",
+                        "latency_ms": latency,
+                        "is_live": False,
+                        "error_detail": f"HTTP {resp.status_code}: {resp.text[:150]}"
+                    }
         except Exception as exc:
             latency = round((time.time() - start_time) * 1000, 1)
-            print(f"\n   [TARGET MODEL CONNECTION ERROR] Failed to connect to {endpoint}: {str(exc)}")
-            demo_fallback = _get_demo_model_response(prompt, effective_model)
+            print(f"\n   [TARGET MODEL CONNECTION ERROR] Failed to connect to {target_url}: {str(exc)}")
+            demo_fallback = _get_demo_model_response(prompt, clean_model)
             return {
                 "status": "fallback",
                 "response": demo_fallback,
-                "model": f"{effective_model} (fallback simulation)",
+                "model": f"{clean_model} (fallback simulation)",
                 "latency_ms": latency,
                 "is_live": False,
                 "error_detail": str(exc)
@@ -774,7 +761,7 @@ async def test_direct_connection(
         endpoint = base_url or "https://api.sarvam.ai/v1/chat/completions"
         effective_key = api_key or ""
     elif provider == "google":
-        clean_model = effective_model.replace("models/", "")
+        clean_model = effective_model.replace("models/", "").replace("v1beta/", "").replace("v1/", "").strip("/")
         if base_url and "openai" in base_url:
             endpoint = base_url.rstrip("/") + "/chat/completions"
             is_google_native = False
@@ -801,13 +788,8 @@ async def test_direct_connection(
     raw_token = effective_key.replace("Bearer ", "").strip() if effective_key else ""
 
     if is_google_native:
-        clean_model = effective_model.replace("models/", "")
-        candidate_endpoints = [
-            (clean_model, f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent"),
-            (clean_model, f"https://generativelanguage.googleapis.com/v1/models/{clean_model}:generateContent"),
-            ("gemini-2.0-flash", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"),
-            ("gemini-1.5-pro", "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent")
-        ]
+        clean_model = effective_model.replace("models/", "").replace("v1beta/", "").replace("v1/", "").strip("/")
+        target_url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent?key={raw_token}"
         headers = {
             "Content-Type": "application/json",
             "x-goog-api-key": raw_token
@@ -819,59 +801,53 @@ async def test_direct_connection(
         
         try:
             async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-                last_resp = None
-                for candidate_model, cand_url in candidate_endpoints:
-                    target_url = f"{cand_url}?key={raw_token}" if raw_token else cand_url
-                    resp = await client.post(target_url, json=payload, headers=headers)
-                    last_resp = resp
-                    latency = round((time.time() - start_time) * 1000, 1)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        candidates = data.get("candidates", [])
-                        content = ""
-                        if candidates:
-                            parts = candidates[0].get("content", {}).get("parts", [])
-                            if parts:
-                                content = parts[0].get("text", "").strip()
-                        if not content:
-                            content = str(data)
-                        return {
-                            "success": True,
-                            "provider": provider,
-                            "model": candidate_model,
-                            "endpoint": cand_url,
-                            "latency_ms": latency,
-                            "response_sample": content[:150]
-                        }
-                    elif resp.status_code == 429:
-                        return {
-                            "success": False,
-                            "is_quota_limit": True,
-                            "provider": provider,
-                            "model": candidate_model,
-                            "endpoint": cand_url,
-                            "http_status": 429,
-                            "error": f"HTTP 429 Quota/Rate Limit: API key is VALID and authenticated, but model '{candidate_model}' has exhausted its free requests per minute (RPM) quota on Google AI Studio. Try switching model to 'gemini-2.0-flash' or check console.cloud.google.com quotas."
-                        }
-                    elif resp.status_code != 404:
-                        # Non-404 error (e.g. 400 invalid key) -> return immediately
-                        break
-
-                return {
-                    "success": False,
-                    "provider": provider,
-                    "model": effective_model,
-                    "endpoint": endpoint,
-                    "http_status": last_resp.status_code if last_resp else 500,
-                    "error": last_resp.text[:300] if last_resp else "Endpoint unreachable"
-                }
+                resp = await client.post(target_url, json=payload, headers=headers)
+                latency = round((time.time() - start_time) * 1000, 1)
+                
+                if resp.status_code == 200:
+                    data = resp.json()
+                    candidates = data.get("candidates", [])
+                    content = ""
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            content = parts[0].get("text", "").strip()
+                    if not content:
+                        content = str(data)
+                    return {
+                        "success": True,
+                        "provider": provider,
+                        "model": clean_model,
+                        "endpoint": target_url.split("?")[0],
+                        "latency_ms": latency,
+                        "response_sample": content[:150]
+                    }
+                elif resp.status_code == 429:
+                    return {
+                        "success": False,
+                        "is_quota_limit": True,
+                        "provider": provider,
+                        "model": clean_model,
+                        "endpoint": target_url.split("?")[0],
+                        "http_status": 429,
+                        "error": f"HTTP 429 Quota/Rate Limit: API key is VALID and authenticated, but model '{clean_model}' has exhausted its free requests per minute (RPM) quota on Google AI Studio."
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "provider": provider,
+                        "model": clean_model,
+                        "endpoint": target_url.split("?")[0],
+                        "http_status": resp.status_code,
+                        "error": resp.text[:300]
+                    }
         except Exception as exc:
             latency = round((time.time() - start_time) * 1000, 1)
             return {
                 "success": False,
                 "provider": provider,
-                "model": effective_model,
-                "endpoint": endpoint,
+                "model": clean_model,
+                "endpoint": target_url.split("?")[0],
                 "latency_ms": latency,
                 "error": str(exc)
             }
