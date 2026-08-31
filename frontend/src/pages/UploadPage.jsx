@@ -97,7 +97,7 @@ const PROVIDER_CONFIGS = {
     keyLinkText: 'aistudio.google.com/apikey',
     keyDesc: 'Get a free API key at aistudio.google.com/apikey — 15 RPM free tier with zero credit card.',
     modelDefault: 'gemini-2.0-flash',
-    modelHint: 'Supported Free Tier Models: gemini-2.0-flash, gemini-1.5-flash, gemini-1.5-pro',
+    modelHint: 'Supported Models: gemini-2.0-flash, gemini-2.5-flash, gemini-1.5-flash',
     urlDefault: 'https://generativelanguage.googleapis.com/v1beta',
     serverKeyStatus: 'ⓘ Enter personal Google AI Studio key (ephemeral — passed via x-goog-api-key header).',
     isServerKeyAvailable: false,
@@ -581,7 +581,7 @@ export default function LaunchEvaluationPage() {
                     >
                       <option value="groq">Groq Cloud (LLaMA 3.3 / 3.1) [Free Tier]</option>
                       <option value="sarvam">Sarvam AI (Indic 105B / 2B) [Indian Sovereign LLM]</option>
-                      <option value="google">Google AI Studio (Gemini 2.5) [100% Free]</option>
+                      <option value="google">Google AI Studio (Gemini 2.0 / 2.5) [100% Free]</option>
                       <option value="openrouter">OpenRouter (Free-Tier Router) [Free Models]</option>
                       <option value="custom">Custom Endpoint (vLLM / Ollama / Krutrim)</option>
                     </select>
