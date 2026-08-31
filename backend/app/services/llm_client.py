@@ -538,7 +538,7 @@ async def query_target_model(
     Queries any OpenAI-compatible target LLM asynchronously with fast failover to demo response.
     """
     start_time = time.time()
-    effective_model = model_name or "sarvam-indic-2b"
+    effective_model = model_name or ("gemini-1.5-flash" if provider == "google" else "sarvam-105b" if provider == "sarvam" else "llama-3.1-8b-instant")
 
     # Fast track demo/preset models
     if provider in ("demo", "mock", "preset") or "mock" in effective_model.lower():
@@ -604,6 +604,7 @@ async def query_target_model(
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {raw_token}" if raw_token else "",
+        "x-goog-api-key": raw_token,
         "api-subscription-key": raw_token,
         "subscription-key": raw_token,
         "SARVAM-API-KEY": raw_token
@@ -672,7 +673,7 @@ async def test_direct_connection(
     Returns real HTTP status and response from the upstream provider.
     """
     start_time = time.time()
-    effective_model = model_name or ("sarvam-105b" if provider == "sarvam" else "llama-3.1-8b-instant")
+    effective_model = model_name or ("gemini-1.5-flash" if provider == "google" else "sarvam-105b" if provider == "sarvam" else "llama-3.1-8b-instant")
 
     if provider in ("demo", "mock", "preset"):
         return {
@@ -714,6 +715,7 @@ async def test_direct_connection(
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {raw_token}" if raw_token else "",
+        "x-goog-api-key": raw_token,
         "api-subscription-key": raw_token,
         "subscription-key": raw_token,
         "SARVAM-API-KEY": raw_token
@@ -745,6 +747,17 @@ async def test_direct_connection(
                     "latency_ms": latency,
                     "response_sample": content[:150]
                 }
+            elif resp.status_code == 429:
+                # Quota / Rate limit exhausted from upstream provider
+                return {
+                    "success": False,
+                    "is_quota_limit": True,
+                    "provider": provider,
+                    "model": effective_model,
+                    "endpoint": endpoint,
+                    "http_status": 429,
+                    "error": f"HTTP 429 Quota/Rate Limit: API key is VALID and authenticated, but model '{effective_model}' has exhausted its free requests per minute (RPM) quota on Google AI Studio. Try switching to 'gemini-1.5-flash' or check console.cloud.google.com quotas."
+                }
             else:
                 return {
                     "success": False,
@@ -754,6 +767,16 @@ async def test_direct_connection(
                     "http_status": resp.status_code,
                     "error": resp.text[:300]
                 }
+    except Exception as exc:
+        latency = round((time.time() - start_time) * 1000, 1)
+        return {
+            "success": False,
+            "provider": provider,
+            "model": effective_model,
+            "endpoint": endpoint,
+            "latency_ms": latency,
+            "error": str(exc)
+        }
     except Exception as exc:
         latency = round((time.time() - start_time) * 1000, 1)
         return {

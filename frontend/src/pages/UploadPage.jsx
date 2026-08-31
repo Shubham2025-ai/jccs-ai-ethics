@@ -95,11 +95,11 @@ const PROVIDER_CONFIGS = {
     badgeColor: '#4285F4',
     keyLink: 'https://aistudio.google.com/apikey',
     keyLinkText: 'aistudio.google.com/apikey',
-    keyDesc: 'Get a free API key at aistudio.google.com/apikey — no credit card required.',
-    modelDefault: 'gemini-2.5-flash',
-    modelHint: 'Supported IDs: gemini-2.5-flash, gemini-2.5-flash-lite, gemini-1.5-flash',
+    keyDesc: 'Get a free API key at aistudio.google.com/apikey — 15 RPM free tier with zero credit card.',
+    modelDefault: 'gemini-1.5-flash',
+    modelHint: 'Supported Free Tier Models: gemini-1.5-flash, gemini-2.0-flash, gemini-1.5-pro',
     urlDefault: 'https://generativelanguage.googleapis.com/v1beta/openai/',
-    serverKeyStatus: 'ⓘ Enter personal Google AI Studio key (ephemeral — not stored on server).',
+    serverKeyStatus: 'ⓘ Enter personal Google AI Studio key (ephemeral — passed via x-goog-api-key header).',
     isServerKeyAvailable: false,
   },
   openrouter: {
@@ -734,15 +734,21 @@ export default function LaunchEvaluationPage() {
 
                   {connectionStatus && (
                     <div
-                      className={`p-2.5 rounded-xl border text-xs animate-fadeIn space-y-1 ${
+                      className={`p-3 rounded-2xl border text-xs animate-fadeIn space-y-1.5 ${
                         connectionStatus.success
                           ? 'bg-green-500/10 border-green-500/30 text-green-300'
+                          : connectionStatus.is_quota_limit || connectionStatus.http_status === 429
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
                           : 'bg-red-500/10 border-red-500/30 text-red-300'
                       }`}
                     >
                       <div className="flex items-center justify-between font-bold">
                         <span>
-                          {connectionStatus.success ? '✅ Target Endpoint Reachable & Verified' : '❌ Target Endpoint Connection Failed'}
+                          {connectionStatus.success
+                            ? '✅ Target Endpoint Reachable & Verified'
+                            : connectionStatus.is_quota_limit || connectionStatus.http_status === 429
+                            ? '⚠️ API Key Validated — Quota / Rate Limit Reached (HTTP 429)'
+                            : '❌ Target Endpoint Connection Failed'}
                         </span>
                         {connectionStatus.latency_ms && (
                           <span className="font-mono text-[10px] bg-black/40 px-2 py-0.5 rounded border border-white/10">
@@ -756,7 +762,7 @@ export default function LaunchEvaluationPage() {
                           <span className="italic">"{connectionStatus.response_sample}"</span>
                         </div>
                       ) : (
-                        <div className="text-[11px] text-red-200 bg-black/50 p-2 rounded border border-red-500/20 font-mono mt-1 break-all">
+                        <div className="text-[11px] text-gray-200 bg-black/50 p-2.5 rounded-xl border border-white/10 font-mono leading-relaxed break-words">
                           {connectionStatus.error || `HTTP ${connectionStatus.http_status}`}
                         </div>
                       )}
