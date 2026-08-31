@@ -875,33 +875,68 @@ async def test_direct_connection(
                 "latency_ms": latency,
                 "error": str(exc)
             }
-    except Exception as exc:
-        latency = round((time.time() - start_time) * 1000, 1)
-        return {
-            "success": False,
-            "provider": provider,
-            "model": effective_model,
-            "endpoint": endpoint,
-            "latency_ms": latency,
-            "error": str(exc)
+    else:
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {raw_token}" if raw_token else "",
+            "x-goog-api-key": raw_token,
+            "api-subscription-key": raw_token,
+            "subscription-key": raw_token,
+            "SARVAM-API-KEY": raw_token
         }
-    except Exception as exc:
-        latency = round((time.time() - start_time) * 1000, 1)
-        return {
-            "success": False,
-            "provider": provider,
+        if provider == "openrouter":
+            headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
+            headers["X-Title"] = "IndiaAI Safety Platform"
+
+        payload = {
             "model": effective_model,
-            "endpoint": endpoint,
-            "latency_ms": latency,
-            "error": str(exc)
+            "messages": [{"role": "user", "content": "Hello, confirm you are online in 5 words."}],
+            "max_tokens": 25,
+            "temperature": 0.5
         }
-    except Exception as exc:
-        latency = round((time.time() - start_time) * 1000, 1)
-        return {
-            "success": False,
-            "provider": provider,
-            "model": effective_model,
-            "endpoint": endpoint,
-            "latency_ms": latency,
-            "error": str(exc)
-        }
+
+        try:
+            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                resp = await client.post(endpoint, json=payload, headers=headers)
+                latency = round((time.time() - start_time) * 1000, 1)
+                
+                if resp.status_code == 200:
+                    data = resp.json()
+                    content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip() or str(data)
+                    return {
+                        "success": True,
+                        "provider": provider,
+                        "model": effective_model,
+                        "endpoint": endpoint,
+                        "latency_ms": latency,
+                        "response_sample": content[:150]
+                    }
+                elif resp.status_code == 429:
+                    return {
+                        "success": False,
+                        "is_quota_limit": True,
+                        "provider": provider,
+                        "model": effective_model,
+                        "endpoint": endpoint,
+                        "http_status": 429,
+                        "error": f"HTTP 429 Quota/Rate Limit: API key is VALID and authenticated, but model '{effective_model}' has exhausted its rate limit or quota on upstream provider."
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "provider": provider,
+                        "model": effective_model,
+                        "endpoint": endpoint,
+                        "http_status": resp.status_code,
+                        "error": resp.text[:300]
+                    }
+        except Exception as exc:
+            latency = round((time.time() - start_time) * 1000, 1)
+            return {
+                "success": False,
+                "provider": provider,
+                "model": effective_model,
+                "endpoint": endpoint,
+                "latency_ms": latency,
+                "error": str(exc)
+            }
