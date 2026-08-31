@@ -132,15 +132,19 @@ function LoadingScreen({ progress }) {
   const currentStep = EVALUATION_STEPS[stepIndex]
 
   return (
-    <div className="max-w-lg mx-auto py-8 text-center space-y-5 animate-fadeIn">
-      <div className="relative w-24 h-24 mx-auto">
-        <svg className="w-full h-full -rotate-90" viewBox="0 0 128 128">
-          <circle cx="64" cy="64" r="54" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
-          <circle cx="64" cy="64" r="54" fill="none" strokeWidth="8"
+    <div className="max-w-md mx-auto py-10 text-center space-y-6 animate-fade-in">
+      <div className="relative w-28 h-28 mx-auto flex items-center justify-center">
+        {/* Ambient Glow */}
+        <div className="absolute inset-0 rounded-full bg-gradient-to-r from-[#6C63FF]/20 to-[#00B894]/20 blur-xl animate-pulse-glow" />
+        
+        <svg className="w-full h-full -rotate-90 relative z-10" viewBox="0 0 128 128">
+          <circle cx="64" cy="64" r="54" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="7" />
+          <circle
+            cx="64" cy="64" r="54" fill="none" strokeWidth="7"
             stroke="url(#grad)" strokeLinecap="round"
             strokeDasharray={2 * Math.PI * 54}
             strokeDashoffset={2 * Math.PI * 54 * (1 - progress / 100)}
-            style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+            style={{ transition: 'stroke-dashoffset 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}
           />
           <defs>
             <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -149,33 +153,47 @@ function LoadingScreen({ progress }) {
             </linearGradient>
           </defs>
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-xl">{currentStep.icon}</span>
-          <span className="text-white font-black text-sm">{Math.round(progress)}%</span>
+
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
+          <span className="text-2xl mb-0.5">{currentStep.icon}</span>
+          <span className="text-white font-black text-sm tracking-tight font-mono">{Math.round(progress)}%</span>
         </div>
       </div>
 
-      <div className="space-y-1">
-        <h2 className="text-lg font-black text-white">{currentStep.label}</h2>
-        <p className="text-gray-400 text-xs">{currentStep.detail}</p>
+      <div className="space-y-1.5">
+        <span className="text-[10px] font-black uppercase tracking-widest text-[#a78bfa] bg-[#6C63FF]/15 px-3 py-1 rounded-full border border-[#6C63FF]/30">
+          Step {stepIndex + 1} of {EVALUATION_STEPS.length} · Live Audit Engine
+        </span>
+        <h2 className="text-lg font-black text-white pt-1">{currentStep.label}</h2>
+        <p className="text-gray-400 text-xs max-w-xs mx-auto leading-relaxed">{currentStep.detail}</p>
       </div>
 
       <div className="flex items-center justify-center gap-1.5 flex-wrap px-4">
         {EVALUATION_STEPS.map((s, i) => (
-          <div key={i} className={`w-2 h-2 rounded-full transition-all duration-300 ${
-            i < stepIndex ? 'bg-green-400' :
-            i === stepIndex ? 'bg-[#6C63FF] scale-125 shadow-[0_0_8px_#6C63FF]' : 'bg-white/10'
+          <div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${
+            i < stepIndex ? 'w-4 bg-green-400' :
+            i === stepIndex ? 'w-6 bg-[#6C63FF] shadow-[0_0_10px_#6C63FF]' : 'w-1.5 bg-white/10'
           }`} />
         ))}
       </div>
 
-      <div className="glass rounded-2xl p-3 text-left space-y-1.5 text-xs max-h-44 overflow-y-auto">
+      <div className="glass rounded-2xl p-4 text-left space-y-2 text-xs border border-white/10 shadow-lg">
         {EVALUATION_STEPS.map((s, i) => (
-          <div key={i} className={`flex items-center gap-2.5 transition-all ${
-            i < stepIndex ? 'opacity-40' : i === stepIndex ? 'opacity-100 font-semibold' : 'opacity-20'
+          <div key={i} className={`flex items-center justify-between transition-all py-0.5 ${
+            i < stepIndex ? 'opacity-40' : i === stepIndex ? 'opacity-100 font-bold text-white' : 'opacity-25 text-gray-500'
           }`}>
-            <span className="text-sm">{i < stepIndex ? '✅' : i === stepIndex ? <Loader className="w-3.5 h-3.5 animate-spin inline text-[#6C63FF]" /> : '○'}</span>
-            <span className={i === stepIndex ? 'text-white' : 'text-gray-400'}>{s.label}</span>
+            <div className="flex items-center gap-2.5">
+              <span className="text-xs">
+                {i < stepIndex ? <span className="text-green-400">✓</span> : i === stepIndex ? <Loader className="w-3.5 h-3.5 animate-spin inline text-[#6C63FF]" /> : '○'}
+              </span>
+              <span className={i === stepIndex ? 'text-white' : 'text-gray-400'}>{s.label}</span>
+            </div>
+            {i === stepIndex && (
+              <span className="text-[10px] font-mono text-purple-300 animate-pulse">Running...</span>
+            )}
+            {i < stepIndex && (
+              <span className="text-[10px] font-mono text-green-400">Complete</span>
+            )}
           </div>
         ))}
       </div>

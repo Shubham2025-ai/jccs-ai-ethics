@@ -223,9 +223,33 @@ function clientSideRedact(text, category, compliant) {
 
 function ScoreRing({ score, riskLevel, isTabular = false }) {
   const [animated, setAnimated] = useState(0)
+  const [displayScore, setDisplayScore] = useState(0)
+
   useEffect(() => {
-    const t = setTimeout(() => setAnimated(score), 100)
-    return () => clearTimeout(t)
+    const t = setTimeout(() => setAnimated(score), 80)
+    
+    // Smooth number tick-up animation
+    let startTimestamp = null
+    const duration = 1200
+    const startValue = 0
+    const endValue = score
+
+    const step = (timestamp) => {
+      if (!startTimestamp) startTimestamp = timestamp
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1)
+      // Ease out cubic
+      const easeProgress = 1 - Math.pow(1 - progress, 3)
+      setDisplayScore(Math.round(startValue + (endValue - startValue) * easeProgress))
+      if (progress < 1) {
+        window.requestAnimationFrame(step)
+      }
+    }
+    const animFrame = window.requestAnimationFrame(step)
+
+    return () => {
+      clearTimeout(t)
+      window.cancelAnimationFrame(animFrame)
+    }
   }, [score])
 
   const r = 74, c = 2 * Math.PI * r
@@ -240,32 +264,41 @@ function ScoreRing({ score, riskLevel, isTabular = false }) {
   const riskIcon = { critical: '🔴', high: '🟠', medium: '🟡', low: '🟢' }
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <div className="relative" style={{ filter: `drop-shadow(0 0 20px ${color}55)` }}>
-        <svg width="200" height="200">
+    <div className="flex flex-col items-center gap-3 animate-fade-in">
+      <div className="relative" style={{ filter: `drop-shadow(0 0 24px ${color}66)` }}>
+        <svg width="210" height="210" viewBox="0 0 200 200">
           <circle cx="100" cy="100" r={r} fill="none" stroke="#ffffff08" strokeWidth="14" />
-          {[...Array(20)].map((_, i) => {
-            const angle = (i / 20) * 2 * Math.PI - Math.PI / 2
-            const x1 = 100 + (r - 8) * Math.cos(angle)
-            const y1 = 100 + (r - 8) * Math.sin(angle)
-            const x2 = 100 + (r + 2) * Math.cos(angle)
-            const y2 = 100 + (r + 2) * Math.sin(angle)
+          {[...Array(24)].map((_, i) => {
+            const angle = (i / 24) * 2 * Math.PI - Math.PI / 2
+            const x1 = 100 + (r - 9) * Math.cos(angle)
+            const y1 = 100 + (r - 9) * Math.sin(angle)
+            const x2 = 100 + (r + 3) * Math.cos(angle)
+            const y2 = 100 + (r + 3) * Math.sin(angle)
             return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#ffffff15" strokeWidth="1.5" />
           })}
-          <circle cx="100" cy="100" r={r} fill="none" stroke={color} strokeWidth="14"
-            strokeDasharray={c} strokeDashoffset={offset}
-            strokeLinecap="round" transform="rotate(-90 100 100)"
-            style={{ transition: 'stroke-dashoffset 1.4s cubic-bezier(0.4,0,0.2,1)' }} />
-          <text x="100" y="88" textAnchor="middle" fill="white" fontSize="36" fontWeight="900">
-            {score}
+          <circle
+            cx="100"
+            cy="100"
+            r={r}
+            fill="none"
+            stroke={color}
+            strokeWidth="14"
+            strokeDasharray={c}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            transform="rotate(-90 100 100)"
+            style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.16, 1, 0.3, 1)' }}
+          />
+          <text x="100" y="86" textAnchor="middle" fill="white" fontSize="38" fontWeight="900" letterSpacing="-0.02em">
+            {displayScore}
           </text>
-          <text x="100" y="110" textAnchor="middle" fill="#6b7280" fontSize="13">/100</text>
-          <text x="100" y="128" textAnchor="middle" fill={color} fontSize="10" fontWeight="800" letterSpacing="0.05em">
+          <text x="100" y="108" textAnchor="middle" fill="#94a3b8" fontSize="12" fontWeight="600">/ 100</text>
+          <text x="100" y="126" textAnchor="middle" fill={color} fontSize="9.5" fontWeight="800" letterSpacing="0.08em">
             {isTabular ? 'FAIRNESS SCORE' : 'SAFETY SCORE'}
           </text>
         </svg>
       </div>
-      <div className="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-black tracking-wider uppercase"
+      <div className="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-black tracking-wider uppercase shadow-sm"
         style={{ background: color + '18', border: `1px solid ${color}44`, color }}>
         <span>{riskIcon[riskLevel] || '🔴'}</span>
         {riskLabel[riskLevel] || 'HIGH RISK'}
@@ -582,39 +615,42 @@ export default function ResultsPage() {
             </div>
 
             {/* Verification & Meta Card */}
-            <div className="glass rounded-3xl p-6 border border-white/10 flex flex-col justify-between space-y-4 text-xs">
+            <div className="cert-card rounded-3xl p-6 flex flex-col justify-between space-y-4 text-xs">
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <span className="font-bold text-white text-sm flex items-center gap-1.5">
-                    <Shield className="w-4 h-4 text-green-400" /> Tamper-Proof Audit Proof
+                  <span className="font-bold text-white text-sm flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-lg bg-green-500/20 text-green-400 border border-green-500/30 flex items-center justify-center font-mono">
+                      ✓
+                    </span>
+                    Cryptographic Audit Certificate
                   </span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30">
-                    VERIFIED
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider bg-green-500/15 text-green-400 border border-green-500/30">
+                    VERIFIED ANCHOR
                   </span>
                 </div>
                 <div className="space-y-2 text-gray-400">
                   <div>
-                    <span className="text-gray-500">Manifest SHA-256:</span>
-                    <div className="font-mono text-[11px] text-gray-300 truncate bg-black/40 p-1.5 rounded mt-0.5 border border-white/5">
+                    <span className="text-gray-400 text-[11px] font-medium">Manifest SHA-256 Digest:</span>
+                    <div className="font-mono text-[10.5px] text-green-300/90 truncate bg-black/60 p-2 rounded-xl mt-1 border border-white/10 shadow-inner">
                       {audit.hash_sha256 || 'SHA-256 Hash Generated'}
                     </div>
                   </div>
                   <div>
-                    <span className="text-gray-500">Blockchain TX / Certificate:</span>
-                    <div className="font-mono text-[11px] text-purple-300 truncate bg-black/40 p-1.5 rounded mt-0.5 border border-white/5">
+                    <span className="text-gray-400 text-[11px] font-medium">Blockchain TX / Chained Proof:</span>
+                    <div className="font-mono text-[10.5px] text-purple-300 truncate bg-black/60 p-2 rounded-xl mt-1 border border-white/10 shadow-inner">
                       {audit.blockchain_tx || 'OriginStamp Bitcoin Proof'}
                     </div>
                   </div>
-                  <div>
-                    <span className="text-gray-500">Digital Signature:</span>
-                    <div className="text-gray-300 mt-0.5 flex items-center gap-1">
-                      <Lock className="w-3 h-3 text-[#00B894]" /> HMAC-SHA256 Signed by JCCS Audit Authority
-                    </div>
+                  <div className="pt-1 flex items-center justify-between text-[11px]">
+                    <span className="text-gray-400">Digital Signature:</span>
+                    <span className="text-white font-mono font-bold flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-[#00B894]" /> HMAC-SHA256 Signed
+                    </span>
                   </div>
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-white/5 flex items-center justify-between text-gray-400">
+              <div className="pt-3 border-t border-white/10 flex items-center justify-between text-gray-400">
                 <span>Evaluator Engine:</span>
                 <span className="font-semibold text-white">
                   {isTabular ? 'Fairlearn + AIF360 Statistical Engine' : 'Groq LLaMA 3.3 70B (IndiaAI Judge)'}
