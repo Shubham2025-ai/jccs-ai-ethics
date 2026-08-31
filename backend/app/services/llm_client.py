@@ -538,7 +538,7 @@ async def query_target_model(
     Queries any OpenAI-compatible target LLM asynchronously with fast failover to demo response.
     """
     start_time = time.time()
-    effective_model = model_name or ("gemini-1.5-flash" if provider == "google" else "sarvam-105b" if provider == "sarvam" else "llama-3.1-8b-instant")
+    effective_model = model_name or ("gemini-3.6-flash" if provider == "google" else "sarvam-105b" if provider == "sarvam" else "llama-3.1-8b-instant")
 
     # Fast track demo/preset models
     if provider in ("demo", "mock", "preset") or "mock" in effective_model.lower():
@@ -740,7 +740,7 @@ async def test_direct_connection(
     Returns real HTTP status and response from the upstream provider.
     """
     start_time = time.time()
-    effective_model = model_name or ("gemini-2.0-flash" if provider == "google" else "sarvam-105b" if provider == "sarvam" else "llama-3.1-8b-instant")
+    effective_model = model_name or ("gemini-3.6-flash" if provider == "google" else "sarvam-105b" if provider == "sarvam" else "llama-3.1-8b-instant")
 
     if provider in ("demo", "mock", "preset"):
         return {
