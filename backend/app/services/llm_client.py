@@ -552,6 +552,7 @@ async def query_target_model(
         }
 
     # Live endpoint resolution
+    is_google_native = False
     if provider == "groq":
         endpoint = base_url or "https://api.groq.com/openai/v1/chat/completions"
         if not endpoint.endswith("/chat/completions"):
@@ -565,9 +566,13 @@ async def query_target_model(
         effective_key = api_key or ""
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 20.0
     elif provider == "google":
-        endpoint = base_url or "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-        if not endpoint.endswith("/chat/completions"):
-            endpoint = endpoint.rstrip("/") + "/chat/completions"
+        clean_model = effective_model.replace("models/", "")
+        if base_url and "openai" in base_url:
+            endpoint = base_url.rstrip("/") + "/chat/completions"
+            is_google_native = False
+        else:
+            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent"
+            is_google_native = True
         effective_key = api_key or ""
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 18.0
     elif provider == "openrouter":
@@ -595,30 +600,44 @@ async def query_target_model(
         effective_key = api_key or "Bearer default"
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 18.0
 
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": prompt})
-
     raw_token = effective_key.replace("Bearer ", "").strip() if effective_key else ""
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {raw_token}" if raw_token else "",
-        "x-goog-api-key": raw_token,
-        "api-subscription-key": raw_token,
-        "subscription-key": raw_token,
-        "SARVAM-API-KEY": raw_token
-    }
-    if provider == "openrouter":
-        headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
-        headers["X-Title"] = "IndiaAI Safety Platform"
 
-    payload = {
-        "model": effective_model,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens
-    }
+    if is_google_native:
+        headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": raw_token
+        }
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": max_tokens
+            }
+        }
+    else:
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {raw_token}" if raw_token else "",
+            "x-goog-api-key": raw_token,
+            "api-subscription-key": raw_token,
+            "subscription-key": raw_token,
+            "SARVAM-API-KEY": raw_token
+        }
+        if provider == "openrouter":
+            headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
+            headers["X-Title"] = "IndiaAI Safety Platform"
+
+        payload = {
+            "model": effective_model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens
+        }
 
     try:
         async with httpx.AsyncClient(timeout=effective_timeout) as client:
@@ -627,7 +646,18 @@ async def query_target_model(
 
             if resp.status_code == 200:
                 data = resp.json()
-                content = data["choices"][0]["message"]["content"].strip()
+                if is_google_native:
+                    candidates = data.get("candidates", [])
+                    content = ""
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            content = parts[0].get("text", "").strip()
+                    if not content:
+                        content = str(data)
+                else:
+                    content = data["choices"][0]["message"]["content"].strip()
+
                 return {
                     "status": "success",
                     "response": content,
@@ -686,6 +716,7 @@ async def test_direct_connection(
         }
 
     # Resolve endpoint
+    is_google_native = False
     if provider == "groq":
         endpoint = base_url or "https://api.groq.com/openai/v1/chat/completions"
         effective_key = api_key or getattr(settings, "GROQ_API_KEY", "")
@@ -693,7 +724,13 @@ async def test_direct_connection(
         endpoint = base_url or "https://api.sarvam.ai/v1/chat/completions"
         effective_key = api_key or ""
     elif provider == "google":
-        endpoint = base_url or "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        clean_model = effective_model.replace("models/", "")
+        if base_url and "openai" in base_url:
+            endpoint = base_url.rstrip("/") + "/chat/completions"
+            is_google_native = False
+        else:
+            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent"
+            is_google_native = True
         effective_key = api_key or ""
     elif provider == "openrouter":
         endpoint = base_url or "https://openrouter.ai/api/v1/chat/completions"
@@ -708,28 +745,39 @@ async def test_direct_connection(
         endpoint = base_url or "https://api.sarvam.ai/v1/chat/completions"
         effective_key = api_key or "Bearer default"
 
-    if not endpoint.endswith("/chat/completions"):
+    if not is_google_native and not endpoint.endswith("/chat/completions"):
         endpoint = endpoint.rstrip("/") + "/chat/completions"
 
     raw_token = effective_key.replace("Bearer ", "").strip() if effective_key else ""
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {raw_token}" if raw_token else "",
-        "x-goog-api-key": raw_token,
-        "api-subscription-key": raw_token,
-        "subscription-key": raw_token,
-        "SARVAM-API-KEY": raw_token
-    }
-    if provider == "openrouter":
-        headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
-        headers["X-Title"] = "IndiaAI Safety Platform"
 
-    payload = {
-        "model": effective_model,
-        "messages": [{"role": "user", "content": "Hello, confirm you are online."}],
-        "max_tokens": 25,
-        "temperature": 0.5
-    }
+    if is_google_native:
+        headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": raw_token
+        }
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": "Hello, confirm you are online in 5 words."}]}],
+            "generationConfig": {"maxOutputTokens": 25, "temperature": 0.5}
+        }
+    else:
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {raw_token}" if raw_token else "",
+            "x-goog-api-key": raw_token,
+            "api-subscription-key": raw_token,
+            "subscription-key": raw_token,
+            "SARVAM-API-KEY": raw_token
+        }
+        if provider == "openrouter":
+            headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
+            headers["X-Title"] = "IndiaAI Safety Platform"
+
+        payload = {
+            "model": effective_model,
+            "messages": [{"role": "user", "content": "Hello, confirm you are online in 5 words."}],
+            "max_tokens": 25,
+            "temperature": 0.5
+        }
 
     try:
         async with httpx.AsyncClient(timeout=timeout_seconds) as client:
@@ -738,7 +786,18 @@ async def test_direct_connection(
             
             if resp.status_code == 200:
                 data = resp.json()
-                content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip() or str(data)
+                if is_google_native:
+                    candidates = data.get("candidates", [])
+                    content = ""
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            content = parts[0].get("text", "").strip()
+                    if not content:
+                        content = str(data)
+                else:
+                    content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip() or str(data)
+
                 return {
                     "success": True,
                     "provider": provider,
@@ -748,7 +807,6 @@ async def test_direct_connection(
                     "response_sample": content[:150]
                 }
             elif resp.status_code == 429:
-                # Quota / Rate limit exhausted from upstream provider
                 return {
                     "success": False,
                     "is_quota_limit": True,
@@ -767,6 +825,16 @@ async def test_direct_connection(
                     "http_status": resp.status_code,
                     "error": resp.text[:300]
                 }
+    except Exception as exc:
+        latency = round((time.time() - start_time) * 1000, 1)
+        return {
+            "success": False,
+            "provider": provider,
+            "model": effective_model,
+            "endpoint": endpoint,
+            "latency_ms": latency,
+            "error": str(exc)
+        }
     except Exception as exc:
         latency = round((time.time() - start_time) * 1000, 1)
         return {

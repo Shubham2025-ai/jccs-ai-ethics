@@ -98,7 +98,7 @@ const PROVIDER_CONFIGS = {
     keyDesc: 'Get a free API key at aistudio.google.com/apikey — 15 RPM free tier with zero credit card.',
     modelDefault: 'gemini-1.5-flash',
     modelHint: 'Supported Free Tier Models: gemini-1.5-flash, gemini-2.0-flash, gemini-1.5-pro',
-    urlDefault: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+    urlDefault: 'https://generativelanguage.googleapis.com/v1beta',
     serverKeyStatus: 'ⓘ Enter personal Google AI Studio key (ephemeral — passed via x-goog-api-key header).',
     isServerKeyAvailable: false,
   },
