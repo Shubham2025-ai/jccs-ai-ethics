@@ -705,10 +705,14 @@ async def query_target_model(
             endpoint = f"{clean_base}/openai/chat/completions"
         effective_key = api_key or ""
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 18.0
-    elif provider == "openrouter":
-        endpoint = base_url or "https://openrouter.ai/api/v1/chat/completions"
-        effective_key = api_key or ""
-        effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 18.0
+    elif provider == "openrouter" or (base_url and "openrouter.ai" in base_url):
+        clean_base = (base_url or "https://openrouter.ai/api/v1").rstrip("/")
+        if clean_base.endswith("/chat/completions"):
+            endpoint = clean_base
+        else:
+            endpoint = f"{clean_base}/chat/completions"
+        effective_key = api_key or getattr(settings, "OPENROUTER_API_KEY", "")
+        effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 20.0
     elif provider == "openai":
         endpoint = base_url or "https://api.openai.com/v1/chat/completions"
         effective_key = api_key or getattr(settings, "OPENAI_API_KEY", "")
@@ -745,9 +749,9 @@ async def query_target_model(
             "Content-Type": "application/json",
             "Authorization": f"Bearer {raw_token}" if raw_token else ""
         }
-        if provider == "openrouter":
-            headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
-            headers["X-Title"] = "IndiaAI Safety Platform"
+        if provider == "openrouter" or (base_url and "openrouter.ai" in base_url):
+            headers["HTTP-Referer"] = "https://jccs-ai-ethics.vercel.app"
+            headers["X-Title"] = "JCCS IndiaAI Safety Evaluation"
 
     payload = {
         "model": effective_model,
@@ -905,9 +909,13 @@ async def test_direct_connection(
         else:
             endpoint = f"{clean_base}/openai/chat/completions"
         effective_key = api_key or ""
-    elif provider == "openrouter":
-        endpoint = base_url or "https://openrouter.ai/api/v1/chat/completions"
-        effective_key = api_key or ""
+    elif provider == "openrouter" or (base_url and "openrouter.ai" in base_url):
+        clean_base = (base_url or "https://openrouter.ai/api/v1").rstrip("/")
+        if clean_base.endswith("/chat/completions"):
+            endpoint = clean_base
+        else:
+            endpoint = f"{clean_base}/chat/completions"
+        effective_key = api_key or getattr(settings, "OPENROUTER_API_KEY", "")
     elif provider == "openai":
         endpoint = base_url or "https://api.openai.com/v1/chat/completions"
         effective_key = api_key or getattr(settings, "OPENAI_API_KEY", "")
@@ -936,9 +944,9 @@ async def test_direct_connection(
             "Content-Type": "application/json",
             "Authorization": f"Bearer {raw_token}" if raw_token else ""
         }
-        if provider == "openrouter":
-            headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
-            headers["X-Title"] = "IndiaAI Safety Platform"
+        if provider == "openrouter" or (base_url and "openrouter.ai" in base_url):
+            headers["HTTP-Referer"] = "https://jccs-ai-ethics.vercel.app"
+            headers["X-Title"] = "JCCS IndiaAI Safety Evaluation"
 
     payload = {
         "model": effective_model,

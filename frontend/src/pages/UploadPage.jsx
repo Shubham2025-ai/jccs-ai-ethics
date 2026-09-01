@@ -595,7 +595,7 @@ export default function LaunchEvaluationPage() {
                       type="text"
                       value={modelName}
                       onChange={(e) => setModelName(e.target.value)}
-                      placeholder="e.g. openai/gpt-oss-20b"
+                      placeholder={currentProviderConfig?.modelDefault ? `e.g. ${currentProviderConfig.modelDefault}` : 'e.g. meta-llama/llama-3.3-70b-instruct:free'}
                       className="w-full rounded-xl px-3.5 py-2 text-xs text-white placeholder-gray-600 outline-none bg-white/5 border border-white/10 focus:border-[#6C63FF]"
                     />
                   </div>
@@ -702,7 +702,7 @@ export default function LaunchEvaluationPage() {
                       type="text"
                       value={baseUrl}
                       onChange={(e) => setBaseUrl(e.target.value)}
-                      placeholder="https://api.groq.com/openai/v1"
+                      placeholder={currentProviderConfig?.urlDefault || 'https://openrouter.ai/api/v1'}
                       className="w-full rounded-xl px-3.5 py-2 text-xs text-white placeholder-gray-600 outline-none bg-white/5 border border-white/10 focus:border-[#6C63FF]"
                     />
                   </div>

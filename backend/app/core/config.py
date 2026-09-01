@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     USE_SQLITE: bool = False
 
     GROQ_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
     ORIGINSTAMP_API_KEY: str = ""
     FRONTEND_URL: str = "http://localhost:3000"
     MAX_FILE_SIZE_MB: int = 50
