@@ -604,6 +604,46 @@ def _extract_openai_chat_content(data: Any) -> str:
     return ""
 
 
+def _extract_gemini_content(data: Any) -> str:
+    """
+    Safely extracts generated text from Google AI Studio / Gemini REST API response dict.
+    Never raises AttributeError, KeyError, or IndexError.
+    """
+    if not isinstance(data, dict):
+        return str(data) if data is not None else ""
+
+    candidates = data.get("candidates")
+    if isinstance(candidates, list) and len(candidates) > 0:
+        first_cand = candidates[0]
+        if isinstance(first_cand, dict):
+            content_obj = first_cand.get("content")
+            if isinstance(content_obj, dict):
+                parts = content_obj.get("parts")
+                if isinstance(parts, list) and len(parts) > 0:
+                    chunks = []
+                    for p in parts:
+                        if isinstance(p, dict) and "text" in p and isinstance(p["text"], str):
+                            chunks.append(p["text"])
+                        elif isinstance(p, str):
+                            chunks.append(p)
+                    if chunks:
+                        return "".join(chunks).strip()
+
+            # Check refusal / finishReason if text is empty
+            finish_reason = first_cand.get("finishReason", "")
+            if finish_reason in ("SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT"):
+                return f"[Refusal]: Request filtered by safety guardrails ({finish_reason})."
+            elif finish_reason == "MAX_TOKENS":
+                return "[Response Truncated]: Model reached token limit."
+
+    # Fallback to promptFeedback if blocked
+    feedback = data.get("promptFeedback")
+    if isinstance(feedback, dict) and feedback.get("blockReason"):
+        return f"[Refusal]: Prompt blocked by safety policy ({feedback.get('blockReason')})."
+
+    return ""
+
+
 async def query_target_model(
     prompt: str,
     model_name: Optional[str] = None,
@@ -657,13 +697,19 @@ async def query_target_model(
             endpoint = f"{clean_base}/chat/completions"
         effective_key = api_key or ""
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 20.0
-    elif provider == "google":
-        clean_model = effective_model.replace("models/", "")
+    elif provider in ("google", "gemini", "google_ai_studio") or (base_url and ("googleapis.com" in base_url or "generativelanguage" in base_url)):
+        clean_model = effective_model.replace("models/", "").replace("v1beta/", "").replace("v1/", "").strip("/")
         if base_url and "openai" in base_url:
             endpoint = base_url.rstrip("/") + "/chat/completions"
             is_google_native = False
         else:
-            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent"
+            clean_base = (base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
+            if ":generateContent" in clean_base:
+                endpoint = clean_base
+            elif "/models" in clean_base:
+                endpoint = f"{clean_base}/{clean_model}:generateContent"
+            else:
+                endpoint = f"{clean_base}/models/{clean_model}:generateContent"
             is_google_native = True
         effective_key = api_key or ""
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 18.0
@@ -723,21 +769,9 @@ async def query_target_model(
 
                 if resp.status_code == 200:
                     data = resp.json()
-                    candidates = data.get("candidates", [])
-                    content = ""
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        if parts:
-                            text_chunks = [p.get("text", "") for p in parts if "text" in p]
-                            content = "".join(text_chunks).strip()
+                    content = _extract_gemini_content(data)
                     if not content:
-                        finish_reason = candidates[0].get("finishReason", "") if candidates else ""
-                        if finish_reason in ("SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT"):
-                            content = f"[Refusal]: Request filtered by safety guardrails ({finish_reason})."
-                        elif finish_reason == "MAX_TOKENS":
-                            content = "[Response Truncated]: Model reached token limit with no visible output."
-                        else:
-                            content = "[Empty Response]: The model generated no visible text output."
+                        content = "[Empty Response]: The model generated no visible text output."
 
                     return {
                         "status": "success",
@@ -888,13 +922,19 @@ async def test_direct_connection(
                 clean_base = clean_base + "/v1"
             endpoint = f"{clean_base}/chat/completions"
         effective_key = api_key or ""
-    elif provider == "google":
+    elif provider in ("google", "gemini", "google_ai_studio") or (base_url and ("googleapis.com" in base_url or "generativelanguage" in base_url)):
         clean_model = effective_model.replace("models/", "").replace("v1beta/", "").replace("v1/", "").strip("/")
         if base_url and "openai" in base_url:
             endpoint = base_url.rstrip("/") + "/chat/completions"
             is_google_native = False
         else:
-            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent"
+            clean_base = (base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
+            if ":generateContent" in clean_base:
+                endpoint = clean_base
+            elif "/models" in clean_base:
+                endpoint = f"{clean_base}/{clean_model}:generateContent"
+            else:
+                endpoint = f"{clean_base}/models/{clean_model}:generateContent"
             is_google_native = True
         effective_key = api_key or ""
     elif provider == "openrouter":
@@ -918,7 +958,7 @@ async def test_direct_connection(
 
     if is_google_native:
         clean_model = effective_model.replace("models/", "").replace("v1beta/", "").replace("v1/", "").strip("/")
-        target_url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent?key={raw_token}"
+        target_url = f"{endpoint}?key={raw_token}" if raw_token else endpoint
         headers = {
             "Content-Type": "application/json",
             "x-goog-api-key": raw_token
@@ -939,27 +979,16 @@ async def test_direct_connection(
                 
                 if resp.status_code == 200:
                     data = resp.json()
-                    candidates = data.get("candidates", [])
-                    content = ""
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        if parts:
-                            text_chunks = [p.get("text", "") for p in parts if "text" in p]
-                            content = "".join(text_chunks).strip()
+                    content = _extract_gemini_content(data)
                     if not content:
-                        finish_reason = candidates[0].get("finishReason", "") if candidates else ""
-                        if finish_reason in ("SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT"):
-                            content = f"[Refusal]: Request filtered by safety guardrails ({finish_reason})."
-                        elif finish_reason == "MAX_TOKENS":
-                            content = "[Response Truncated]: Model reached token limit."
-                        else:
-                            content = "Online (Ready for safety evaluation)"
+                        content = "Online (Ready for safety evaluation)"
 
                     return {
                         "success": True,
                         "provider": provider,
                         "model": clean_model,
                         "endpoint": target_url.split("?")[0],
+                        "http_status": 200,
                         "latency_ms": latency,
                         "response_sample": content[:150]
                     }
@@ -972,6 +1001,7 @@ async def test_direct_connection(
                         "model": clean_model,
                         "endpoint": target_url.split("?")[0],
                         "http_status": 429,
+                        "latency_ms": latency,
                         "error": f"HTTP 429 Quota/Rate Limit: API key is VALID, but model '{clean_model}' exceeded quota on Google AI Studio. ({err_parsed})"
                     }
                 else:
@@ -982,17 +1012,20 @@ async def test_direct_connection(
                         "model": clean_model,
                         "endpoint": target_url.split("?")[0],
                         "http_status": resp.status_code,
+                        "latency_ms": latency,
                         "error": f"HTTP {resp.status_code}: {err_parsed}"
                     }
         except Exception as exc:
             latency = round((time.time() - start_time) * 1000, 1)
+            status_code = getattr(exc, "response", None) and getattr(exc.response, "status_code", None)
             return {
                 "success": False,
                 "provider": provider,
                 "model": clean_model,
                 "endpoint": target_url.split("?")[0],
+                "http_status": status_code or 0,
                 "latency_ms": latency,
-                "error": str(exc)
+                "error": f"HTTP {status_code or 0}: Connection failed — check endpoint URL and model ID ({str(exc)})"
             }
     else:
         # Build headers
@@ -1036,6 +1069,7 @@ async def test_direct_connection(
                         "provider": provider,
                         "model": effective_model,
                         "endpoint": endpoint,
+                        "http_status": 200,
                         "latency_ms": latency,
                         "response_sample": content[:150]
                     }
@@ -1048,6 +1082,7 @@ async def test_direct_connection(
                         "model": effective_model,
                         "endpoint": endpoint,
                         "http_status": 429,
+                        "latency_ms": latency,
                         "error": f"HTTP 429 Quota/Rate Limit: API key is VALID, but model '{effective_model}' exhausted rate limit on upstream provider. ({err_parsed})"
                     }
                 else:
@@ -1058,15 +1093,18 @@ async def test_direct_connection(
                         "model": effective_model,
                         "endpoint": endpoint,
                         "http_status": resp.status_code,
+                        "latency_ms": latency,
                         "error": f"HTTP {resp.status_code}: {err_parsed}"
                     }
         except Exception as exc:
             latency = round((time.time() - start_time) * 1000, 1)
+            status_code = getattr(exc, "response", None) and getattr(exc.response, "status_code", None)
             return {
                 "success": False,
                 "provider": provider,
                 "model": effective_model,
                 "endpoint": endpoint,
+                "http_status": status_code or 0,
                 "latency_ms": latency,
-                "error": str(exc)
+                "error": f"HTTP {status_code or 0}: Connection failed — check endpoint URL and model ID ({str(exc)})"
             }

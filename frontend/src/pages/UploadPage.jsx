@@ -263,7 +263,7 @@ export default function LaunchEvaluationPage() {
       } else if (res.data.is_quota_limit || res.data.http_status === 429) {
         toast.error(`API Key Validated — Quota Limit Reached (HTTP 429)`)
       } else {
-        const errorDetail = res.data.error || `HTTP ${res.data.http_status}`
+        const errorDetail = res.data.error || (res.data.http_status ? `HTTP ${res.data.http_status}` : 'Connection check failed')
         toast.error(`Target connection failed: ${errorDetail}`)
       }
     } catch (err) {
@@ -765,7 +765,7 @@ export default function LaunchEvaluationPage() {
                         </div>
                       ) : (
                         <div className="text-[11px] text-gray-200 bg-black/50 p-2.5 rounded-xl border border-white/10 font-mono leading-relaxed break-words">
-                          {connectionStatus.error || `HTTP ${connectionStatus.http_status}`}
+                          {connectionStatus.error || (connectionStatus.http_status ? `HTTP ${connectionStatus.http_status}` : 'Connection failed')}
                         </div>
                       )}
                     </div>
