@@ -645,10 +645,16 @@ async def query_target_model(
             endpoint = endpoint.rstrip("/") + "/chat/completions"
         effective_key = api_key or getattr(settings, "GROQ_API_KEY", "")
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 6.0
-    elif provider == "sarvam":
-        endpoint = base_url or "https://api.sarvam.ai/v1/chat/completions"
-        if not endpoint.endswith("/chat/completions"):
-            endpoint = endpoint.rstrip("/") + "/chat/completions"
+    elif provider == "sarvam" or (base_url and "sarvam.ai" in base_url):
+        clean_base = (base_url or "https://api.sarvam.ai/v1").rstrip("/")
+        if clean_base.endswith("/chat/completions"):
+            endpoint = clean_base
+        else:
+            if clean_base.endswith("/v2"):
+                clean_base = clean_base[:-3] + "/v1"
+            elif not clean_base.endswith("/v1"):
+                clean_base = clean_base + "/v1"
+            endpoint = f"{clean_base}/chat/completions"
         effective_key = api_key or ""
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 20.0
     elif provider == "google":
@@ -772,17 +778,21 @@ async def query_target_model(
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {raw_token}" if raw_token else "",
-            "x-goog-api-key": raw_token,
-            "api-subscription-key": raw_token,
-            "subscription-key": raw_token,
-            "SARVAM-API-KEY": raw_token
-        }
-        if provider == "openrouter":
-            headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
-            headers["X-Title"] = "IndiaAI Safety Platform"
+        # Build headers
+        is_sarvam = provider == "sarvam" or (base_url and "sarvam.ai" in base_url)
+        if is_sarvam:
+            headers = {
+                "Content-Type": "application/json",
+                "api-subscription-key": raw_token
+            }
+        else:
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {raw_token}" if raw_token else ""
+            }
+            if provider == "openrouter":
+                headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
+                headers["X-Title"] = "IndiaAI Safety Platform"
 
         payload = {
             "model": effective_model,
@@ -867,8 +877,16 @@ async def test_direct_connection(
     if provider == "groq":
         endpoint = base_url or "https://api.groq.com/openai/v1/chat/completions"
         effective_key = api_key or getattr(settings, "GROQ_API_KEY", "")
-    elif provider == "sarvam":
-        endpoint = base_url or "https://api.sarvam.ai/v1/chat/completions"
+    elif provider == "sarvam" or (base_url and "sarvam.ai" in base_url):
+        clean_base = (base_url or "https://api.sarvam.ai/v1").rstrip("/")
+        if clean_base.endswith("/chat/completions"):
+            endpoint = clean_base
+        else:
+            if clean_base.endswith("/v2"):
+                clean_base = clean_base[:-3] + "/v1"
+            elif not clean_base.endswith("/v1"):
+                clean_base = clean_base + "/v1"
+            endpoint = f"{clean_base}/chat/completions"
         effective_key = api_key or ""
     elif provider == "google":
         clean_model = effective_model.replace("models/", "").replace("v1beta/", "").replace("v1/", "").strip("/")
@@ -977,17 +995,21 @@ async def test_direct_connection(
                 "error": str(exc)
             }
     else:
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {raw_token}" if raw_token else "",
-            "x-goog-api-key": raw_token,
-            "api-subscription-key": raw_token,
-            "subscription-key": raw_token,
-            "SARVAM-API-KEY": raw_token
-        }
-        if provider == "openrouter":
-            headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
-            headers["X-Title"] = "IndiaAI Safety Platform"
+        # Build headers
+        is_sarvam = provider == "sarvam" or (base_url and "sarvam.ai" in base_url)
+        if is_sarvam:
+            headers = {
+                "Content-Type": "application/json",
+                "api-subscription-key": raw_token
+            }
+        else:
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {raw_token}" if raw_token else ""
+            }
+            if provider == "openrouter":
+                headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
+                headers["X-Title"] = "IndiaAI Safety Platform"
 
         payload = {
             "model": effective_model,
