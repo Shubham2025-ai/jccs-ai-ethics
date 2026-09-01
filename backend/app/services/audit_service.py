@@ -265,7 +265,7 @@ async def _audit_llm_async(
 def process_llm_safety_audit(
     db: Session,
     audit_id: int,
-    target_model_name: str = "llama-3.1-8b-instant",
+    target_model_name: str = "openai/gpt-oss-20b",
     target_model_provider: str = "groq",
     target_model_url: Optional[str] = None,
     api_key: Optional[str] = None,

@@ -21,7 +21,7 @@ def run_live_audit():
     # Launch live Groq audit with 3 languages across all 4 categories
     payload = {
         "run_name": "Live Cloud Audit — Meta LLaMA 3.1 8B Instant (Groq)",
-        "target_model_name": "llama-3.1-8b-instant",
+        "target_model_name": "openai/gpt-oss-20b",
         "target_model_provider": "groq",
         "selected_languages": ["en", "hi", "ta"],
         "selected_categories": ["caste_representation", "gender_occupational", "regional_religious", "safety_guidelines"]

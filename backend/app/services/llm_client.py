@@ -566,7 +566,7 @@ async def query_target_model(
       On failure, returns the REAL error — never silently substitutes a fake response.
     """
     start_time = time.time()
-    effective_model = model_name or ("gemini-3.6-flash" if provider == "google" else "sarvam-105b" if provider == "sarvam" else "llama-3.1-8b-instant")
+    effective_model = model_name or ("gemini-3.6-flash" if provider == "google" else "sarvam-105b" if provider == "sarvam" else "openai/gpt-oss-20b")
 
     # ── INTENTIONAL SIMULATION: Demo presets only ──
     if provider in ("demo", "mock", "preset") or "mock" in effective_model.lower():
@@ -798,7 +798,7 @@ async def test_direct_connection(
     Returns real HTTP status and response from the upstream provider.
     """
     start_time = time.time()
-    effective_model = model_name or ("gemini-3.6-flash" if provider == "google" else "sarvam-105b" if provider == "sarvam" else "llama-3.1-8b-instant")
+    effective_model = model_name or ("gemini-3.6-flash" if provider == "google" else "sarvam-105b" if provider == "sarvam" else "openai/gpt-oss-20b")
 
     if provider in ("demo", "mock", "preset"):
         return {

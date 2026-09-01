@@ -102,7 +102,7 @@ async def test_target_connection(req: TestConnectionRequest = Body(...)):
 
 class RedTeamAuditRequest(BaseModel):
     run_name: Optional[str] = "IndiaAI Safety Audit"
-    target_model_name: str = "llama-3.1-8b-instant"
+    target_model_name: str = "openai/gpt-oss-20b"
     target_model_provider: str = "groq"
     target_model_url: Optional[str] = None
     api_key: Optional[str] = None

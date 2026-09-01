@@ -45,10 +45,10 @@ const PRESET_MODELS = [
   },
   {
     id: 'groq-live',
-    title: 'Live Cloud Endpoint (Groq LLaMA 3.1)',
+    title: 'Live Cloud Endpoint (Groq GPT-OSS 20B)',
     provider: 'groq',
-    modelName: 'llama-3.1-8b-instant',
-    desc: 'Real-time inference against Meta LLaMA 3.1 8B Instant hosted on Groq Cloud.',
+    modelName: 'openai/gpt-oss-20b',
+    desc: 'Real-time inference against OpenAI GPT-OSS 20B hosted on Groq Cloud.',
     badge: '⚡ Live Real-Time API',
     badgeBg: 'rgba(108, 99, 255, 0.15)',
     badgeBorder: 'rgba(108, 99, 255, 0.35)',
@@ -68,8 +68,8 @@ const PROVIDER_CONFIGS = {
     keyLink: 'https://console.groq.com/keys',
     keyLinkText: 'console.groq.com/keys',
     keyDesc: 'Get a free API key at console.groq.com/keys — generous free tier with high rate limits.',
-    modelDefault: 'llama-3.1-8b-instant',
-    modelHint: 'Recommended: llama-3.3-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768',
+    modelDefault: 'openai/gpt-oss-20b',
+    modelHint: 'Recommended: openai/gpt-oss-120b, openai/gpt-oss-20b, meta-llama/llama-4-scout-17b-16e-instruct',
     urlDefault: 'https://api.groq.com/openai/v1',
     serverKeyStatus: '✓ Server default Groq key active — leave API Key blank to use pre-configured key.',
     isServerKeyAvailable: true,
@@ -581,7 +581,7 @@ export default function LaunchEvaluationPage() {
                       onChange={(e) => handleProviderChange(e.target.value)}
                       className="w-full rounded-xl px-3.5 py-2 text-xs text-white outline-none bg-black/50 border border-white/10 focus:border-[#6C63FF]"
                     >
-                      <option value="groq">Groq Cloud (LLaMA 3.3 / 3.1) [Free Tier]</option>
+                      <option value="groq">Groq Cloud (GPT-OSS 120B / 20B) [Free Tier]</option>
                       <option value="sarvam">Sarvam AI (Indic 105B / 2B) [Indian Sovereign LLM]</option>
                       <option value="google">Google AI Studio (Gemini 3.6 Flash) [100% Free]</option>
                       <option value="openrouter">OpenRouter (Free-Tier Router) [Free Models]</option>
@@ -595,7 +595,7 @@ export default function LaunchEvaluationPage() {
                       type="text"
                       value={modelName}
                       onChange={(e) => setModelName(e.target.value)}
-                      placeholder="e.g. llama-3.1-8b-instant"
+                      placeholder="e.g. openai/gpt-oss-20b"
                       className="w-full rounded-xl px-3.5 py-2 text-xs text-white placeholder-gray-600 outline-none bg-white/5 border border-white/10 focus:border-[#6C63FF]"
                     />
                   </div>
