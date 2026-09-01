@@ -1,90 +1,91 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { Shield, Play, BarChart2, FileCheck, Zap, Lock, Eye, ArrowRight, AlertTriangle, Globe, Layers, Terminal } from 'lucide-react'
+import {
+  Shield, Play, BarChart2, FileCheck, Zap, Lock, Eye, ArrowRight,
+  AlertTriangle, Globe, Layers, Terminal, Sparkles, CheckCircle2, Cpu
+} from 'lucide-react'
+import { motion } from 'framer-motion'
+import SafetyGauge from '../components/dashboard/SafetyGauge'
 
 const features = [
-  { icon: Shield,    title: 'Caste Equity & Non-Discrimination', desc: 'Counterfactual surname pair probes evaluating equal merit in hiring, credit & tenancy.', color: '#6C63FF', tag: 'Core' },
-  { icon: Eye,       title: 'Gender & Occupational Parity',       desc: 'Detects occupational stereotyping and grammatical gender defaults in Indic grammars.', color: '#00B894', tag: 'Core' },
-  { icon: Globe,     title: 'Regional & Communal Harmony',       desc: 'North-South workplace fairness, Northeast integration & 8th Schedule linguistic rights.', color: '#FDCB6E', tag: 'Cultural' },
-  { icon: Zap,       title: 'Adversarial Jailbreak Defense',     desc: 'Probes model resistance against DevMode, persona adoption & OTP fraud interception.', color: '#E94560', tag: 'Security' },
-  { icon: FileCheck, title: 'MeitY & DPDP Compliance',           desc: 'Auto-mapped against MeitY GenAI Advisories, DPDP Act 2023 & IndiaAI Safety benchmarks.', color: '#3B82F6', tag: 'Legal' },
-  { icon: Lock,      title: 'Blockchain Audit Proof',            desc: 'HMAC-SHA256 digital signature anchored to immutable Bitcoin blockchain proof.', color: '#8B5CF6', tag: 'Trust' },
+  { icon: Shield,    title: 'Caste Equity & Surname Parity', desc: 'Counterfactual surname pair probes evaluating equal merit in hiring, credit & tenancy algorithms.', color: '#ff9933', tag: 'Core Pillar' },
+  { icon: Eye,       title: 'Gender & Occupational Roles',   desc: 'Detects occupational stereotyping and grammatical gender defaults across Indic grammars.', color: '#00d4aa', tag: 'Core Pillar' },
+  { icon: Globe,     title: 'Regional & Religious Harmony',  desc: 'North-South workplace tropes, Northeast integration & 8th Schedule linguistic rights.', color: '#3498db', tag: 'Cultural' },
+  { icon: Zap,       title: 'Adversarial Jailbreak Defense', desc: 'Probes model resistance against DevMode evasion, UPI OTP exploits & fraud generation.', color: '#c0392b', tag: 'Security' },
+  { icon: FileCheck, title: 'MeitY & DPDP Compliance',       desc: 'Auto-mapped against MeitY GenAI Advisories, DPDP Act 2023 & IndiaAI Safety benchmarks.', color: '#f1c40f', tag: 'Regulatory' },
+  { icon: Lock,      title: 'Blockchain Audit Proof',        desc: 'HMAC-SHA256 digital signature anchored to immutable Bitcoin blockchain proof.', color: '#ff9933', tag: 'Integrity' },
 ]
 
 const safetyDimensions = [
-  { label: 'Caste Representation & Equity', score: 85, color: '#00B894' },
-  { label: 'Gender & Occupational Roles', score: 82, color: '#00B894' },
-  { label: 'Regional & Religious Harmony', score: 91, color: '#00B894' },
-  { label: 'Indic Linguistic Rights (EN/HI/TA)', score: 90, color: '#00B894' },
-  { label: 'Adversarial Jailbreak Resistance', score: 48, color: '#E94560' },
-  { label: 'DPDP Personal Data Privacy', score: 88, color: '#00B894' },
+  { label: 'Caste Representation & Equity', score: 85, color: '#ff9933' },
+  { label: 'Gender & Occupational Roles', score: 82, color: '#00d4aa' },
+  { label: 'Regional & Religious Harmony', score: 91, color: '#3498db' },
+  { label: 'Indic Linguistic Parity (EN/HI/TA)', score: 90, color: '#00d4aa' },
+  { label: 'Adversarial Jailbreak Resistance', score: 48, color: '#c0392b' },
+  { label: 'DPDP Personal Data Privacy', score: 88, color: '#00d4aa' },
 ]
 
 const steps = [
-  { n: '01', emoji: '🎯', title: 'Target Model Setup', desc: 'Select or input any OpenAI-compatible Indian LLM endpoint (Groq, OpenAI, Ollama, Sarvam API, or Demo Presets).' },
-  { n: '02', emoji: '⚡', title: 'Multilingual Red-Teaming', desc: 'Automated execution of 44 curated adversarial probes across English, Hindi, and Tamil in parallel.' },
-  { n: '03', emoji: '📜', title: 'Get Certified Scorecard', desc: 'Download a tamper-proof, blockchain-anchored IndiaAI Safety Scorecard with drop-in guardrail patches.' },
+  { n: '01', title: 'Target Model Gateway', desc: 'Select from sovereign Indic foundation models (Sarvam AI), Google Gemini, Groq Cloud, or custom vLLM / Ollama endpoints.' },
+  { n: '02', title: 'Multilingual Red-Teaming', desc: 'Automated parallel execution of 44 curated adversarial probes across English, Hindi, and Tamil cultural contexts.' },
+  { n: '03', title: 'Certified Bharat Scorecard', desc: 'Download a tamper-proof, blockchain-anchored IndiaAI Safety Scorecard with drop-in mitigation guardrails.' },
 ]
 
 const stats = [
-  { n: '9',    label: 'Safety Dimensions',   color: '#6C63FF' },
-  { n: '3',    label: 'Indic Languages (EN/HI/TA)', color: '#00B894' },
-  { n: '4',    label: 'Legal Frameworks',    color: '#3B82F6' },
-  { n: '<30s', label: 'Automated Audit',     color: '#E94560' },
+  { n: '44',   label: 'Adversarial Probes', color: '#ff9933' },
+  { n: '3',    label: 'Indic Languages (EN/HI/TA)', color: '#00d4aa' },
+  { n: '9',    label: 'Safety Dimensions', color: '#3498db' },
+  { n: '<30s', label: 'Full Audit Cycle', color: '#f1c40f' },
 ]
 
-const ticker = [
-  'Caste Equity in Hiring', 'Gender Stereotypes in STEM', 'Regional Workplace Parity',
-  'UPI OTP Jailbreak Defense', 'DPDP Aadhaar Privacy', '8th Schedule Linguistic Rights',
-  'Communal Harmony', 'Indic Grammatical Bias', 'Fake Document Forgery Refusal', 'Hate Speech Prevention'
+const trustEntities = [
+  { name: 'IndiaAI Mission', label: 'Safety Mandate' },
+  { name: 'Ministry of Electronics & IT (MeitY)', label: 'GenAI Advisory Compliance' },
+  { name: 'Bureau of Indian Standards (BIS)', label: 'AI Standards Framework' },
+  { name: 'DPDP Act 2023', label: 'Section 4, 6 & 8 Verification' },
+  { name: 'C-DAC India', label: 'High-Performance AI Benchmarks' },
 ]
 
-function LiveScorecardPreview() {
-  const [visible, setVisible] = useState(false)
-  useEffect(() => { const t = setTimeout(() => setVisible(true), 400); return () => clearTimeout(t) }, [])
-
+function LiveScorecardCard() {
   return (
-    <div className="relative mx-auto" style={{ width: "280px", filter: 'drop-shadow(0 32px 80px rgba(108,99,255,0.3))' }}>
-      <div className="rounded-3xl overflow-hidden border border-white/10"
-        style={{ background: 'linear-gradient(145deg, #0d0d1a, #12121f)' }}>
-        <div className="px-5 pt-5 pb-3 border-b border-white/5">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-black text-[#a78bfa] uppercase tracking-widest">IndiaAI Safety Audit</span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-yellow-500/20 text-yellow-400">MEDIUM RISK</span>
-          </div>
-          <div className="flex items-end gap-2 mb-1">
-            <span className="text-4xl font-black text-white">77.1</span>
-            <span className="text-gray-500 text-sm mb-1">/ 100</span>
-          </div>
-          <p className="text-[11px] text-gray-400">Indic LLM 7B · 44 Probes (EN/HI/TA)</p>
+    <div className="fortress-card p-6 border-fortress-border max-w-sm mx-auto shadow-fortress-card relative overflow-hidden">
+      {/* Top Banner */}
+      <div className="flex items-center justify-between pb-3 border-b border-fortress-border mb-4">
+        <div>
+          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-saffron block">
+            LIVE EVALUATION PREVIEW
+          </span>
+          <h4 className="font-heading font-black text-ink-white text-sm">Indic LLM 7B Benchmark</h4>
         </div>
-
-        <div className="px-5 py-3 space-y-2">
-          {safetyDimensions.map(({ label, score, color }, i) => (
-            <div key={label}>
-              <div className="flex justify-between mb-0.5 text-[11px]">
-                <span className="text-gray-400 truncate pr-2">{label}</span>
-                <span className="font-bold font-mono" style={{ color }}>{score}</span>
-              </div>
-              <div className="h-1 rounded-full bg-white/5">
-                <div className="h-1 rounded-full transition-all duration-1000"
-                  style={{ width: visible ? `${score}%` : '0%', background: color, transitionDelay: `${i * 80 + 400}ms` }} />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="px-5 pb-4 pt-1">
-          <div className="rounded-xl px-3 py-2 text-[10px] font-mono text-gray-500 truncate"
-            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-            SHA-256: 4c863b5ce2265052...
-          </div>
-        </div>
+        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-safety-gold/10 text-safety-gold border border-safety-gold/30">
+          MODERATE RISK
+        </span>
       </div>
 
-      <div className="absolute -top-2 -right-2 px-3 py-1 rounded-full text-xs font-black text-white whitespace-nowrap"
-        style={{ background: 'linear-gradient(135deg,#6C63FF,#00B894)', boxShadow: '0 6px 18px rgba(108,99,255,0.5)', fontSize: '10px' }}>
-        ✓ Blockchain Anchored
+      {/* Safety Gauge Visual */}
+      <div className="flex justify-center py-2">
+        <SafetyGauge score={74} size={130} label="BHARAT SAFETY SCORE" />
+      </div>
+
+      {/* Mini Dimensions */}
+      <div className="space-y-2 pt-3 border-t border-fortress-border">
+        {safetyDimensions.slice(0, 4).map(({ label, score, color }) => (
+          <div key={label} className="space-y-1">
+            <div className="flex justify-between text-[10px] font-mono">
+              <span className="text-ink-gray truncate pr-2">{label}</span>
+              <span className="font-bold" style={{ color }}>{score}%</span>
+            </div>
+            <div className="h-1 rounded-full bg-fortress-base overflow-hidden">
+              <div className="h-full rounded-full" style={{ width: `${score}%`, background: color }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Cryptographic Verification Pill */}
+      <div className="mt-4 pt-3 border-t border-fortress-border flex items-center justify-between text-[10px] font-mono text-ink-dim">
+        <span>HMAC-SHA256 Anchor:</span>
+        <span className="text-safety-teal font-bold truncate max-w-[110px]">7f4e92a...98b</span>
       </div>
     </div>
   )
@@ -92,114 +93,141 @@ function LiveScorecardPreview() {
 
 export default function HomePage() {
   return (
-    <div className="space-y-20 py-8">
+    <div className="space-y-24 py-6 animate-fade-in pb-16">
       {/* Hero Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center pt-6">
         <div className="lg:col-span-7 space-y-6">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-[#6C63FF]/15 text-[#a78bfa] border border-[#6C63FF]/30">
-            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            Aligned with IndiaAI Mission & MeitY GenAI Advisory
+          {/* Sovereign Badge */}
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-mono font-bold bg-saffron/10 text-saffron border border-saffron/30">
+            <span className="w-2 h-2 rounded-full bg-saffron animate-pulse" />
+            Aligned with IndiaAI Mission & MeitY GenAI Advisories
           </div>
 
-          <h1 className="text-4xl sm:text-5xl font-black text-white leading-tight tracking-tight">
-            Automated LLM Safety & Red-Teaming for <span className="gradient-text">Indian Languages</span>
+          {/* Headline */}
+          <h1 className="text-4xl sm:text-6xl font-heading font-black text-ink-white leading-[1.1] tracking-tight">
+            Safeguarding <span className="gradient-saffron">India’s</span> AI Future.
           </h1>
 
-          <p className="text-gray-400 text-base leading-relaxed max-w-xl">
-            Evaluate Indian language models across caste representation, gender occupational fairness, regional harmony, and adversarial jailbreaks. Generate tamper-proof, blockchain-anchored safety scorecards in seconds.
+          {/* Subheading */}
+          <p className="text-ink-gray text-base sm:text-lg leading-relaxed max-w-xl">
+            Automated red-teaming and cultural alignment audit for Indian language foundation models. Detect caste bias, gender occupational disparities, and adversarial jailbreaks in seconds.
           </p>
 
-          <div className="flex items-center gap-4 pt-2">
+          {/* Call to Actions */}
+          <div className="flex flex-wrap items-center gap-4 pt-2">
             <Link
               to="/upload"
-              className="px-6 py-3.5 rounded-2xl font-black text-white text-sm transition-all flex items-center gap-2 shadow-[0_0_25px_rgba(108,99,255,0.35)] hover:scale-105"
-              style={{ background: 'linear-gradient(135deg, #6C63FF, #00B894)' }}
+              className="px-7 py-3.5 rounded-xl font-heading font-black text-sm text-fortress-base bg-gradient-to-r from-saffron to-saffron-deep hover:brightness-110 shadow-saffron-glow transition-all flex items-center gap-2 hover:-translate-y-0.5 active:translate-y-0"
             >
-              <Play className="w-4 h-4 fill-current" /> Launch Safety Evaluation
+              <Play className="w-4 h-4 fill-current" />
+              <span>Launch Safety Evaluation</span>
             </Link>
 
             <Link
               to="/history"
-              className="px-5 py-3.5 rounded-2xl font-bold text-gray-300 text-sm transition-all bg-white/5 hover:bg-white/10 hover:text-white border border-white/10"
+              className="btn-saffron-slide px-6 py-3.5 rounded-xl font-heading font-bold text-ink-white text-sm bg-fortress-surface border border-fortress-border hover:border-saffron transition-all"
             >
               View Audit History
             </Link>
           </div>
 
-          {/* Quick Stats Grid */}
-          <div className="grid grid-cols-4 gap-3 pt-4 border-t border-white/5">
+          {/* Quick Metrics Grid */}
+          <div className="grid grid-cols-4 gap-4 pt-6 border-t border-fortress-border">
             {stats.map(({ n, label, color }) => (
               <div key={label} className="text-left">
-                <div className="text-2xl font-black font-mono" style={{ color }}>{n}</div>
-                <div className="text-[11px] text-gray-500 font-medium leading-tight mt-0.5">{label}</div>
+                <div className="text-2xl sm:text-3xl font-heading font-black font-mono" style={{ color }}>{n}</div>
+                <div className="text-[11px] text-ink-dim font-heading font-bold mt-0.5 leading-tight">{label}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Live Scorecard Preview */}
+        {/* Live Scorecard Preview Column */}
         <div className="lg:col-span-5 flex justify-center">
-          <LiveScorecardPreview />
+          <LiveScorecardCard />
         </div>
       </div>
 
-      {/* Ticker Banner */}
-      <div className="overflow-hidden py-3 border-y border-white/5 bg-white/2">
-        <div className="flex gap-8 whitespace-nowrap animate-marquee">
-          {ticker.concat(ticker).map((item, idx) => (
-            <span key={idx} className="text-xs font-mono text-gray-400 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#6C63FF]" /> {item}
-            </span>
+      {/* Trust & Governance Bar */}
+      <div className="border-y border-fortress-border py-5 bg-fortress-surface/50">
+        <div className="text-center text-[10px] font-mono uppercase tracking-widest text-ink-dim mb-3">
+          STANDARDIZED AGAINST INDIAN REGULATORY & SAFETY MANDATES
+        </div>
+        <div className="flex flex-wrap items-center justify-around gap-6 text-xs font-heading font-bold text-ink-gray">
+          {trustEntities.map((e) => (
+            <div
+              key={e.name}
+              className="flex items-center gap-2 transition-all hover:text-ink-white cursor-default group"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-saffron/60 group-hover:bg-saffron" />
+              <span>{e.name}</span>
+            </div>
           ))}
         </div>
       </div>
 
       {/* 6 Core Pillars */}
-      <div className="space-y-6">
+      <div className="space-y-8">
         <div className="text-center max-w-2xl mx-auto space-y-2">
-          <h2 className="text-3xl font-black text-white tracking-tight">
-            Comprehensive IndiaAI Evaluation Framework
+          <span className="text-xs font-mono font-bold uppercase tracking-wider text-saffron">
+            BHARAT SAFETY EVALUATION FRAMEWORK
+          </span>
+          <h2 className="text-2xl sm:text-3xl font-heading font-black text-ink-white tracking-tight">
+            6 Core Dimensions of Sovereign AI Safety
           </h2>
-          <p className="text-gray-400 text-sm">
-            Evaluating Indian foundation models for cultural alignment, fairness, and safety vulnerability.
+          <p className="text-ink-gray text-xs sm:text-sm">
+            Auditing foundation models for cultural nuances, fair representation, and defensive security.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {features.map(({ icon: Icon, title, desc, color, tag }) => (
-            <div key={title} className="glass rounded-3xl p-6 border border-white/10 space-y-3 relative overflow-hidden group hover:border-[#6C63FF]/40 transition-all">
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
-                  style={{ background: `${color}18`, color }}>
-                  <Icon className="w-5 h-5" />
+            <div
+              key={title}
+              className="fortress-card fortress-card-interactive p-6 space-y-3 relative flex flex-col justify-between"
+              style={{ borderLeftWidth: '4px', borderLeftColor: color }}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center"
+                    style={{ background: `${color}18`, color }}
+                  >
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <span
+                    className="text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded"
+                    style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}
+                  >
+                    {tag}
+                  </span>
                 </div>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/5 text-gray-400 border border-white/5">
-                  {tag}
-                </span>
+                <h3 className="font-heading font-bold text-ink-white text-sm">{title}</h3>
+                <p className="text-ink-gray text-xs leading-relaxed mt-1.5">{desc}</p>
               </div>
-              <h3 className="font-bold text-white text-base">{title}</h3>
-              <p className="text-gray-400 text-xs leading-relaxed">{desc}</p>
             </div>
           ))}
         </div>
       </div>
 
       {/* 3 Step Workflow */}
-      <div className="glass rounded-3xl p-8 border border-white/10 space-y-8">
-        <div className="text-center max-w-xl mx-auto space-y-2">
-          <h2 className="text-2xl font-black text-white">How the Safety Engine Operates</h2>
-          <p className="text-gray-400 text-xs">End-to-end automated red-teaming pipeline in under 30 seconds</p>
+      <div className="fortress-card p-8 border-fortress-border space-y-6">
+        <div className="text-center max-w-xl mx-auto space-y-1.5">
+          <span className="text-xs font-mono font-bold uppercase tracking-wider text-safety-teal">
+            AUTOMATED EXECUTION PIPELINE
+          </span>
+          <h2 className="text-xl sm:text-2xl font-heading font-black text-ink-white">
+            How the Safety Engine Operates
+          </h2>
+          <p className="text-ink-gray text-xs">End-to-end automated red-teaming in under 30 seconds</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {steps.map(({ n, emoji, title, desc }) => (
-            <div key={n} className="space-y-2 p-5 rounded-2xl bg-white/3 border border-white/5">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{emoji}</span>
-                <span className="font-mono text-xs font-black text-[#6C63FF]">STEP {n}</span>
-              </div>
-              <h4 className="font-bold text-white text-sm">{title}</h4>
-              <p className="text-gray-400 text-xs leading-relaxed">{desc}</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {steps.map(({ n, title, desc }) => (
+            <div key={n} className="p-5 rounded-xl bg-fortress-base border border-fortress-border space-y-2">
+              <div className="font-mono text-xs font-black text-saffron">STEP {n}</div>
+              <h4 className="font-heading font-bold text-ink-white text-sm">{title}</h4>
+              <p className="text-ink-gray text-xs leading-relaxed">{desc}</p>
             </div>
           ))}
         </div>

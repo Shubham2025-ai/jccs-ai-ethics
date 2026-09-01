@@ -1,32 +1,48 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 body {
-  background-color: #080811;
-  color: #f1f5f9;
-  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #0a0a0f;
+  color: #f0f0f5;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   min-height: 100vh;
   overflow-x: hidden;
+  line-height: 1.45;
   letter-spacing: -0.01em;
 }
 
-/* Subtle futuristic background grid with radial depth and ambient mesh */
+/* Sovereign Digital Fortress Background */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   background-image:
-    radial-gradient(circle at 50% -10%, rgba(108, 99, 255, 0.18) 0%, transparent 50%),
-    radial-gradient(circle at 90% 60%, rgba(0, 184, 148, 0.08) 0%, transparent 40%),
-    radial-gradient(circle at 10% 80%, rgba(233, 69, 96, 0.06) 0%, transparent 45%),
-    linear-gradient(rgba(108, 99, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(108, 99, 255, 0.02) 1px, transparent 1px);
+    radial-gradient(circle at 50% -10%, rgba(255, 153, 51, 0.08) 0%, transparent 45%),
+    radial-gradient(circle at 85% 70%, rgba(0, 212, 170, 0.04) 0%, transparent 40%),
+    radial-gradient(circle at 15% 85%, rgba(192, 57, 43, 0.03) 0%, transparent 40%),
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
   background-size: 100% 100%, 100% 100%, 100% 100%, 48px 48px, 48px 48px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Subtle Ashoka Chakra Geometric Backdrop */
+body::after {
+  content: '';
+  position: fixed;
+  top: 15%;
+  right: -10%;
+  width: 600px;
+  height: 600px;
+  background-image: radial-gradient(circle, transparent 30%, rgba(255, 153, 51, 0.015) 31%, transparent 32%),
+    repeating-conic-gradient(from 0deg, transparent 0deg 13deg, rgba(255, 153, 51, 0.01) 14deg 15deg);
+  border-radius: 50%;
   pointer-events: none;
   z-index: 0;
 }
@@ -39,111 +55,160 @@ body::before {
   flex-direction: column;
 }
 
-/* Premium frosted glassmorphism */
+/* Typography Utility Classes */
+.font-heading {
+  font-family: 'Space Grotesk', sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Sovereign Fortress Surface Cards */
+.fortress-card {
+  background-color: #13131f;
+  border: 1px solid #1e1e2e;
+  border-radius: 1rem;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fortress-card-interactive {
+  background-color: #13131f;
+  border: 1px solid #1e1e2e;
+  border-radius: 1rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fortress-card-interactive:hover {
+  transform: translateY(-2px);
+  border-color: #2e2e42;
+  box-shadow: 0 12px 36px -8px rgba(0, 0, 0, 0.5);
+}
+
+/* Legacy Glass Support mapped to Fortress */
 .glass {
-  background: rgba(15, 15, 26, 0.72);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: #13131f;
+  border: 1px solid #1e1e2e;
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .glass-interactive {
-  background: rgba(15, 15, 26, 0.72);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: #13131f;
+  border: 1px solid #1e1e2e;
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .glass-interactive:hover {
-  border-color: rgba(108, 99, 255, 0.4);
-  box-shadow: 0 12px 40px -4px rgba(108, 99, 255, 0.22);
+  border-color: #ff9933;
+  box-shadow: 0 12px 36px -4px rgba(255, 153, 51, 0.12);
   transform: translateY(-2px);
 }
 
-.glass-interactive:active {
-  transform: translateY(0px) scale(0.995);
-}
-
-/* Shimmer & Certificate Glow */
-.cert-card {
+/* Saffron Underline Hover Effect for Buttons */
+.btn-saffron-slide {
   position: relative;
-  background: linear-gradient(145deg, rgba(20, 20, 36, 0.85), rgba(12, 12, 22, 0.95));
-  border: 1px solid rgba(108, 99, 255, 0.3);
-  box-shadow: 0 0 35px rgba(108, 99, 255, 0.15), inset 0 0 20px rgba(108, 99, 255, 0.05);
+  overflow: hidden;
 }
 
-.cert-card::after {
+.btn-saffron-slide::after {
   content: '';
   position: absolute;
-  top: 0; left: -100%; width: 50%; height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.04), transparent);
-  animation: certShimmer 6s infinite;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, #ff9933, #e67e00);
+  transform: scaleX(0);
+  transform-origin: bottom left;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-saffron-slide:hover::after {
+  transform: scaleX(1);
+}
+
+/* Scanline animation for inputs */
+@keyframes scanline {
+  0% { transform: translateY(-100%); opacity: 0; }
+  50% { opacity: 0.8; }
+  100% { transform: translateY(200%); opacity: 0; }
+}
+
+.input-scanline {
+  position: relative;
+  overflow: hidden;
+}
+
+.input-scanline::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #ff9933, transparent);
+  opacity: 0;
   pointer-events: none;
 }
 
-@keyframes certShimmer {
-  0% { left: -100%; }
-  25% { left: 200%; }
-  100% { left: 200%; }
+.input-scanline:focus-within::before {
+  animation: scanline 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
-/* Glowing effects */
-.score-ring { filter: drop-shadow(0 0 28px rgba(108, 99, 255, 0.45)); }
-.glow-purple { box-shadow: 0 0 30px rgba(108, 99, 255, 0.25); }
-.glow-green  { box-shadow: 0 0 30px rgba(0, 184, 148, 0.25); }
+/* Saffron Gradient Text */
+.gradient-saffron {
+  background: linear-gradient(135deg, #ff9933 0%, #e67e00 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
 
-/* Gradient text helpers */
+.gradient-teal {
+  background: linear-gradient(135deg, #00d4aa 0%, #00a884 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
 .gradient-text {
-  background: linear-gradient(135deg, #a78bfa 0%, #6C63FF 50%, #00B894 100%);
+  background: linear-gradient(135deg, #ff9933 0%, #e67e00 50%, #00d4aa 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 /* Unified Risk Tier Palette */
-.risk-low      { color: #00B894; }
-.risk-medium   { color: #FDCB6E; }
-.risk-high     { color: #E17055; }
-.risk-critical { color: #E94560; }
-.passed        { color: #00B894; }
-.failed        { color: #E94560; }
+.risk-low      { color: #00d4aa; }
+.risk-medium   { color: #f1c40f; }
+.risk-high     { color: #e67e00; }
+.risk-critical { color: #c0392b; }
+.passed        { color: #00d4aa; }
+.failed        { color: #c0392b; }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: rgba(8, 8, 17, 0.8); }
-::-webkit-scrollbar-thumb { background: rgba(108, 99, 255, 0.35); border-radius: 9999px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(108, 99, 255, 0.65); }
-
-/* Monospace font */
-.font-mono { font-family: 'JetBrains Mono', monospace; }
-
-/* Micro-animations */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+/* Custom Minimal Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0a0f;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e1e2e;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #ff9933;
 }
 
-@keyframes pulseGlow {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.05); }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.animate-pulse-glow {
-  animation: pulseGlow 3s ease-in-out infinite;
-}
-
-@keyframes pulseGlow {
-  0%, 100% { opacity: 0.8; transform: scale(1); }
-  50%      { opacity: 1; transform: scale(1.05); }
-}
-
-.pulse-glow {
-  animation: pulseGlow 2.5s infinite ease-in-out;
+/* Respect Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
