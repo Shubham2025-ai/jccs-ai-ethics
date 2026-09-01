@@ -337,7 +337,7 @@ export default function LaunchEvaluationPage() {
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState(0)
 
-  const [testingConnection, setTestingConnection] = useState(false)
+  const [isTesting, setIsTesting] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState(null)
 
   const currentProviderTile = useMemo(() => {
@@ -351,31 +351,46 @@ export default function LaunchEvaluationPage() {
     setConnectionStatus(null)
   }
 
-  const handleTestConnection = async () => {
-    setTestingConnection(true)
+  const handleTestConnection = async (e) => {
+    if (e && e.preventDefault) e.preventDefault()
+    console.log("[Frontend] Button clicked")
+    console.log("[Frontend] Payload:", { provider, apiKey: !!apiKey, baseUrl, modelId: modelName })
+
+    setIsTesting(true)
     setConnectionStatus(null)
+
     try {
       const res = await testTargetConnection({
         target_model_name: modelName,
         target_model_provider: provider,
         target_model_url: baseUrl.trim() ? baseUrl : null,
-        api_key: apiKey.trim() ? apiKey : null
+        api_key: apiKey.trim() ? apiKey : null,
+        provider,
+        model: modelName,
+        base_url: baseUrl.trim() ? baseUrl : null,
+        apiKey: apiKey.trim() ? apiKey : null
       })
+      console.log("[Frontend] Response:", res.status, res.data)
       setConnectionStatus(res.data)
-      if (res.data.success) {
+      if (res.data?.success) {
         toast.success(`Target Connected: ${res.data.model} (${res.data.latency_ms}ms)`)
-      } else if (res.data.is_quota_limit || res.data.http_status === 429) {
+      } else if (res.data?.is_quota_limit || res.data?.http_status === 429) {
         toast.error(`API Key Validated — Rate Limit Reached (HTTP 429)`)
       } else {
-        const errorDetail = res.data.error || (res.data.http_status ? `HTTP ${res.data.http_status}` : 'Connection check failed')
+        const errorDetail = res.data?.error || (res.data?.http_status ? `HTTP ${res.data.http_status}` : 'Connection check failed')
         toast.error(`Target connection failed: ${errorDetail}`)
       }
-    } catch (err) {
-      const errorMsg = err.response?.data?.detail || err.message || 'Connection check failed'
-      setConnectionStatus({ success: false, error: errorMsg })
+    } catch (error) {
+      console.error("[Frontend] Fetch error:", error)
+      const errorMsg = error.response?.data?.detail || error.message || 'Connection check failed'
+      setConnectionStatus({
+        success: false,
+        error: errorMsg,
+        http_status: error.response?.status || 500
+      })
       toast.error(errorMsg)
     } finally {
-      setTestingConnection(false)
+      setIsTesting(false)
     }
   }
 
@@ -749,14 +764,15 @@ export default function LaunchEvaluationPage() {
               <div className="pt-2 border-t border-fortress-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <button
                   type="button"
-                  disabled={testingConnection}
+                  disabled={isTesting}
                   onClick={handleTestConnection}
-                  className="btn-saffron-slide px-4 py-2 rounded-xl text-xs font-heading font-bold flex items-center gap-2 bg-fortress-surface border border-fortress-border hover:border-saffron text-ink-white disabled:opacity-50 transition-all"
+                  className="btn-saffron-slide px-4 py-2 rounded-xl text-xs font-heading font-bold flex items-center gap-2 bg-fortress-surface border border-fortress-border hover:border-saffron text-ink-white disabled:opacity-50 transition-all cursor-pointer"
                 >
-                  {testingConnection ? (
+                  {isTesting ? (
                     <>
+                      <span className="w-2 h-2 rounded-full bg-saffron animate-ping" />
                       <Loader2 className="w-3.5 h-3.5 animate-spin text-saffron" />
-                      <span>Pinging Target Architecture...</span>
+                      <span>Testing...</span>
                     </>
                   ) : (
                     <>
@@ -766,25 +782,34 @@ export default function LaunchEvaluationPage() {
                   )}
                 </button>
 
-                {connectionStatus && (
-                  <div className="w-full sm:w-auto">
-                    {connectionStatus.success ? (
+                <div className="w-full sm:w-auto">
+                  {isTesting && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-saffron/10 border border-saffron/30 text-saffron text-xs font-mono">
+                      <span className="w-2 h-2 rounded-full bg-saffron animate-pulse" />
+                      <span>Testing...</span>
+                    </div>
+                  )}
+
+                  {!isTesting && connectionStatus && (
+                    connectionStatus.success ? (
                       <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-safety-teal/10 border border-safety-teal/30 text-safety-teal text-xs font-mono">
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span className="font-bold">Connection Verified:</span>
                         <span className="text-ink-white">{connectionStatus.model}</span>
-                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-safety-teal/20">
-                          {connectionStatus.latency_ms}ms
-                        </span>
+                        {(connectionStatus.latency_ms !== undefined && connectionStatus.latency_ms !== null) && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-safety-teal/20">
+                            {connectionStatus.latency_ms}ms
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-safety-crimson/10 border border-safety-crimson/30 text-safety-crimson text-xs font-mono">
                         <span className="font-bold uppercase">HTTP {connectionStatus.http_status || 0}:</span>
                         <span className="text-ink-gray truncate max-w-xs">{connectionStatus.error || 'Connection failed'}</span>
                       </div>
-                    )}
-                  </div>
-                )}
+                    )
+                  )}
+                </div>
               </div>
             </div>
           )}

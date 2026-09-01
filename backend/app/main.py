@@ -62,6 +62,63 @@ app.include_router(audit_router)
 app.include_router(batch_audit_router)
 
 
+from app.services import llm_client
+from pydantic import BaseModel
+from typing import Optional
+from fastapi import Body, HTTPException
+import traceback
+
+
+class DirectTestRequest(BaseModel):
+    model_config = {"protected_namespaces": ()}
+
+    target_model_name: Optional[str] = None
+    target_model_provider: Optional[str] = None
+    target_model_url: Optional[str] = None
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+    model_name: Optional[str] = None
+    modelId: Optional[str] = None
+    provider: Optional[str] = None
+    base_url: Optional[str] = None
+    url: Optional[str] = None
+    apiKey: Optional[str] = None
+
+
+@app.post("/api/test-connection")
+@app.post("/test-connection")
+async def root_test_connection(req: DirectTestRequest = Body(...)):
+    provider = req.provider or req.target_model_provider or "groq"
+    model = req.model or req.model_name or req.modelId or req.target_model_name or "openai/gpt-oss-20b"
+    base_url = req.base_url or req.url or req.target_model_url
+    api_key = req.apiKey or req.api_key
+
+    print(f"[Backend] /api/test-connection hit with provider={provider}, model={model}, base_url={base_url}, api_key_set={bool(api_key)}")
+
+    if not provider:
+        raise HTTPException(status_code=400, detail="Missing required field: provider")
+
+    try:
+        res = await llm_client.test_direct_connection(
+            model_name=model,
+            provider=provider,
+            base_url=base_url,
+            api_key=api_key
+        )
+        print(f"[Backend] Result: {res}")
+        return res
+    except Exception as e:
+        print("[Backend] Exception in test_direct_connection:")
+        print(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e),
+            "http_status": 500,
+            "provider": provider,
+            "model": model
+        }
+
+
 @app.get("/")
 def root():
     return {

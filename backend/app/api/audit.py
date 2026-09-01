@@ -70,30 +70,61 @@ def run_tabular_audit_sync(audit_id: int, df: pd.DataFrame, run_name: str):
         db.close()
 
 
-# =========================================================================
-# 1. NEW ENDPOINT: /audit/test-target-connection (Direct Live Probe)
-# =========================================================================
+import traceback
 
 class TestConnectionRequest(BaseModel):
-    target_model_name: Optional[str] = "sarvam-105b"
-    target_model_provider: str = "sarvam"
+    model_config = {"protected_namespaces": ()}
+
+    target_model_name: Optional[str] = None
+    target_model_provider: Optional[str] = None
     target_model_url: Optional[str] = None
     api_key: Optional[str] = None
+    # Support alias parameter names
+    model: Optional[str] = None
+    model_name: Optional[str] = None
+    modelId: Optional[str] = None
+    provider: Optional[str] = None
+    base_url: Optional[str] = None
+    url: Optional[str] = None
+    apiKey: Optional[str] = None
 
 
 @router.post("/test-target-connection")
+@router.post("/test-connection")
 async def test_target_connection(req: TestConnectionRequest = Body(...)):
     """
     Directly tests connectivity to a live target LLM endpoint WITHOUT fallback simulation.
     Returns real HTTP status code and response from the upstream provider.
     """
-    res = await llm_client.test_direct_connection(
-        model_name=req.target_model_name,
-        provider=req.target_model_provider,
-        base_url=req.target_model_url,
-        api_key=req.api_key
-    )
-    return res
+    provider = req.provider or req.target_model_provider or "groq"
+    model = req.model or req.model_name or req.modelId or req.target_model_name or "openai/gpt-oss-20b"
+    base_url = req.base_url or req.url or req.target_model_url
+    api_key = req.apiKey or req.api_key
+
+    print(f"[Backend] /api/test-connection hit with provider={provider}, model={model}, base_url={base_url}, api_key_set={bool(api_key)}")
+
+    if not provider:
+        raise HTTPException(status_code=400, detail="Missing required field: provider")
+
+    try:
+        res = await llm_client.test_direct_connection(
+            model_name=model,
+            provider=provider,
+            base_url=base_url,
+            api_key=api_key
+        )
+        print(f"[Backend] Result: {res}")
+        return res
+    except Exception as e:
+        print("[Backend] Exception in test_direct_connection:")
+        print(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e),
+            "http_status": 500,
+            "provider": provider,
+            "model": model
+        }
 
 
 # =========================================================================
