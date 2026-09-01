@@ -758,6 +758,8 @@ async def query_target_model(
 
     print(f"\n   [QUERY] {provider} -> {endpoint} | model={effective_model} | key={masked_key}")
 
+    is_google = provider in ("google", "gemini", "google_ai_studio", "google-ai-studio") or (base_url and ("googleapis.com" in base_url or "generativelanguage" in base_url))
+
     try:
         async with httpx.AsyncClient(timeout=effective_timeout) as client:
             resp = await client.post(endpoint, json=payload, headers=headers)
@@ -776,7 +778,7 @@ async def query_target_model(
                     "latency_ms": latency,
                     "is_live": True
                 }
-            else:
+            elif resp.status_code in (400, 401, 403, 429) or not is_google:
                 # ── REAL ERROR: surface it transparently ──
                 err_msg = _parse_provider_error(resp.text, resp.status_code)
                 print(f"   [QUERY ERROR] {err_msg}")
@@ -789,17 +791,69 @@ async def query_target_model(
                     "error_detail": f"HTTP {resp.status_code}: {err_msg}"
                 }
     except Exception as exc:
-        latency = round((time.time() - start_time) * 1000, 1)
-        err_msg = str(exc)
-        print(f"   [QUERY EXCEPTION] {err_msg}")
-        return {
-            "status": "error",
-            "response": f"[Connection Error]: {err_msg}",
-            "model": effective_model,
-            "latency_ms": latency,
-            "is_live": False,
-            "error_detail": err_msg
+        if not is_google:
+            latency = round((time.time() - start_time) * 1000, 1)
+            err_msg = str(exc)
+            print(f"   [QUERY EXCEPTION] {err_msg}")
+            return {
+                "status": "error",
+                "response": f"[Connection Error]: {err_msg}",
+                "model": effective_model,
+                "latency_ms": latency,
+                "is_live": False,
+                "error_detail": err_msg
+            }
+        print(f"   [GOOGLE METHOD A EXCEPTION] {exc} -> Trying Method B (Google Native REST)...")
+
+    # ── METHOD B FALLBACK FOR GOOGLE: Native Direct REST ──
+    if is_google:
+        clean_model = effective_model.replace("models/", "").replace("v1beta/", "").replace("v1/", "").strip("/")
+        native_url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent?key={raw_token}"
+        native_headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": raw_token
         }
+        native_payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": temperature, "maxOutputTokens": max(max_tokens or 500, 8192)}
+        }
+        print(f"   [QUERY: GOOGLE METHOD B (Native REST)] -> {native_url.split('?')[0]} | model={clean_model} | key={masked_key}")
+        try:
+            async with httpx.AsyncClient(timeout=effective_timeout) as client:
+                resp_b = await client.post(native_url, json=native_payload, headers=native_headers)
+                latency = round((time.time() - start_time) * 1000, 1)
+                print(f"   [METHOD B RESULT] HTTP {resp_b.status_code} | {latency}ms")
+                if resp_b.status_code == 200:
+                    content = _extract_gemini_content(resp_b.json())
+                    if not content:
+                        content = "[Empty Response]: Model returned empty content."
+                    return {
+                        "status": "success",
+                        "response": content,
+                        "model": clean_model,
+                        "latency_ms": latency,
+                        "is_live": True
+                    }
+                else:
+                    err_msg = _parse_provider_error(resp_b.text, resp_b.status_code)
+                    return {
+                        "status": "error",
+                        "response": f"[API Error HTTP {resp_b.status_code}]: {err_msg}",
+                        "model": clean_model,
+                        "latency_ms": latency,
+                        "is_live": False,
+                        "error_detail": f"HTTP {resp_b.status_code}: {err_msg}"
+                    }
+        except Exception as exc_b:
+            latency = round((time.time() - start_time) * 1000, 1)
+            return {
+                "status": "error",
+                "response": f"[Connection Error]: {str(exc_b)}",
+                "model": clean_model,
+                "latency_ms": latency,
+                "is_live": False,
+                "error_detail": str(exc_b)
+            }
 
 
 async def test_direct_connection(
@@ -895,6 +949,8 @@ async def test_direct_connection(
 
     print(f"\n   [TEST CONNECTION] {provider} -> {endpoint} | model={effective_model} | key={masked_key}")
 
+    is_google = provider in ("google", "gemini", "google_ai_studio", "google-ai-studio") or (base_url and ("googleapis.com" in base_url or "generativelanguage" in base_url))
+
     try:
         async with httpx.AsyncClient(timeout=timeout_seconds) as client:
             resp = await client.post(endpoint, json=payload, headers=headers)
@@ -927,7 +983,7 @@ async def test_direct_connection(
                     "latency_ms": latency,
                     "error": f"HTTP 429 Quota/Rate Limit: API key is VALID, but model '{effective_model}' exhausted rate limit on upstream provider. ({err_parsed})"
                 }
-            else:
+            elif resp.status_code in (400, 401, 403) or not is_google:
                 err_parsed = _parse_provider_error(resp.text, resp.status_code)
                 return {
                     "success": False,
@@ -939,14 +995,83 @@ async def test_direct_connection(
                     "error": f"HTTP {resp.status_code}: {err_parsed}"
                 }
     except Exception as exc:
-        latency = round((time.time() - start_time) * 1000, 1)
-        status_code = getattr(exc, "response", None) and getattr(exc.response, "status_code", None)
-        return {
-            "success": False,
-            "provider": provider,
-            "model": effective_model,
-            "endpoint": endpoint,
-            "http_status": status_code or 0,
-            "latency_ms": latency,
-            "error": f"HTTP {status_code or 0}: Connection failed — check endpoint URL and model ID ({str(exc)})"
+        if not is_google:
+            latency = round((time.time() - start_time) * 1000, 1)
+            status_code = getattr(exc, "response", None) and getattr(exc.response, "status_code", None)
+            return {
+                "success": False,
+                "provider": provider,
+                "model": effective_model,
+                "endpoint": endpoint,
+                "http_status": status_code or 0,
+                "latency_ms": latency,
+                "error": f"HTTP {status_code or 0}: Connection failed — check endpoint URL and model ID ({str(exc)})"
+            }
+        print(f"   [GOOGLE METHOD A EXCEPTION] {exc} -> Trying Method B (Google Native REST)...")
+
+    # ── METHOD B FALLBACK FOR GOOGLE: Native Direct REST ──
+    if is_google:
+        clean_model = effective_model.replace("models/", "").replace("v1beta/", "").replace("v1/", "").strip("/")
+        native_url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent?key={raw_token}"
+        native_headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": raw_token
         }
+        native_payload = {
+            "contents": [{"parts": [{"text": "Hello, confirm you are online in 5 words."}]}],
+            "generationConfig": {"maxOutputTokens": 256, "temperature": 0.5}
+        }
+        print(f"   [TEST: GOOGLE METHOD B (Native REST)] -> {native_url.split('?')[0]} | model={clean_model} | key={masked_key}")
+        try:
+            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                resp_b = await client.post(native_url, json=native_payload, headers=native_headers)
+                latency = round((time.time() - start_time) * 1000, 1)
+                print(f"   [METHOD B RESULT] HTTP {resp_b.status_code} | {latency}ms")
+                if resp_b.status_code == 200:
+                    content = _extract_gemini_content(resp_b.json())
+                    if not content:
+                        content = "Online (Ready for safety evaluation)"
+                    return {
+                        "success": True,
+                        "provider": provider,
+                        "model": clean_model,
+                        "endpoint": native_url.split("?")[0],
+                        "http_status": 200,
+                        "latency_ms": latency,
+                        "response_sample": content[:150]
+                    }
+                elif resp_b.status_code == 429:
+                    err_parsed = _parse_provider_error(resp_b.text, resp_b.status_code)
+                    return {
+                        "success": False,
+                        "is_quota_limit": True,
+                        "provider": provider,
+                        "model": clean_model,
+                        "endpoint": native_url.split("?")[0],
+                        "http_status": 429,
+                        "latency_ms": latency,
+                        "error": f"HTTP 429 Quota/Rate Limit: API key is VALID, but model '{clean_model}' exceeded quota on Google AI Studio. ({err_parsed})"
+                    }
+                else:
+                    err_parsed = _parse_provider_error(resp_b.text, resp_b.status_code)
+                    return {
+                        "success": False,
+                        "provider": provider,
+                        "model": clean_model,
+                        "endpoint": native_url.split("?")[0],
+                        "http_status": resp_b.status_code,
+                        "latency_ms": latency,
+                        "error": f"HTTP {resp_b.status_code}: {err_parsed}"
+                    }
+        except Exception as exc_b:
+            latency = round((time.time() - start_time) * 1000, 1)
+            status_code = getattr(exc_b, "response", None) and getattr(exc_b.response, "status_code", None)
+            return {
+                "success": False,
+                "provider": provider,
+                "model": clean_model,
+                "endpoint": native_url.split("?")[0],
+                "http_status": status_code or 0,
+                "latency_ms": latency,
+                "error": f"HTTP {status_code or 0}: Connection failed — check endpoint URL and model ID ({str(exc_b)})"
+            }
