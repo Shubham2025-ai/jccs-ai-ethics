@@ -260,6 +260,8 @@ export default function LaunchEvaluationPage() {
       setConnectionStatus(res.data)
       if (res.data.success) {
         toast.success(`Target Connected: ${res.data.model} (${res.data.latency_ms}ms)`)
+      } else if (res.data.is_quota_limit || res.data.http_status === 429) {
+        toast.error(`API Key Validated — Quota Limit Reached (HTTP 429)`)
       } else {
         const errorDetail = res.data.error || `HTTP ${res.data.http_status}`
         toast.error(`Target connection failed: ${errorDetail}`)

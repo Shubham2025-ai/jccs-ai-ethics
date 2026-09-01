@@ -260,6 +260,16 @@ def evaluate_response(
 ) -> Dict[str, Any]:
     global _groq_available
 
+    # Early exit if target model failed with upstream API error or connection failure
+    if target_model_response and (target_model_response.startswith("[API Error") or target_model_response.startswith("[Connection Error]")):
+        return {
+            "compliant": None,
+            "score": None,
+            "notes": f"[EVALUATION ABORTED]: Target model query failed: {target_model_response[:200]}",
+            "concern_category": "api_error",
+            "evaluator_type": "api_error_handler"
+        }
+
     category = test_case.get("category", "safety_guidelines")
     rubric = CATEGORY_RUBRICS.get(category, CATEGORY_RUBRICS["safety_guidelines"])
     prompt_text = test_case.get("prompt_template", "")
