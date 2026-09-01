@@ -532,7 +532,9 @@ def _parse_provider_error(raw_body: str, status_code: int) -> str:
     """
     try:
         data = json.loads(raw_body)
-        # OpenAI / Groq / Sarvam: {"error": {"message": "...", "code": "..."}}
+        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+            data = data[0]
+        # OpenAI / Groq / Sarvam / Google: {"error": {"message": "...", "code": "..."}}
         if isinstance(data, dict) and "error" in data:
             err = data["error"]
             if isinstance(err, dict):
@@ -542,7 +544,6 @@ def _parse_provider_error(raw_body: str, status_code: int) -> str:
                     return f"{msg} (code: {code})" if code else msg
                 return str(err)[:200]
             return str(err)[:200]
-        # Google: {"error": {"message": "...", "status": "..."}}  (same shape, already handled)
         return raw_body[:200]
     except (json.JSONDecodeError, Exception):
         return raw_body[:200] if raw_body else f"HTTP {status_code} (empty response body)"
@@ -678,11 +679,8 @@ async def query_target_model(
         }
 
     # ── REAL API: Live endpoint resolution ──
-    is_google_native = False
     if provider == "groq":
         endpoint = base_url or "https://api.groq.com/openai/v1/chat/completions"
-        if not endpoint.endswith("/chat/completions"):
-            endpoint = endpoint.rstrip("/") + "/chat/completions"
         effective_key = api_key or getattr(settings, "GROQ_API_KEY", "")
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 6.0
     elif provider == "sarvam" or (base_url and "sarvam.ai" in base_url):
@@ -697,189 +695,111 @@ async def query_target_model(
             endpoint = f"{clean_base}/chat/completions"
         effective_key = api_key or ""
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 20.0
-    elif provider in ("google", "gemini", "google_ai_studio") or (base_url and ("googleapis.com" in base_url or "generativelanguage" in base_url)):
-        clean_model = effective_model.replace("models/", "").replace("v1beta/", "").replace("v1/", "").strip("/")
-        if base_url and "openai" in base_url:
-            endpoint = base_url.rstrip("/") + "/chat/completions"
-            is_google_native = False
+    elif provider in ("google", "gemini", "google_ai_studio", "google-ai-studio") or (base_url and ("googleapis.com" in base_url or "generativelanguage" in base_url)):
+        clean_base = (base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
+        if clean_base.endswith("/chat/completions"):
+            endpoint = clean_base
+        elif clean_base.endswith("/openai"):
+            endpoint = f"{clean_base}/chat/completions"
         else:
-            clean_base = (base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
-            if ":generateContent" in clean_base:
-                endpoint = clean_base
-            elif "/models" in clean_base:
-                endpoint = f"{clean_base}/{clean_model}:generateContent"
-            else:
-                endpoint = f"{clean_base}/models/{clean_model}:generateContent"
-            is_google_native = True
+            endpoint = f"{clean_base}/openai/chat/completions"
         effective_key = api_key or ""
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 18.0
     elif provider == "openrouter":
         endpoint = base_url or "https://openrouter.ai/api/v1/chat/completions"
-        if not endpoint.endswith("/chat/completions"):
-            endpoint = endpoint.rstrip("/") + "/chat/completions"
         effective_key = api_key or ""
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 18.0
     elif provider == "openai":
         endpoint = base_url or "https://api.openai.com/v1/chat/completions"
-        if not endpoint.endswith("/chat/completions"):
-            endpoint = endpoint.rstrip("/") + "/chat/completions"
         effective_key = api_key or getattr(settings, "OPENAI_API_KEY", "")
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 18.0
     elif provider == "ollama":
         endpoint = base_url or "http://localhost:11434/v1/chat/completions"
-        if not endpoint.endswith("/chat/completions"):
-            endpoint = endpoint.rstrip("/") + "/chat/completions"
         effective_key = api_key or "ollama"
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 18.0
     else:  # Custom BYO endpoint / Krutrim / vLLM
         endpoint = base_url or "https://api.sarvam.ai/v1/chat/completions"
-        if not endpoint.endswith("/chat/completions"):
-            endpoint = endpoint.rstrip("/") + "/chat/completions"
         effective_key = api_key or "Bearer default"
         effective_timeout = timeout_seconds if timeout_seconds != 6.0 else 18.0
+
+    if not endpoint.endswith("/chat/completions"):
+        endpoint = endpoint.rstrip("/") + "/chat/completions"
 
     raw_token = effective_key.replace("Bearer ", "").strip().strip('"').strip("'") if effective_key else ""
     masked_key = f"{raw_token[:4]}****{raw_token[-4:]}" if len(raw_token) > 8 else "****"
 
-    # ── GOOGLE NATIVE (generateContent) ──
-    if is_google_native:
-        clean_model = effective_model.replace("models/", "").replace("v1beta/", "").replace("v1/", "").strip("/")
-        target_url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent?key={raw_token}"
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
+    # Build headers
+    is_sarvam = provider == "sarvam" or (base_url and "sarvam.ai" in base_url)
+    if is_sarvam:
         headers = {
             "Content-Type": "application/json",
-            "x-goog-api-key": raw_token
+            "api-subscription-key": raw_token
         }
-        effective_max_tokens = max(max_tokens or 500, 8192)
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "temperature": temperature,
-                "maxOutputTokens": effective_max_tokens
-            }
-        }
-
-        log_url = target_url.split("?")[0]
-        print(f"\n   [QUERY] Google Native -> {log_url} | model={clean_model} | key={masked_key} | maxTokens={effective_max_tokens}")
-
-        try:
-            async with httpx.AsyncClient(timeout=effective_timeout) as client:
-                resp = await client.post(target_url, json=payload, headers=headers)
-                latency = round((time.time() - start_time) * 1000, 1)
-                print(f"   [QUERY RESULT] HTTP {resp.status_code} | {latency}ms")
-
-                if resp.status_code == 200:
-                    data = resp.json()
-                    content = _extract_gemini_content(data)
-                    if not content:
-                        content = "[Empty Response]: The model generated no visible text output."
-
-                    return {
-                        "status": "success",
-                        "response": content,
-                        "model": clean_model,
-                        "latency_ms": latency,
-                        "is_live": True
-                    }
-                else:
-                    # ── REAL ERROR: surface it transparently ──
-                    err_msg = _parse_provider_error(resp.text, resp.status_code)
-                    print(f"   [QUERY ERROR] {err_msg}")
-                    return {
-                        "status": "error",
-                        "response": f"[API Error HTTP {resp.status_code}]: {err_msg}",
-                        "model": clean_model,
-                        "latency_ms": latency,
-                        "is_live": False,
-                        "error_detail": f"HTTP {resp.status_code}: {err_msg}"
-                    }
-        except Exception as exc:
-            latency = round((time.time() - start_time) * 1000, 1)
-            err_msg = str(exc)
-            print(f"   [QUERY EXCEPTION] {err_msg}")
-            return {
-                "status": "error",
-                "response": f"[Connection Error]: {err_msg}",
-                "model": clean_model,
-                "latency_ms": latency,
-                "is_live": False,
-                "error_detail": err_msg
-            }
-
-    # ── OPENAI-COMPATIBLE (chat/completions) ──
     else:
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
-
-        # Build headers
-        is_sarvam = provider == "sarvam" or (base_url and "sarvam.ai" in base_url)
-        if is_sarvam:
-            headers = {
-                "Content-Type": "application/json",
-                "api-subscription-key": raw_token
-            }
-        else:
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {raw_token}" if raw_token else ""
-            }
-            if provider == "openrouter":
-                headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
-                headers["X-Title"] = "IndiaAI Safety Platform"
-
-        payload = {
-            "model": effective_model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {raw_token}" if raw_token else ""
         }
+        if provider == "openrouter":
+            headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
+            headers["X-Title"] = "IndiaAI Safety Platform"
 
-        print(f"\n   [QUERY] {provider} -> {endpoint} | model={effective_model} | key={masked_key}")
+    payload = {
+        "model": effective_model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens
+    }
 
-        try:
-            async with httpx.AsyncClient(timeout=effective_timeout) as client:
-                resp = await client.post(endpoint, json=payload, headers=headers)
-                latency = round((time.time() - start_time) * 1000, 1)
-                print(f"   [QUERY RESULT] HTTP {resp.status_code} | {latency}ms")
+    print(f"\n   [QUERY] {provider} -> {endpoint} | model={effective_model} | key={masked_key}")
 
-                if resp.status_code == 200:
-                    data = resp.json()
-                    content = _extract_openai_chat_content(data)
-                    if not content:
-                        content = "[Empty Response]: Model returned empty content."
-                    return {
-                        "status": "success",
-                        "response": content,
-                        "model": effective_model,
-                        "latency_ms": latency,
-                        "is_live": True
-                    }
-                else:
-                    # ── REAL ERROR: surface it transparently ──
-                    err_msg = _parse_provider_error(resp.text, resp.status_code)
-                    print(f"   [QUERY ERROR] {err_msg}")
-                    return {
-                        "status": "error",
-                        "response": f"[API Error HTTP {resp.status_code}]: {err_msg}",
-                        "model": effective_model,
-                        "latency_ms": latency,
-                        "is_live": False,
-                        "error_detail": f"HTTP {resp.status_code}: {err_msg}"
-                    }
-
-        except Exception as exc:
+    try:
+        async with httpx.AsyncClient(timeout=effective_timeout) as client:
+            resp = await client.post(endpoint, json=payload, headers=headers)
             latency = round((time.time() - start_time) * 1000, 1)
-            err_msg = str(exc)
-            print(f"   [QUERY EXCEPTION] {err_msg}")
-            return {
-                "status": "error",
-                "response": f"[Connection Error]: {err_msg}",
-                "model": effective_model,
-                "latency_ms": latency,
-                "is_live": False,
-                "error_detail": err_msg
-            }
+            print(f"   [QUERY RESULT] HTTP {resp.status_code} | {latency}ms")
+
+            if resp.status_code == 200:
+                data = resp.json()
+                content = _extract_openai_chat_content(data)
+                if not content:
+                    content = "[Empty Response]: Model returned empty content."
+                return {
+                    "status": "success",
+                    "response": content,
+                    "model": effective_model,
+                    "latency_ms": latency,
+                    "is_live": True
+                }
+            else:
+                # ── REAL ERROR: surface it transparently ──
+                err_msg = _parse_provider_error(resp.text, resp.status_code)
+                print(f"   [QUERY ERROR] {err_msg}")
+                return {
+                    "status": "error",
+                    "response": f"[API Error HTTP {resp.status_code}]: {err_msg}",
+                    "model": effective_model,
+                    "latency_ms": latency,
+                    "is_live": False,
+                    "error_detail": f"HTTP {resp.status_code}: {err_msg}"
+                }
+    except Exception as exc:
+        latency = round((time.time() - start_time) * 1000, 1)
+        err_msg = str(exc)
+        print(f"   [QUERY EXCEPTION] {err_msg}")
+        return {
+            "status": "error",
+            "response": f"[Connection Error]: {err_msg}",
+            "model": effective_model,
+            "latency_ms": latency,
+            "is_live": False,
+            "error_detail": err_msg
+        }
 
 
 async def test_direct_connection(
@@ -922,20 +842,14 @@ async def test_direct_connection(
                 clean_base = clean_base + "/v1"
             endpoint = f"{clean_base}/chat/completions"
         effective_key = api_key or ""
-    elif provider in ("google", "gemini", "google_ai_studio") or (base_url and ("googleapis.com" in base_url or "generativelanguage" in base_url)):
-        clean_model = effective_model.replace("models/", "").replace("v1beta/", "").replace("v1/", "").strip("/")
-        if base_url and "openai" in base_url:
-            endpoint = base_url.rstrip("/") + "/chat/completions"
-            is_google_native = False
+    elif provider in ("google", "gemini", "google_ai_studio", "google-ai-studio") or (base_url and ("googleapis.com" in base_url or "generativelanguage" in base_url)):
+        clean_base = (base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
+        if clean_base.endswith("/chat/completions"):
+            endpoint = clean_base
+        elif clean_base.endswith("/openai"):
+            endpoint = f"{clean_base}/chat/completions"
         else:
-            clean_base = (base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
-            if ":generateContent" in clean_base:
-                endpoint = clean_base
-            elif "/models" in clean_base:
-                endpoint = f"{clean_base}/{clean_model}:generateContent"
-            else:
-                endpoint = f"{clean_base}/models/{clean_model}:generateContent"
-            is_google_native = True
+            endpoint = f"{clean_base}/openai/chat/completions"
         effective_key = api_key or ""
     elif provider == "openrouter":
         endpoint = base_url or "https://openrouter.ai/api/v1/chat/completions"
@@ -950,161 +864,89 @@ async def test_direct_connection(
         endpoint = base_url or "https://api.sarvam.ai/v1/chat/completions"
         effective_key = api_key or "Bearer default"
 
-    if not is_google_native and not endpoint.endswith("/chat/completions"):
+    if not endpoint.endswith("/chat/completions"):
         endpoint = endpoint.rstrip("/") + "/chat/completions"
 
     raw_token = effective_key.replace("Bearer ", "").strip().strip('"').strip("'") if effective_key else ""
     masked_key = f"{raw_token[:4]}****{raw_token[-4:]}" if len(raw_token) > 8 else "****"
 
-    if is_google_native:
-        clean_model = effective_model.replace("models/", "").replace("v1beta/", "").replace("v1/", "").strip("/")
-        target_url = f"{endpoint}?key={raw_token}" if raw_token else endpoint
+    # Build headers
+    is_sarvam = provider == "sarvam" or (base_url and "sarvam.ai" in base_url)
+    if is_sarvam:
         headers = {
             "Content-Type": "application/json",
-            "x-goog-api-key": raw_token
+            "api-subscription-key": raw_token
         }
-        payload = {
-            "contents": [{"parts": [{"text": "Hello, confirm you are online in 5 words."}]}],
-            "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.5}
-        }
-        
-        log_url = target_url.split("?")[0]
-        print(f"\n   [TEST CONNECTION] Google Native -> {log_url} | model={clean_model} | key={masked_key}")
-
-        try:
-            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-                resp = await client.post(target_url, json=payload, headers=headers)
-                latency = round((time.time() - start_time) * 1000, 1)
-                print(f"   [TEST RESULT] HTTP {resp.status_code} | {latency}ms")
-                
-                if resp.status_code == 200:
-                    data = resp.json()
-                    content = _extract_gemini_content(data)
-                    if not content:
-                        content = "Online (Ready for safety evaluation)"
-
-                    return {
-                        "success": True,
-                        "provider": provider,
-                        "model": clean_model,
-                        "endpoint": target_url.split("?")[0],
-                        "http_status": 200,
-                        "latency_ms": latency,
-                        "response_sample": content[:150]
-                    }
-                elif resp.status_code == 429:
-                    err_parsed = _parse_provider_error(resp.text, resp.status_code)
-                    return {
-                        "success": False,
-                        "is_quota_limit": True,
-                        "provider": provider,
-                        "model": clean_model,
-                        "endpoint": target_url.split("?")[0],
-                        "http_status": 429,
-                        "latency_ms": latency,
-                        "error": f"HTTP 429 Quota/Rate Limit: API key is VALID, but model '{clean_model}' exceeded quota on Google AI Studio. ({err_parsed})"
-                    }
-                else:
-                    err_parsed = _parse_provider_error(resp.text, resp.status_code)
-                    return {
-                        "success": False,
-                        "provider": provider,
-                        "model": clean_model,
-                        "endpoint": target_url.split("?")[0],
-                        "http_status": resp.status_code,
-                        "latency_ms": latency,
-                        "error": f"HTTP {resp.status_code}: {err_parsed}"
-                    }
-        except Exception as exc:
-            latency = round((time.time() - start_time) * 1000, 1)
-            status_code = getattr(exc, "response", None) and getattr(exc.response, "status_code", None)
-            return {
-                "success": False,
-                "provider": provider,
-                "model": clean_model,
-                "endpoint": target_url.split("?")[0],
-                "http_status": status_code or 0,
-                "latency_ms": latency,
-                "error": f"HTTP {status_code or 0}: Connection failed — check endpoint URL and model ID ({str(exc)})"
-            }
     else:
-        # Build headers
-        is_sarvam = provider == "sarvam" or (base_url and "sarvam.ai" in base_url)
-        if is_sarvam:
-            headers = {
-                "Content-Type": "application/json",
-                "api-subscription-key": raw_token
-            }
-        else:
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {raw_token}" if raw_token else ""
-            }
-            if provider == "openrouter":
-                headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
-                headers["X-Title"] = "IndiaAI Safety Platform"
-
-        payload = {
-            "model": effective_model,
-            "messages": [{"role": "user", "content": "Hello, confirm you are online in 5 words."}],
-            "max_tokens": 256,
-            "temperature": 0.5
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {raw_token}" if raw_token else ""
         }
+        if provider == "openrouter":
+            headers["HTTP-Referer"] = "https://github.com/IndiaAI-Safety/JCCS"
+            headers["X-Title"] = "IndiaAI Safety Platform"
 
-        print(f"\n   [TEST CONNECTION] {provider} -> {endpoint} | model={effective_model} | key={masked_key}")
+    payload = {
+        "model": effective_model,
+        "messages": [{"role": "user", "content": "Hello, confirm you are online in 5 words."}],
+        "max_tokens": 256,
+        "temperature": 0.5
+    }
 
-        try:
-            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-                resp = await client.post(endpoint, json=payload, headers=headers)
-                latency = round((time.time() - start_time) * 1000, 1)
-                print(f"   [TEST RESULT] HTTP {resp.status_code} | {latency}ms")
-                
-                if resp.status_code == 200:
-                    data = resp.json()
-                    content = _extract_openai_chat_content(data)
-                    if not content:
-                        content = "Online (Ready for safety evaluation)"
-                    return {
-                        "success": True,
-                        "provider": provider,
-                        "model": effective_model,
-                        "endpoint": endpoint,
-                        "http_status": 200,
-                        "latency_ms": latency,
-                        "response_sample": content[:150]
-                    }
-                elif resp.status_code == 429:
-                    err_parsed = _parse_provider_error(resp.text, resp.status_code)
-                    return {
-                        "success": False,
-                        "is_quota_limit": True,
-                        "provider": provider,
-                        "model": effective_model,
-                        "endpoint": endpoint,
-                        "http_status": 429,
-                        "latency_ms": latency,
-                        "error": f"HTTP 429 Quota/Rate Limit: API key is VALID, but model '{effective_model}' exhausted rate limit on upstream provider. ({err_parsed})"
-                    }
-                else:
-                    err_parsed = _parse_provider_error(resp.text, resp.status_code)
-                    return {
-                        "success": False,
-                        "provider": provider,
-                        "model": effective_model,
-                        "endpoint": endpoint,
-                        "http_status": resp.status_code,
-                        "latency_ms": latency,
-                        "error": f"HTTP {resp.status_code}: {err_parsed}"
-                    }
-        except Exception as exc:
+    print(f"\n   [TEST CONNECTION] {provider} -> {endpoint} | model={effective_model} | key={masked_key}")
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+            resp = await client.post(endpoint, json=payload, headers=headers)
             latency = round((time.time() - start_time) * 1000, 1)
-            status_code = getattr(exc, "response", None) and getattr(exc.response, "status_code", None)
-            return {
-                "success": False,
-                "provider": provider,
-                "model": effective_model,
-                "endpoint": endpoint,
-                "http_status": status_code or 0,
-                "latency_ms": latency,
-                "error": f"HTTP {status_code or 0}: Connection failed — check endpoint URL and model ID ({str(exc)})"
-            }
+            print(f"   [TEST RESULT] HTTP {resp.status_code} | {latency}ms")
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                content = _extract_openai_chat_content(data)
+                if not content:
+                    content = "Online (Ready for safety evaluation)"
+                return {
+                    "success": True,
+                    "provider": provider,
+                    "model": effective_model,
+                    "endpoint": endpoint,
+                    "http_status": 200,
+                    "latency_ms": latency,
+                    "response_sample": content[:150]
+                }
+            elif resp.status_code == 429:
+                err_parsed = _parse_provider_error(resp.text, resp.status_code)
+                return {
+                    "success": False,
+                    "is_quota_limit": True,
+                    "provider": provider,
+                    "model": effective_model,
+                    "endpoint": endpoint,
+                    "http_status": 429,
+                    "latency_ms": latency,
+                    "error": f"HTTP 429 Quota/Rate Limit: API key is VALID, but model '{effective_model}' exhausted rate limit on upstream provider. ({err_parsed})"
+                }
+            else:
+                err_parsed = _parse_provider_error(resp.text, resp.status_code)
+                return {
+                    "success": False,
+                    "provider": provider,
+                    "model": effective_model,
+                    "endpoint": endpoint,
+                    "http_status": resp.status_code,
+                    "latency_ms": latency,
+                    "error": f"HTTP {resp.status_code}: {err_parsed}"
+                }
+    except Exception as exc:
+        latency = round((time.time() - start_time) * 1000, 1)
+        status_code = getattr(exc, "response", None) and getattr(exc.response, "status_code", None)
+        return {
+            "success": False,
+            "provider": provider,
+            "model": effective_model,
+            "endpoint": endpoint,
+            "http_status": status_code or 0,
+            "latency_ms": latency,
+            "error": f"HTTP {status_code or 0}: Connection failed — check endpoint URL and model ID ({str(exc)})"
+        }
