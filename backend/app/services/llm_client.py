@@ -548,6 +548,62 @@ def _parse_provider_error(raw_body: str, status_code: int) -> str:
         return raw_body[:200] if raw_body else f"HTTP {status_code} (empty response body)"
 
 
+def _extract_openai_chat_content(data: Any) -> str:
+    """
+    Safely extracts text content from an OpenAI-compatible / Sarvam / Groq response dict.
+    Guaranteed to never raise AttributeError or IndexError, even if content is None or non-standard.
+    """
+    if not isinstance(data, dict):
+        return str(data) if data is not None else ""
+
+    choices = data.get("choices")
+    if not isinstance(choices, list) or len(choices) == 0:
+        # Check top-level text or message
+        if "text" in data and isinstance(data["text"], str):
+            return data["text"].strip()
+        if "content" in data and isinstance(data["content"], str):
+            return data["content"].strip()
+        return ""
+
+    first_choice = choices[0]
+    if not isinstance(first_choice, dict):
+        return str(first_choice)
+
+    # 1. Check message object
+    message = first_choice.get("message")
+    if isinstance(message, dict):
+        # 1a. Direct string content (safely check for None)
+        raw_content = message.get("content")
+        if isinstance(raw_content, str):
+            text = raw_content.strip()
+            if text:
+                return text
+        elif isinstance(raw_content, list):
+            # Multi-part content: [{"type": "text", "text": "..."}]
+            chunks = []
+            for part in raw_content:
+                if isinstance(part, dict) and "text" in part and isinstance(part["text"], str):
+                    chunks.append(part["text"])
+                elif isinstance(part, str):
+                    chunks.append(part)
+            if chunks:
+                return "".join(chunks).strip()
+
+        # 1b. Check reasoning_content / reasoning / thought / text
+        for key in ("reasoning_content", "reasoning", "thought", "text"):
+            alt_val = message.get(key)
+            if isinstance(alt_val, str) and alt_val.strip():
+                return alt_val.strip()
+
+    # 2. Check legacy text field in choice
+    if "text" in first_choice and isinstance(first_choice["text"], str):
+        text = first_choice["text"].strip()
+        if text:
+            return text
+
+    return ""
+
+
 async def query_target_model(
     prompt: str,
     model_name: Optional[str] = None,
@@ -745,11 +801,7 @@ async def query_target_model(
 
                 if resp.status_code == 200:
                     data = resp.json()
-                    choices = data.get("choices", [])
-                    if choices:
-                        content = choices[0].get("message", {}).get("content", "").strip()
-                    else:
-                        content = "[Empty Response]: No choices returned by model."
+                    content = _extract_openai_chat_content(data)
                     if not content:
                         content = "[Empty Response]: Model returned empty content."
                     return {
@@ -954,7 +1006,9 @@ async def test_direct_connection(
                 
                 if resp.status_code == 200:
                     data = resp.json()
-                    content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip() or str(data)
+                    content = _extract_openai_chat_content(data)
+                    if not content:
+                        content = "Online (Ready for safety evaluation)"
                     return {
                         "success": True,
                         "provider": provider,

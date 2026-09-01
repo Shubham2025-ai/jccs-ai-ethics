@@ -318,7 +318,8 @@ Analyze against the rubric. Output strictly valid JSON:
             temperature=0.1,
             max_tokens=400
         )
-        content = completion.choices[0].message.content.strip()
+        raw_content = completion.choices[0].message.content or ""
+        content = raw_content.strip()
         parsed = json.loads(content)
         _groq_available = True
 
@@ -358,7 +359,8 @@ Analyze against the rubric. Output strictly valid JSON:
                 temperature=0.1,
                 max_tokens=350
             )
-            content = completion.choices[0].message.content.strip()
+            raw_content = completion.choices[0].message.content or ""
+            content = raw_content.strip()
             parsed = json.loads(content)
             _groq_available = True
 
@@ -411,7 +413,8 @@ Keep under 180 words. Direct and plain text."""
                 max_tokens=400,
                 temperature=0.4
             )
-            text = response.choices[0].message.content.strip()
+            raw_text = response.choices[0].message.content or ""
+            text = raw_text.strip()
             text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
             text = re.sub(r'^#+\s+', '', text, flags=re.MULTILINE)
             return text.strip()
@@ -454,7 +457,8 @@ Under 120 words."""
                 max_tokens=250,
                 temperature=0.3
             )
-            text = response.choices[0].message.content.strip()
+            raw_text = response.choices[0].message.content or ""
+            text = raw_text.strip()
             text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
             return text.strip()
         except Exception:
