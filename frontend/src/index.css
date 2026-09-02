@@ -187,6 +187,12 @@ body::after {
 .passed        { color: #00d4aa; }
 .failed        { color: #c0392b; }
 
+/* FIX: Accessible focus rings for keyboard navigation */
+:focus-visible {
+  outline: 2px solid #ff9933;
+  outline-offset: 2px;
+}
+
 /* Custom Minimal Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
@@ -203,7 +209,7 @@ body::after {
   background: #ff9933;
 }
 
-/* Respect Reduced Motion */
+/* FIX: Respect Reduced Motion globally */
 @media (prefers-reduced-motion: reduce) {
   *, ::before, ::after {
     animation-duration: 0.01ms !important;

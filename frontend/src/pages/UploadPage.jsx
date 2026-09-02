@@ -8,6 +8,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { startRedTeamAudit, uploadAudit, getAudit, testTargetConnection } from '../utils/api'
+import LoadingScreen from '../components/LoadingScreen' // FIX: Import polished standalone LoadingScreen component
 
 const EVALUATION_STEPS = [
   { label: 'Connecting to target model', icon: '⚡', detail: 'Establishing secure async API connection...' },
@@ -253,80 +254,6 @@ function ProbeDonutVisual({ selectedCategories, selectedLanguages }) {
               <span className="text-ink-dim">Active Probes:</span>
               <span className="font-bold" style={{ color: cat.color }}>{cat.count}</span>
             </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function LoadingScreen({ progress }) {
-  const isComplete = progress >= 100
-  const stepIndex = isComplete
-    ? EVALUATION_STEPS.length
-    : Math.min(Math.floor((progress / 100) * EVALUATION_STEPS.length), EVALUATION_STEPS.length - 1)
-  const currentStep = isComplete
-    ? { icon: '🛡️', label: 'Audit Complete & Cryptographically Verified', detail: 'Anchoring verified · Loading executive safety scorecard...' }
-    : EVALUATION_STEPS[stepIndex]
-
-  return (
-    <div className="max-w-md mx-auto py-12 text-center space-y-6 animate-fade-in">
-      <div className="relative w-28 h-28 mx-auto flex items-center justify-center">
-        <div className="absolute inset-0 rounded-full bg-gradient-to-r from-saffron/20 to-safety-teal/20 blur-xl animate-pulse" />
-        
-        <svg className="w-full h-full -rotate-90 relative z-10" viewBox="0 0 128 128">
-          <circle cx="64" cy="64" r="54" fill="none" stroke="#1e1e2e" strokeWidth="6" />
-          <circle
-            cx="64" cy="64" r="54" fill="none" strokeWidth="6"
-            stroke="url(#saffronGrad)" strokeLinecap="round"
-            strokeDasharray={2 * Math.PI * 54}
-            strokeDashoffset={2 * Math.PI * 54 * (1 - progress / 100)}
-            className="transition-all duration-300"
-          />
-          <defs>
-            <linearGradient id="saffronGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#ff9933" />
-              <stop offset="100%" stopColor="#00d4aa" />
-            </linearGradient>
-          </defs>
-        </svg>
-
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-          <span className="text-2xl font-black font-mono text-ink-white">{Math.round(progress)}%</span>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <div className="text-base font-heading font-black text-ink-white flex items-center justify-center gap-2">
-          <span>{currentStep.icon}</span>
-          <span>{currentStep.label}</span>
-        </div>
-        <p className="text-xs text-ink-gray max-w-sm mx-auto font-mono">{currentStep.detail}</p>
-      </div>
-
-      <div className="bg-fortress-surface border border-fortress-border rounded-2xl p-4 text-left space-y-2 font-mono text-xs max-w-sm mx-auto shadow-fortress-card">
-        {EVALUATION_STEPS.map((s, i) => (
-          <div key={s.label} className="flex items-center justify-between">
-            <div className="flex items-center gap-2 truncate pr-2">
-              <span>
-                {i < stepIndex ? (
-                  <span className="text-safety-teal font-bold">✓</span>
-                ) : i === stepIndex ? (
-                  <Loader2 className="w-3 h-3 animate-spin text-saffron inline" />
-                ) : (
-                  <span className="text-ink-dim">○</span>
-                )}
-              </span>
-              <span className={i === stepIndex ? 'text-ink-white font-bold' : i < stepIndex ? 'text-ink-gray' : 'text-ink-dim'}>
-                {s.label}
-              </span>
-            </div>
-            {i === stepIndex && (
-              <span className="text-[10px] text-saffron animate-pulse font-bold">EXEC</span>
-            )}
-            {i < stepIndex && (
-              <span className="text-[10px] text-safety-teal font-bold">PASS</span>
-            )}
           </div>
         ))}
       </div>

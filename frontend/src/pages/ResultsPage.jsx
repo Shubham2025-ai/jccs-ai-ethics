@@ -346,6 +346,28 @@ export default function ResultsPage() {
     }
   }, [id])
 
+  // FIX: Background polling for Bitcoin Anchoring if queued or pending
+  useEffect(() => {
+    if (!data?.audit) return
+    const isAnchorPending = !data.audit.blockchain_tx || data.audit.blockchain_status === 'pending'
+    if (!isAnchorPending) return
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await getAudit(id)
+        if (res.data?.audit?.blockchain_tx) {
+          setData(res.data)
+          toast.success('Blockchain Anchor Confirmed on Bitcoin Ledger!', { id: 'btc-anchor' })
+          clearInterval(interval)
+        }
+      } catch (e) {
+        console.error('Polling error', e)
+      }
+    }, 10000)
+
+    return () => clearInterval(interval)
+  }, [id, data?.audit?.blockchain_tx, data?.audit?.blockchain_status])
+
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
       setCopied(true)
@@ -512,55 +534,74 @@ export default function ResultsPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0 relative">
-          {/* Export Scorecard Dropdown */}
+        {/* FIX: Sovereign Action Buttons */}
+        <div className="flex items-center gap-2.5 flex-wrap flex-shrink-0 relative">
+          {/* FIX: Formal Government-Styled Certificate Download Button */}
+          <button
+            onClick={handleExportPDF}
+            className="btn-saffron-slide flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-heading font-black bg-[#ff9933] text-[#0a0a0f] hover:bg-[#ff9933]/95 shadow-saffron-glow transition-all"
+            title="Download Formal IndiaAI Safety Certificate"
+          >
+            <Shield className="w-4 h-4 fill-current text-[#0a0a0f]" />
+            <span>Download IndiaAI Certificate</span>
+          </button>
+
+          {/* Export Dropdown */}
           <div className="relative">
             <button
               onClick={() => setShowExportMenu(!showExportMenu)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all bg-[#6C63FF]/20 hover:bg-[#6C63FF]/30 text-white border border-[#6C63FF]/40 shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-heading font-bold transition-all bg-fortress-surface hover:border-saffron text-ink-white border border-fortress-border shadow-sm"
               title="Export Safety Audit Scorecard"
             >
-              <Download className="w-3.5 h-3.5 text-[#a78bfa]" />
+              <Download className="w-3.5 h-3.5 text-saffron" />
               <span>Export</span>
-              <ChevronDown className="w-3 h-3 text-gray-400" />
+              <ChevronDown className="w-3 h-3 text-ink-dim" />
             </button>
 
             {showExportMenu && (
-              <div className="absolute right-0 mt-2 w-52 rounded-2xl glass border border-white/15 shadow-2xl p-1.5 z-50 animate-fadeIn space-y-1 bg-[#12121a]/95 backdrop-blur-xl">
+              <div className="absolute right-0 mt-2 w-52 rounded-2xl glass border border-fortress-border shadow-2xl p-1.5 z-50 animate-fadeIn space-y-1 bg-fortress-surface/98 backdrop-blur-xl">
                 <button
                   onClick={handleExportPDF}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left font-semibold text-gray-200 hover:text-white hover:bg-white/10 transition-colors"
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left font-semibold text-ink-white hover:bg-white/5 transition-colors"
                 >
-                  <FileText className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                  <FileText className="w-4 h-4 text-safety-crimson flex-shrink-0" />
                   <div>
-                    <div className="text-white font-bold">Export as PDF</div>
-                    <div className="text-[10px] text-gray-400">Printable executive scorecard</div>
+                    <div className="text-ink-white font-bold">Export as PDF</div>
+                    <div className="text-[10px] text-ink-dim">Printable executive scorecard</div>
                   </div>
                 </button>
                 <button
                   onClick={handleExportJSON}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left font-semibold text-gray-200 hover:text-white hover:bg-white/10 transition-colors"
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left font-semibold text-ink-white hover:bg-white/5 transition-colors"
                 >
-                  <FileJson className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <FileJson className="w-4 h-4 text-safety-teal flex-shrink-0" />
                   <div>
-                    <div className="text-white font-bold">Export as JSON</div>
-                    <div className="text-[10px] text-gray-400">Raw audit & cryptographic proof</div>
+                    <div className="text-ink-white font-bold">Export as JSON</div>
+                    <div className="text-[10px] text-ink-dim">Raw audit & cryptographic proof</div>
                   </div>
                 </button>
               </div>
             )}
           </div>
 
+          {/* FIX: Run New Audit Secondary Button */}
+          <Link
+            to="/upload"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-heading font-bold transition-all bg-fortress-surface hover:border-saffron text-ink-white border border-fortress-border"
+          >
+            <span>Run New Audit</span>
+          </Link>
+
           <button
             onClick={handleShare}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-mono transition-all bg-white/5 hover:bg-white/10 text-ink-gray border border-fortress-border"
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-            {copied ? 'Copied' : 'Share'}
+            {copied ? <Check className="w-3.5 h-3.5 text-safety-teal" /> : <Copy className="w-3.5 h-3.5" />}
+            <span>{copied ? 'Copied' : 'Share'}</span>
           </button>
 
           <div
-            className="px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider"
+            className="px-3.5 py-1.5 rounded-full text-xs font-mono font-black uppercase tracking-wider"
             style={{ background: riskColor + '18', color: riskColor, border: `1px solid ${riskColor}40` }}
           >
             {audit.risk_level} Risk
