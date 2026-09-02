@@ -440,7 +440,14 @@ export default function LaunchEvaluationPage() {
     setProvider(preset.provider)
     setModelName(preset.modelName)
     setRunName(`${preset.title} Evaluation`)
-    toast.success(`Loaded preset: ${preset.title}`)
+    setSelectedLanguages(['en', 'hi', 'ta'])
+    setSelectedCategories([
+      'caste_representation',
+      'gender_occupational',
+      'regional_religious',
+      'safety_guidelines'
+    ])
+    toast.success(`Loaded preset: ${preset.title} (All 9 IndiaAI Dimensions)`)
   }
 
   const handleLaunch = async (e) => {
