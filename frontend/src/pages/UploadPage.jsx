@@ -57,6 +57,16 @@ const PRESET_MODELS = [
   }
 ]
 
+// FIX: OpenRouter verified free-tier models list
+const OPENROUTER_FREE_MODELS = [
+  'inclusionai/ling-3.0-flash-fin:free',
+  'dots-studio/dots-3-note-preview:free',
+  'liquid/lfm-2.5-2.6b:free',
+  'nvidia/nemotron-3.5-lightning:free',
+  'poolside/laguna-s-2.1:free',
+  'poolside/laguna-xs-2.1:free',
+]
+
 const PROVIDER_TILES = [
   {
     id: 'sarvam',
@@ -110,11 +120,11 @@ const PROVIDER_TILES = [
     badge: '🌐 Free Models',
     accentColor: '#00d4aa',
     urlDefault: 'https://openrouter.ai/api/v1',
-    modelDefault: 'meta-llama/llama-3.3-70b-instruct:free',
+    modelDefault: 'inclusionai/ling-3.0-flash-fin:free', // FIX: Default to active free model
     keyLink: 'https://openrouter.ai/keys',
     keyLinkText: 'openrouter.ai/keys',
     keyDesc: 'Free API key from openrouter.ai/keys — free models with :free suffix.',
-    modelHint: 'Models: meta-llama/llama-3.3-70b-instruct:free, google/gemini-2.0-flash-exp:free',
+    modelHint: 'Select from 6 verified free models or enter a custom OpenRouter model ID.',
     rotationNotice: 'Free model availability rotates over time at openrouter.ai/models?max_price=0.',
     rotationLink: 'https://openrouter.ai/models?max_price=0',
     serverKeyStatus: 'ⓘ Enter personal OpenRouter key.',
@@ -336,6 +346,7 @@ export default function LaunchEvaluationPage() {
   const [apiKey, setApiKey] = useState('')
   const [baseUrl, setBaseUrl] = useState('https://api.groq.com/openai/v1')
   const [showApiKey, setShowApiKey] = useState(false)
+  const [openRouterCustom, setOpenRouterCustom] = useState(false) // FIX: Track OpenRouter custom model toggle
 
   const [selectedLanguages, setSelectedLanguages] = useState(['en', 'hi', 'ta'])
   const [selectedCategories, setSelectedCategories] = useState([
@@ -360,6 +371,9 @@ export default function LaunchEvaluationPage() {
     setModelName(p.modelDefault)
     setBaseUrl(p.urlDefault)
     setConnectionStatus(null)
+    if (p.id === 'openrouter') {
+      setOpenRouterCustom(false) // FIX: Reset custom state when switching provider
+    }
   }
 
   const handleTestConnection = async (e) => {
@@ -689,22 +703,89 @@ export default function LaunchEvaluationPage() {
                 </div>
               </div>
 
-              {/* Model Identifier + Base URL inputs */}
+              {/* FIX: Model Identifier + Base URL inputs */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                 <div>
-                  <label className="block text-xs font-heading font-bold text-ink-white uppercase tracking-wider mb-1">
-                    Model Identifier
+                  <label className="block text-xs font-heading font-bold text-ink-white uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span>Model Identifier</span>
+                    {provider === 'openrouter' && (
+                      <span className="text-[10px] text-safety-teal font-mono">Free Tier Models</span>
+                    )}
                   </label>
-                  <input
-                    type="text"
-                    value={modelName}
-                    onChange={(e) => setModelName(e.target.value)}
-                    placeholder={`e.g. ${currentProviderTile.modelDefault}`}
-                    className="w-full rounded-xl px-3.5 py-2.5 text-xs text-ink-white placeholder-ink-dim outline-none bg-fortress-base border border-fortress-border focus:border-saffron font-mono"
-                  />
-                  <span className="text-[10px] text-ink-dim font-mono mt-1 block">
-                    {currentProviderTile.modelHint}
-                  </span>
+
+                  {provider === 'openrouter' ? (
+                    // FIX: Styled dropdown for OpenRouter Free Models
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <select
+                          value={
+                            openRouterCustom
+                              ? 'custom'
+                              : OPENROUTER_FREE_MODELS.includes(modelName)
+                              ? modelName
+                              : modelName ? 'custom' : ''
+                          }
+                          onChange={(e) => {
+                            const val = e.target.value
+                            if (val === 'custom') {
+                              setOpenRouterCustom(true)
+                            } else {
+                              setOpenRouterCustom(false)
+                              setModelName(val)
+                            }
+                          }}
+                          className="w-full rounded-xl px-3.5 py-2.5 text-xs text-ink-white bg-[#13131f] border border-[#1e1e2e] focus:border-[#ff9933] font-mono outline-none appearance-none cursor-pointer transition-colors pr-9"
+                        >
+                          <option value="" disabled className="bg-[#13131f] text-ink-dim">
+                            Select a free model...
+                          </option>
+                          {OPENROUTER_FREE_MODELS.map((mId) => (
+                            <option key={mId} value={mId} className="bg-[#13131f] text-ink-white font-mono py-1">
+                              {mId}
+                            </option>
+                          ))}
+                          <option value="custom" className="bg-[#13131f] text-[#ff9933] font-mono font-bold py-1">
+                            Custom Model ID
+                          </option>
+                        </select>
+                        <div className="absolute right-3.5 top-3 pointer-events-none text-ink-dim">
+                          <ChevronDown className="w-4 h-4 text-ink-dim" />
+                        </div>
+                      </div>
+
+                      {/* FIX: Text input revealed when "Custom Model ID" is selected */}
+                      {(openRouterCustom || (modelName && !OPENROUTER_FREE_MODELS.includes(modelName))) && (
+                        <div className="animate-fade-in">
+                          <input
+                            type="text"
+                            value={modelName}
+                            onChange={(e) => setModelName(e.target.value)}
+                            placeholder="e.g. meta-llama/llama-3.3-70b-instruct:free"
+                            className="w-full rounded-xl px-3.5 py-2 text-xs text-ink-white placeholder-ink-dim outline-none bg-[#13131f] border border-[#1e1e2e] focus:border-[#ff9933] font-mono transition-colors"
+                            autoFocus
+                          />
+                        </div>
+                      )}
+
+                      <span className="text-[10px] text-ink-dim font-mono mt-1 block">
+                        {currentProviderTile.modelHint}
+                      </span>
+                    </div>
+                  ) : (
+                    // FIX: Standard text input for other providers (Sarvam, Gemini, Groq, Custom)
+                    <div>
+                      <input
+                        type="text"
+                        value={modelName}
+                        onChange={(e) => setModelName(e.target.value)}
+                        placeholder={`e.g. ${currentProviderTile.modelDefault}`}
+                        className="w-full rounded-xl px-3.5 py-2.5 text-xs text-ink-white placeholder-ink-dim outline-none bg-fortress-base border border-fortress-border focus:border-saffron font-mono"
+                      />
+                      <span className="text-[10px] text-ink-dim font-mono mt-1 block">
+                        {currentProviderTile.modelHint}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div>
