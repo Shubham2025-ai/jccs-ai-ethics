@@ -111,28 +111,47 @@ def _local_cryptographic_proof(sha256_hash: str, audit_id: int, run_name: str) -
 
 def anchor_audit(audit_id: int, sha256_hash: str, run_name: str) -> Dict:
     """
-    Main entry point — anchor an audit hash to blockchain.
-    Tries OriginStamp first, falls back to local cryptographic proof.
-
-    Returns a dict with full blockchain certificate info.
+    Main entry point — anchor an audit hash.
+    Generates an instant, mathematically verifiable local cryptographic proof (<1ms),
+    and dispatches optional OriginStamp Bitcoin submission in a non-blocking background thread.
     """
-    print(f"   ⛓  Anchoring audit #{audit_id} to blockchain...")
-    print(f"   📌 Hash: {sha256_hash[:16]}...{sha256_hash[-8:]}")
+    print(f"   [ANCHOR] Anchoring audit #{audit_id} with HMAC-SHA256 Chained Proof...")
+    print(f"   [HASH] {sha256_hash[:16]}...{sha256_hash[-8:]}")
 
-    # Try real blockchain first (only if API key configured)
-    if ORIGINSTAMP_API_KEY and ORIGINSTAMP_API_KEY not in ("", "your_originstamp_key_here"):
-        result = _originstamp_anchor(sha256_hash)
-        if result:
-            print(f"   ✅ Bitcoin anchored! Certificate: {result['certificate_id'][:16]}...")
-            result["full_hash"] = sha256_hash
-            result["audit_id"] = audit_id
-            return result
-
-    # Fallback: local cryptographic proof
+    # Step 1: Generate instant local proof (Zero blocking, 100% reliable)
     result = _local_cryptographic_proof(sha256_hash, audit_id, run_name)
-    print(f"   ✅ Cryptographic proof generated: {result['merkle_root'][:16]}...")
     result["full_hash"] = sha256_hash
     result["audit_id"] = audit_id
+    print(f"   [OK] Cryptographic proof generated: {result['merkle_root'][:16]}...")
+
+    # Step 2: If OriginStamp key is configured, submit in a detached background daemon thread
+    if ORIGINSTAMP_API_KEY and ORIGINSTAMP_API_KEY not in ("", "your_originstamp_key_here"):
+        def _bg_originstamp_task():
+            try:
+                os_res = _originstamp_anchor(sha256_hash)
+                if os_res:
+                    print(f"   [OK] [Background] OriginStamp Bitcoin anchored! Cert: {os_res['certificate_id'][:16]}...")
+                    # Opportunistically update DB record
+                    try:
+                        from app.core.database import SessionLocal
+                        from app.models.models import AuditRun
+                        db = SessionLocal()
+                        try:
+                            aud = db.query(AuditRun).filter(AuditRun.id == audit_id).first()
+                            if aud:
+                                aud.blockchain_tx = format_blockchain_display(os_res)
+                                db.commit()
+                        finally:
+                            db.close()
+                    except Exception as dbe:
+                        print(f"   [WARN] [Background] DB update skipped: {dbe}")
+            except Exception as ose:
+                print(f"   [WARN] [Background] OriginStamp submission skipped (non-blocking): {ose}")
+
+        import threading
+        bg_thread = threading.Thread(target=_bg_originstamp_task, daemon=True)
+        bg_thread.start()
+
     return result
 
 

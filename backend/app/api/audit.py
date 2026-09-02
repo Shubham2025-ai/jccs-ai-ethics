@@ -54,7 +54,15 @@ def run_llm_audit_sync(
             run_name=run_name
         )
     except Exception as e:
-        print(f"❌ LLM Safety Audit {audit_id} failed: {e}")
+        print(f"[ERROR] LLM Safety Audit {audit_id} failed: {e}")
+        try:
+            audit = db.query(AuditRun).filter(AuditRun.id == audit_id).first()
+            if audit:
+                audit.status = "failed"
+                audit.error_message = str(e)
+                db.commit()
+        except Exception as dbe:
+            print(f"[ERROR] Failed to persist error state for audit {audit_id}: {dbe}")
     finally:
         db.close()
 
@@ -65,7 +73,7 @@ def run_tabular_audit_sync(audit_id: int, df: pd.DataFrame, run_name: str):
     try:
         process_audit(db, audit_id, df, run_name)
     except Exception as e:
-        print(f"❌ Tabular Audit {audit_id} failed: {e}")
+        print(f"[ERROR] Tabular Audit {audit_id} failed: {e}")
     finally:
         db.close()
 

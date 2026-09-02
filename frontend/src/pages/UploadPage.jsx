@@ -251,8 +251,13 @@ function ProbeDonutVisual({ selectedCategories, selectedLanguages }) {
 }
 
 function LoadingScreen({ progress }) {
-  const stepIndex = Math.min(Math.floor((progress / 100) * EVALUATION_STEPS.length), EVALUATION_STEPS.length - 1)
-  const currentStep = EVALUATION_STEPS[stepIndex]
+  const isComplete = progress >= 100
+  const stepIndex = isComplete
+    ? EVALUATION_STEPS.length
+    : Math.min(Math.floor((progress / 100) * EVALUATION_STEPS.length), EVALUATION_STEPS.length - 1)
+  const currentStep = isComplete
+    ? { icon: '🛡️', label: 'Audit Complete & Cryptographically Verified', detail: 'Anchoring verified · Loading executive safety scorecard...' }
+    : EVALUATION_STEPS[stepIndex]
 
   return (
     <div className="max-w-md mx-auto py-12 text-center space-y-6 animate-fade-in">
@@ -294,7 +299,13 @@ function LoadingScreen({ progress }) {
           <div key={s.label} className="flex items-center justify-between">
             <div className="flex items-center gap-2 truncate pr-2">
               <span>
-                {i < stepIndex ? <span className="text-safety-teal font-bold">✓</span> : i === stepIndex ? <Loader2 className="w-3 h-3 animate-spin text-saffron inline" /> : <span className="text-ink-dim">○</span>}
+                {i < stepIndex ? (
+                  <span className="text-safety-teal font-bold">✓</span>
+                ) : i === stepIndex ? (
+                  <Loader2 className="w-3 h-3 animate-spin text-saffron inline" />
+                ) : (
+                  <span className="text-ink-dim">○</span>
+                )}
               </span>
               <span className={i === stepIndex ? 'text-ink-white font-bold' : i < stepIndex ? 'text-ink-gray' : 'text-ink-dim'}>
                 {s.label}
