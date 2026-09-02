@@ -231,10 +231,14 @@ def get_audit_result(audit_id: int, db: Session = Depends(get_db)):
         digital_signature = {"valid": False}
 
     return {
+        "status": audit.status,
+        "id": audit.id,
+        "error_message": getattr(audit, "error_message", None),
         "audit": {
             "id": audit.id,
             "run_name": audit.run_name,
             "status": audit.status,
+            "error_message": getattr(audit, "error_message", None),
             "model_type": audit.model_type,
             "target_model_name": audit.target_model_name,
             "target_model_provider": audit.target_model_provider,

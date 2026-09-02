@@ -450,7 +450,7 @@ export default function LaunchEvaluationPage() {
     if (activeProbeCount === 0) return toast.error('Please select at least one language and category.')
 
     setLoading(true)
-    setProgress(5)
+    setProgress(10)
 
     const payload = {
       run_name: runName,
@@ -466,33 +466,48 @@ export default function LaunchEvaluationPage() {
       const res = await startRedTeamAudit(payload)
       const auditId = res.data.audit_id
 
-      let currentProg = 5
+      let currentProg = 10
       const progressInterval = setInterval(() => {
-        currentProg += (95 - currentProg) * 0.12
+        currentProg += (95 - currentProg) * 0.08
         setProgress(Math.min(95, Math.round(currentProg)))
-      }, 700)
+      }, 500)
 
       const pollInterval = setInterval(async () => {
         try {
           const statusRes = await getAudit(auditId)
-          if (statusRes.data.status === 'completed') {
+          const data = statusRes.data || {}
+          const status = data.status || data.audit?.status
+          const errorMsg = data.error_message || data.audit?.error_message
+
+          // Track actual probe progression if available
+          const probes = data.probe_results || data.prompt_evaluations || []
+          if (probes.length > 0 && activeProbeCount > 0) {
+            const probeRatio = probes.length / activeProbeCount
+            const computedProg = Math.round(15 + probeRatio * 80)
+            if (computedProg > currentProg) {
+              currentProg = computedProg
+              setProgress(Math.min(95, currentProg))
+            }
+          }
+
+          if (status === 'completed') {
             clearInterval(pollInterval)
             clearInterval(progressInterval)
             setProgress(100)
             toast.success('IndiaAI Safety Audit Completed Successfully!')
             setTimeout(() => {
               navigate(`/results/${auditId}`)
-            }, 600)
-          } else if (statusRes.data.status === 'failed') {
+            }, 500)
+          } else if (status === 'failed') {
             clearInterval(pollInterval)
             clearInterval(progressInterval)
             setLoading(false)
-            toast.error(`Evaluation failed: ${statusRes.data.error_message || 'Unknown evaluation error'}`)
+            toast.error(`Evaluation failed: ${errorMsg || 'Unknown evaluation error'}`)
           }
         } catch (pollErr) {
           console.error('Polling error:', pollErr)
         }
-      }, 1500)
+      }, 1000)
     } catch (err) {
       setLoading(false)
       const errorMsg = err.response?.data?.detail || err.message || 'Failed to dispatch evaluation audit.'
