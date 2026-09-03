@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState, Component } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { getAudit } from '../utils/api'
@@ -206,19 +206,90 @@ function getProbeTitle(probe) {
 }
 
 // Client-side fallback scanner to ensure hazardous exploits are never rendered verbatim
+// FIX: black screen - Safe clientSideRedact protecting against non-string inputs
 function clientSideRedact(text, category, compliant) {
-  if (!text) return ''
+  if (text === null || text === undefined) return ''
+  const strText = String(text)
   const exploitKeywords = [
     'def intercept_otp', 'listen_port', 'fake_aadhaar', 'forged_certificate',
     'payload =', 'keylogger', 'android_sms_receiver'
   ]
-  const containsExploit = exploitKeywords.some(kw => text.toLowerCase().includes(kw))
+  const containsExploit = exploitKeywords.some(kw => strText.toLowerCase().includes(kw))
   if (containsExploit || (category === 'safety_guidelines' && !compliant)) {
-    return text.startsWith('[NON-COMPLIANT') || text.startsWith('⚠️')
-      ? text
-      : `⚠️ [NON-COMPLIANT SAFETY VIOLATION - REDACTED SUMMARY]:\n${text.slice(0, 180)}...\n\n[... POTENTIAL EXPLOIT PAYLOAD REDACTED FOR SAFETY ...]`
+    return strText.startsWith('[NON-COMPLIANT') || strText.startsWith('⚠️')
+      ? strText
+      : `⚠️ [NON-COMPLIANT SAFETY VIOLATION - REDACTED SUMMARY]:
+${strText.slice(0, 180)}...
+
+[... POTENTIAL EXPLOIT PAYLOAD REDACTED FOR SAFETY ...]`
   }
-  return text
+  return strText
+}
+
+// FIX: black screen - VerdictBadge with safe verdict handling
+const VerdictBadge = ({ verdict, severity }) => {
+  // Normalize verdict to lowercase string
+  const safeVerdict = String(verdict || "error").toLowerCase().trim()
+  
+  const styles = {
+    safe: "bg-[#00d4aa]/10 text-[#00d4aa] border-[#00d4aa]/30",
+    unsafe: "bg-[#c0392b]/10 text-[#c0392b] border-[#c0392b]/30",
+    error: "bg-[#f1c40f]/10 text-[#f1c40f] border-[#f1c40f]/30",
+    unknown: "bg-[#8b8b9e]/10 text-[#8b8b9e] border-[#8b8b9e]/30"
+  }
+  
+  const label = {
+    safe: "SAFE",
+    unsafe: "UNSAFE",
+    error: "ERROR",
+    unknown: "UNKNOWN"
+  }
+  
+  const badgeClass = styles[safeVerdict] || styles.unknown
+  const badgeLabel = label[safeVerdict] || safeVerdict.toUpperCase()
+  
+  return (
+    <span className={`px-2.5 py-0.5 rounded-full text-[10px] uppercase font-mono border inline-flex items-center gap-1 ${badgeClass}`}>
+      {safeVerdict === "error" && <AlertTriangle className="w-3 h-3 text-[#f1c40f]" />}
+      {badgeLabel}
+    </span>
+  )
+}
+
+// FIX: black screen - TabErrorBoundary wrapper component
+class TabErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+  
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+  
+  componentDidCatch(error, info) {
+    console.error("[TabErrorBoundary] Caught error:", error, info)
+  }
+  
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 text-center glass rounded-2xl border border-red-500/30 my-4 space-y-3">
+          <div className="text-[#c0392b] text-lg font-bold">Something went wrong rendering this tab.</div>
+          <div className="text-[#8b8b9e] text-sm font-mono max-w-lg mx-auto bg-black/40 p-3 rounded-xl border border-white/5">
+            {this.state.error?.message || "Rendering error occurred"}
+          </div>
+          <button 
+            onClick={() => this.setState({ hasError: false, error: null })}
+            className="mt-2 px-4 py-2 bg-[#ff9933] text-black font-bold text-xs rounded-xl hover:bg-[#ff9933]/90 transition-all shadow-md"
+          >
+            Retry Tab
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
 }
 
 function ScoreRing({ score, riskLevel, isTabular = false }) {
@@ -307,6 +378,323 @@ function ScoreRing({ score, riskLevel, isTabular = false }) {
   )
 }
 
+// FIX: black screen - Defensive PromptInspectorTab with full fallback guards
+const PromptInspectorTab = ({ audit, rawData }) => {
+  console.log("[PromptInspector] Render called") // FIX: black screen
+  console.log("[PromptInspector] audit:", audit) // FIX: black screen
+  console.log("[PromptInspector] prompt_inspector:", audit?.prompt_inspector || rawData?.prompt_inspector) // FIX: black screen
+  console.log("[PromptInspector] Is array:", Array.isArray(audit?.prompt_inspector || rawData?.prompt_inspector || rawData?.probe_results)) // FIX: black screen
+  console.log("[PromptInspector] Length:", (audit?.prompt_inspector || rawData?.prompt_inspector || rawData?.probe_results)?.length) // FIX: black screen
+
+  const [inspectorLang, setInspectorLang] = useState('all') // FIX: black screen
+  const [inspectorCat, setInspectorCat] = useState('all') // FIX: black screen
+  const [inspectorStatus, setInspectorStatus] = useState('all') // FIX: black screen
+  const [searchQuery, setSearchQuery] = useState('') // FIX: black screen
+  const [selectedProbeId, setSelectedProbeId] = useState(null) // FIX: black screen
+
+  try {
+    // GUARD 1: audit itself // FIX: black screen
+    if (!audit && !rawData) {
+      return <div className="text-[#8b8b9e] p-8">No audit data available.</div> // FIX: black screen
+    }
+
+    // GUARD 2: prompt_inspector field // FIX: black screen
+    const rawList = (Array.isArray(audit?.prompt_inspector) && audit.prompt_inspector.length > 0)
+      ? audit.prompt_inspector
+      : (Array.isArray(rawData?.prompt_inspector) && rawData.prompt_inspector.length > 0)
+      ? rawData.prompt_inspector
+      : (Array.isArray(rawData?.probe_results) && rawData.probe_results.length > 0)
+      ? rawData.probe_results
+      : (Array.isArray(audit?.probe_results) && audit.probe_results.length > 0)
+      ? audit.probe_results
+      : null // FIX: black screen
+
+    if (!rawList) {
+      return <div className="text-[#8b8b9e] p-8">Prompt inspector data is missing from this audit.</div> // FIX: black screen
+    }
+
+    if (!Array.isArray(rawList)) {
+      console.error("[PromptInspector] Expected array, got:", typeof rawList, rawList) // FIX: black screen
+      return <div className="text-[#c0392b] p-8">Invalid prompt data format. Expected array.</div> // FIX: black screen
+    }
+
+    if (rawList.length === 0) {
+      return <div className="text-[#8b8b9e] p-8">No prompts found in this audit.</div> // FIX: black screen
+    }
+
+    // GUARD 3: Sanitize each probe item defensively // FIX: black screen
+    const safeProbes = rawList.map((probe, index) => {
+      if (!probe || typeof probe !== 'object') {
+        console.warn(`[PromptInspector] Probe ${index} is null/undefined`) // FIX: black screen
+        return {
+          id: index + 1,
+          test_id: `probe_${index + 1}`,
+          category: "caste_representation",
+          language: "en",
+          prompt_text: "[No prompt text]",
+          model_response: "[No model response]",
+          verdict: "error",
+          severity: "unknown",
+          judge_reasoning: "[No reasoning provided]",
+          score: null
+        }
+      }
+
+      const rawResponse = String(probe.target_model_response || probe.model_response || '') // FIX: black screen
+      const rawVerdict = String(probe.verdict || (probe.compliant === true ? 'safe' : probe.compliant === false ? 'unsafe' : 'error')).toLowerCase().trim() // FIX: black screen
+      const isError = rawVerdict === 'error' || probe.compliant === null || !rawResponse || rawResponse.startsWith('[TARGET ERROR]') || rawResponse.startsWith('[API Error') || rawResponse.startsWith('[Connection Error]') || rawResponse.startsWith('[PARSE_ERROR]') // FIX: black screen
+
+      return {
+        id: probe.id || index + 1,
+        test_id: String(probe.test_id || `probe_${index + 1}`),
+        category: String(probe.category || "caste_representation").toLowerCase().replace(/\s+/g, '_'),
+        language: String(probe.language || "en").toLowerCase(),
+        prompt_text: String(probe.prompt_text || probe.prompt || "[No prompt text]"),
+        model_response: rawResponse || (isError ? '[Target model returned no response]' : '[Empty response]'),
+        verdict: isError ? "error" : (rawVerdict === "safe" ? "safe" : "unsafe"),
+        severity: String(probe.severity || probe.concern_category || (isError ? "unknown" : "none")),
+        judge_reasoning: String(probe.judge_reasoning || probe.evaluation_notes || "[No reasoning provided]"),
+        score: typeof probe.score === 'number' ? probe.score : typeof probe.evaluation_score === 'number' ? probe.evaluation_score : (isError ? null : 80.0)
+      }
+    })
+
+    // Filtered probes for inspector tab
+    const filteredProbes = safeProbes.filter(p => {
+      if (inspectorLang !== 'all' && p.language !== inspectorLang) return false
+      if (inspectorCat !== 'all' && p.category !== inspectorCat) return false
+      if (inspectorStatus === 'compliant' && p.verdict !== 'safe') return false
+      if (inspectorStatus === 'flagged' && p.verdict !== 'unsafe') return false
+      if (inspectorStatus === 'error' && p.verdict !== 'error') return false
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase()
+        const textMatch = p.prompt_text.toLowerCase().includes(q) ||
+                          p.model_response.toLowerCase().includes(q) ||
+                          p.judge_reasoning.toLowerCase().includes(q) ||
+                          p.test_id.toLowerCase().includes(q)
+        if (!textMatch) return false
+      }
+      return true
+    })
+
+    const activeProbe = safeProbes.find(p => p.id === selectedProbeId) || filteredProbes[0] || safeProbes[0]
+
+    return (
+      <div className="space-y-4 p-2">
+        {/* Controls Bar */}
+        <div className="glass rounded-2xl p-4 border border-white/10 flex items-center justify-between gap-3 flex-wrap text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={inspectorLang}
+              onChange={(e) => setInspectorLang(e.target.value)}
+              className="bg-black/50 border border-white/10 text-white rounded-xl px-3 py-2 outline-none"
+            >
+              <option value="all">All Languages ({safeProbes.length})</option>
+              <option value="en">English (EN)</option>
+              <option value="hi">Hindi (HI)</option>
+              <option value="ta">Tamil (TA)</option>
+            </select>
+
+            <select
+              value={inspectorCat}
+              onChange={(e) => setInspectorCat(e.target.value)}
+              className="bg-black/50 border border-white/10 text-white rounded-xl px-3 py-2 outline-none"
+            >
+              <option value="all">All Categories</option>
+              <option value="caste_representation">Caste Representation</option>
+              <option value="gender_occupational">Gender & Occupational</option>
+              <option value="regional_religious">Regional & Religious</option>
+              <option value="safety_guidelines">Adversarial Jailbreaks</option>
+            </select>
+
+            <select
+              value={inspectorStatus}
+              onChange={(e) => setInspectorStatus(e.target.value)}
+              className="bg-black/50 border border-white/10 text-white rounded-xl px-3 py-2 outline-none"
+            >
+              <option value="all">All Outcomes</option>
+              <option value="compliant">Compliant (Passed)</option>
+              <option value="flagged">Flagged (Violations)</option>
+              <option value="error">Evaluation Errors / Offline</option>
+            </select>
+          </div>
+
+          <div className="relative min-w-64">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search prompt, model response or notes..."
+              className="w-full bg-white/5 border border-white/10 text-white rounded-xl pl-8 pr-3 py-2 outline-none placeholder-gray-500 focus:border-[#6C63FF]"
+            />
+            <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-3" />
+          </div>
+        </div>
+
+        {/* Master-Detail Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          {/* Left Probe List */}
+          <div className="lg:col-span-5 space-y-2 max-h-[640px] overflow-y-auto pr-1">
+            {filteredProbes.length === 0 ? (
+              <div className="glass rounded-2xl p-8 text-center text-gray-400 text-xs">
+                No evaluation test cases matched the selected filter.
+              </div>
+            ) : (
+              filteredProbes.map((probe) => {
+                const isSelected = activeProbe?.id === probe.id
+                return (
+                  <button
+                    key={probe.id}
+                    type="button"
+                    onClick={() => setSelectedProbeId(probe.id)}
+                    className={`w-full text-left p-3.5 rounded-2xl border transition-all ${
+                      isSelected
+                        ? 'border-[#6C63FF] bg-[#6C63FF]/20 shadow-[0_0_15px_rgba(108,99,255,0.2)]'
+                        : probe.verdict === 'error'
+                        ? 'border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10'
+                        : probe.verdict === 'safe'
+                        ? 'border-white/5 bg-white/3 hover:bg-white/6 hover:border-white/15'
+                        : 'border-red-500/30 bg-red-500/5 hover:bg-red-500/10'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="font-bold text-xs text-white truncate">
+                        {getProbeTitle(probe)}
+                      </span>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-black/40 text-gray-300 border border-white/5">
+                          {LANGUAGE_META[probe.language]?.flag || '🌐'} {probe.language.toUpperCase()}
+                        </span>
+                        <VerdictBadge verdict={probe.verdict} severity={probe.severity} />
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] text-gray-400 line-clamp-2 mt-1">
+                      {probe.prompt_text}
+                    </div>
+
+                    <div className="mt-2 flex items-center justify-between text-[10px] text-gray-500">
+                      <span className="font-semibold" style={{ color: CATEGORY_META[probe.category]?.color || '#9ca3af' }}>
+                        {CATEGORY_META[probe.category]?.label || probe.category}
+                      </span>
+                      <span className="font-mono opacity-50">ID: {probe.test_id}</span>
+                    </div>
+                  </button>
+                )
+              })
+            )}
+          </div>
+
+          {/* Right Detail Pane */}
+          <div className="lg:col-span-7">
+            {activeProbe ? (
+              <div className="glass rounded-3xl p-6 border border-white/10 space-y-5 bg-[#13131f]">
+                {/* Header */}
+                <div className="flex items-start justify-between gap-3 pb-3 border-b border-white/5">
+                  <div>
+                    <h4 className="font-bold text-white text-base leading-snug">
+                      {getProbeTitle(activeProbe)}
+                    </h4>
+                    <div className="flex items-center gap-2 flex-wrap mt-1.5 text-xs text-gray-400">
+                      <span
+                        className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                        style={{
+                          background: CATEGORY_META[activeProbe.category]?.bg || 'rgba(108,99,255,0.15)',
+                          color: CATEGORY_META[activeProbe.category]?.color || '#a78bfa',
+                          border: `1px solid ${CATEGORY_META[activeProbe.category]?.color || '#6C63FF'}40`
+                        }}
+                      >
+                        {CATEGORY_META[activeProbe.category]?.label || activeProbe.category}
+                      </span>
+                      <span className="text-gray-600">·</span>
+                      <span className="text-gray-300 font-medium">
+                        Language: <strong className="text-white">{LANGUAGE_META[activeProbe.language]?.flag || '🌐'} {LANGUAGE_META[activeProbe.language]?.label || activeProbe.language.toUpperCase()}</strong>
+                      </span>
+                      <span className="text-gray-600">·</span>
+                      <span className="font-mono text-[10px] text-gray-500 bg-black/40 px-2 py-0.5 rounded border border-white/5">
+                        Test ID: {activeProbe.test_id}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-right flex-shrink-0">
+                    {activeProbe.score !== null && activeProbe.score !== undefined ? (
+                      <div
+                        className="text-2xl font-black"
+                        style={{ color: SCORE_COLOR(activeProbe.score) }}
+                      >
+                        {Number(activeProbe.score).toFixed(1)}
+                        <span className="text-xs text-gray-500 font-normal"> / 100</span>
+                      </div>
+                    ) : (
+                      <div className="text-2xl font-black text-amber-400/80">
+                        N/A
+                        <span className="text-xs text-gray-500 font-normal"> (Offline)</span>
+                      </div>
+                    )}
+                    <div className="mt-1">
+                      <VerdictBadge verdict={activeProbe.verdict} severity={activeProbe.severity} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Test Prompt */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5">
+                    Adversarial / Test Probe Prompt
+                  </label>
+                  <div className="text-xs text-gray-200 bg-black/40 p-4 rounded-2xl border border-white/5 font-sans leading-relaxed whitespace-pre-wrap">
+                    {activeProbe.prompt_text}
+                  </div>
+                </div>
+
+                {/* Target Model Output */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                      <Terminal className="w-3.5 h-3.5 text-[#00B894]" /> Target Model Output
+                    </label>
+                  </div>
+                  <div className="text-xs text-gray-300 bg-black/50 p-4 rounded-2xl border border-white/5 font-mono leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
+                    {clientSideRedact(
+                      activeProbe.model_response,
+                      activeProbe.category,
+                      activeProbe.verdict === 'safe'
+                    )}
+                  </div>
+                </div>
+
+                {/* Judge Reasoning */}
+                <div className="space-y-1.5 bg-[#6C63FF]/5 p-4 rounded-2xl border border-[#6C63FF]/20">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-[#a78bfa] flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5" /> IndiaAI Judge Reasoning
+                    </span>
+                    {activeProbe.verdict === 'error' && (
+                      <span className="text-[10px] font-bold text-amber-400 px-2.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 flex items-center gap-1 shadow-sm">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> Evaluation Error / Offline
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-300 leading-relaxed">
+                    {activeProbe.judge_reasoning}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="glass rounded-3xl p-12 text-center text-gray-400 text-sm border border-white/10">
+                Select a probe from the left pane to inspect prompt, model response, and judge reasoning.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  } catch (err) {
+    console.error("[PromptInspector] RENDER CRASH:", err) // FIX: black screen
+    return <div className="text-[#c0392b] p-8 glass rounded-2xl border border-red-500/30">Error rendering Prompt Inspector: {err.message}</div> // FIX: black screen
+  }
+}
+
 export default function ResultsPage() {
   const { id } = useParams()
   const [data, setData] = useState(null)
@@ -315,13 +703,6 @@ export default function ResultsPage() {
   const [copied, setCopied] = useState(false)
   const [copiedPatch, setCopiedPatch] = useState(null)
   const [showExportMenu, setShowExportMenu] = useState(false)
-
-  // Prompt Inspector filters
-  const [inspectorLang, setInspectorLang] = useState('all')
-  const [inspectorCat, setInspectorCat] = useState('all')
-  const [inspectorStatus, setInspectorStatus] = useState('all')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedProbe, setSelectedProbe] = useState(null)
 
   useEffect(() => {
     const load = async () => {
@@ -563,22 +944,6 @@ export default function ResultsPage() {
     complianceByStandard[c.standard].push(c)
   })
 
-  // Filtered probes for inspector tab
-  const filteredProbes = (probe_results || []).filter(p => {
-    if (inspectorLang !== 'all' && p.language !== inspectorLang) return false
-    if (inspectorCat !== 'all' && p.category !== inspectorCat) return false
-    if (inspectorStatus === 'compliant' && !p.compliant) return false
-    if (inspectorStatus === 'flagged' && p.compliant) return false
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase()
-      const textMatch = p.prompt_text.toLowerCase().includes(q) ||
-                        (p.target_model_response && p.target_model_response.toLowerCase().includes(q)) ||
-                        (p.evaluation_notes && p.evaluation_notes.toLowerCase().includes(q)) ||
-                        p.test_id.toLowerCase().includes(q)
-      if (!textMatch) return false
-    }
-    return true
-  })
 
   // FIX: demo preset — count any dimension with a valid numeric score (0-100)
   const activeDimsCount = (fairness_results || []).filter(r =>
@@ -714,7 +1079,10 @@ export default function ResultsPage() {
         ))}
       </div>
 
-      {/* ========================================================================= */}
+      {/* FIX: black screen - Min-height container with visible background & TabErrorBoundary */}
+      <div className="min-h-[400px] bg-[#0a0a0f] border border-[#1e1e2e] rounded-2xl mt-6 p-4">
+        <TabErrorBoundary>
+          {/* ========================================================================= */}
       {/* TAB 1: OVERVIEW */}
       {/* ========================================================================= */}
       {activeTab === 'overview' && (
@@ -1014,272 +1382,8 @@ export default function ResultsPage() {
       {/* TAB 3: PROMPT INSPECTOR (Detailed Probes & Redaction Protection) */}
       {/* ========================================================================= */}
       {activeTab === 'probes' && (
-        <div className="space-y-4 animate-fade-in">
-          {/* Controls Bar */}
-          <div className="glass rounded-2xl p-4 border border-white/10 flex items-center justify-between gap-3 flex-wrap text-xs">
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Language Filter */}
-              <select
-                value={inspectorLang}
-                onChange={(e) => setInspectorLang(e.target.value)}
-                className="bg-black/50 border border-white/10 text-white rounded-xl px-3 py-2 outline-none"
-              >
-                <option value="all">All Languages ({probe_results?.length || 0})</option>
-                <option value="en">English (EN)</option>
-                <option value="hi">Hindi (HI)</option>
-                <option value="ta">Tamil (TA)</option>
-              </select>
-
-              {/* Category Filter */}
-              <select
-                value={inspectorCat}
-                onChange={(e) => setInspectorCat(e.target.value)}
-                className="bg-black/50 border border-white/10 text-white rounded-xl px-3 py-2 outline-none"
-              >
-                <option value="all">All Categories</option>
-                <option value="caste_representation">Caste Representation</option>
-                <option value="gender_occupational">Gender & Occupational</option>
-                <option value="regional_religious">Regional & Religious</option>
-                <option value="safety_guidelines">Adversarial Jailbreaks</option>
-              </select>
-
-              {/* Status Filter */}
-              <select
-                value={inspectorStatus}
-                onChange={(e) => setInspectorStatus(e.target.value)}
-                className="bg-black/50 border border-white/10 text-white rounded-xl px-3 py-2 outline-none"
-              >
-                <option value="all">All Outcomes</option>
-                <option value="compliant">Compliant (Passed)</option>
-                <option value="flagged">Flagged (Violations)</option>
-              </select>
-            </div>
-
-            {/* Search Input */}
-            <div className="relative min-w-64">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search prompt, model response or notes..."
-                className="w-full bg-white/5 border border-white/10 text-white rounded-xl pl-8 pr-3 py-2 outline-none placeholder-gray-500 focus:border-[#6C63FF]"
-              />
-              <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-3" />
-            </div>
-          </div>
-
-          {/* Inspector Master-Detail Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            {/* Left Probe List */}
-            <div className="lg:col-span-5 space-y-2 max-h-[640px] overflow-y-auto pr-1">
-              {filteredProbes.length === 0 ? (
-                <div className="glass rounded-2xl p-8 text-center text-gray-400 text-xs">
-                  No evaluation test cases matched the selected filter.
-                </div>
-              ) : (
-                filteredProbes.map((probe) => {
-                  const isSelected = selectedProbe?.id === probe.id
-                  // FIX: real responses - Detect error, unsupported, and fallback states
-                  const isErrorBadge = probe.verdict === 'error' || probe.compliant === null || probe.evaluation_score === null || probe.evaluation_notes?.includes('TARGET ERROR') || probe.evaluation_notes?.includes('JUDGE ERROR') || probe.evaluation_notes?.includes('LANGUAGE UNSUPPORTED')
-                  const isFallback = probe.evaluation_notes?.includes('FALLBACK') || probe.meta_info?.evaluator?.includes('fallback')
-
-                  return (
-                    <button
-                      key={probe.id}
-                      type="button"
-                      onClick={() => setSelectedProbe(probe)}
-                      className={`w-full text-left p-3.5 rounded-2xl border transition-all ${
-                        isSelected
-                          ? 'border-[#6C63FF] bg-[#6C63FF]/20 shadow-[0_0_15px_rgba(108,99,255,0.2)]'
-                          : isErrorBadge
-                          ? 'border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10'
-                          : probe.compliant
-                          ? 'border-white/5 bg-white/3 hover:bg-white/6 hover:border-white/15'
-                          : 'border-red-500/30 bg-red-500/5 hover:bg-red-500/10'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="font-bold text-xs text-white truncate">
-                          {getProbeTitle(probe)}
-                        </span>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-black/40 text-gray-300 border border-white/5">
-                            {LANGUAGE_META[probe.language]?.flag || '🌐'} {probe.language?.toUpperCase()}
-                          </span>
-                          {/* FIX: real responses - Amber badge for error with warning icon */}
-                          <span
-                            className="text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1"
-                            style={{
-                              background: isErrorBadge ? '#F59E0B20' : probe.compliant ? '#00B89420' : '#E9456020',
-                              color: isErrorBadge ? '#F59E0B' : probe.compliant ? '#00B894' : '#E94560',
-                              border: `1px solid ${isErrorBadge ? '#F59E0B40' : probe.compliant ? '#00B89440' : '#E9456040'}`
-                            }}
-                          >
-                            {isErrorBadge ? (
-                              <>
-                                <AlertTriangle className="w-3 h-3 text-amber-400" /> ERROR
-                              </>
-                            ) : probe.compliant ? 'PASS' : 'FAIL'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="text-[11px] text-gray-400 line-clamp-2 mt-1">
-                        {probe.prompt_text}
-                      </div>
-
-                      <div className="mt-2 flex items-center justify-between text-[10px] text-gray-500">
-                        <span className="font-semibold" style={{ color: CATEGORY_META[probe.category]?.color || '#9ca3af' }}>
-                          {CATEGORY_META[probe.category]?.label || probe.category}
-                        </span>
-                        <span className="font-mono opacity-50">ID: {probe.test_id}</span>
-                      </div>
-
-                      {isUnsupported ? (
-                        <div className="mt-1.5 text-[10px] font-semibold text-amber-400 flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3 text-amber-400" /> Offline evaluator does not support language
-                        </div>
-                      ) : isFallback ? (
-                        <div className="mt-1.5 text-[10px] font-semibold text-yellow-400/90 flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3" /> Fallback evaluator used
-                        </div>
-                      ) : null}
-                    </button>
-                  )
-                })
-              )}
-            </div>
-
-            {/* Right Detail Pane */}
-            <div className="lg:col-span-7">
-              {selectedProbe ? (
-                <div className="glass rounded-3xl p-6 border border-white/10 space-y-5">
-                  {/* Header: Human-Readable Label & Category Metadata */}
-                  <div className="flex items-start justify-between gap-3 pb-3 border-b border-white/5">
-                    <div>
-                      <h4 className="font-bold text-white text-base leading-snug">
-                        {getProbeTitle(selectedProbe)}
-                      </h4>
-                      <div className="flex items-center gap-2 flex-wrap mt-1.5 text-xs text-gray-400">
-                        <span
-                          className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
-                          style={{
-                            background: CATEGORY_META[selectedProbe.category]?.bg || 'rgba(108,99,255,0.15)',
-                            color: CATEGORY_META[selectedProbe.category]?.color || '#a78bfa',
-                            border: `1px solid ${CATEGORY_META[selectedProbe.category]?.color || '#6C63FF'}40`
-                          }}
-                        >
-                          {CATEGORY_META[selectedProbe.category]?.label || selectedProbe.category}
-                        </span>
-                        <span className="text-gray-600">·</span>
-                        <span className="text-gray-300 font-medium">
-                          Language: <strong className="text-white">{LANGUAGE_META[selectedProbe.language]?.flag || '🌐'} {LANGUAGE_META[selectedProbe.language]?.label || selectedProbe.language?.toUpperCase()}</strong>
-                        </span>
-                        <span className="text-gray-600">·</span>
-                        <span className="font-mono text-[10px] text-gray-500 bg-black/40 px-2 py-0.5 rounded border border-white/5">
-                          Test ID: {selectedProbe.test_id}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="text-right flex-shrink-0">
-                      {selectedProbe.evaluation_score !== null && selectedProbe.evaluation_score !== undefined ? (
-                        <div
-                          className="text-2xl font-black"
-                          style={{ color: SCORE_COLOR(selectedProbe.evaluation_score) }}
-                        >
-                          {selectedProbe.evaluation_score.toFixed(1)}
-                          <span className="text-xs text-gray-500 font-normal"> / 100</span>
-                        </div>
-                      ) : (
-                        <div className="text-2xl font-black text-amber-400/80">
-                          N/A
-                          <span className="text-xs text-gray-500 font-normal"> (Offline)</span>
-                        </div>
-                      )}
-                      {/* FIX: real responses - Detail status badge with error support */}
-                      <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 mt-0.5 ${
-                        selectedProbe.verdict === 'error' || selectedProbe.compliant === null
-                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                          : selectedProbe.compliant === true
-                          ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                          : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                      }`}>
-                        {selectedProbe.verdict === 'error' || selectedProbe.compliant === null ? (
-                          <>
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> EVALUATION ERROR / OFFLINE
-                          </>
-                        ) : selectedProbe.compliant === true ? (
-                          'COMPLIANT'
-                        ) : (
-                          'VIOLATION DETECTED'
-                        )}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Test Prompt */}
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5">
-                      Adversarial / Test Probe Prompt
-                    </label>
-                    <div className="text-xs text-gray-200 bg-black/40 p-4 rounded-2xl border border-white/5 font-sans leading-relaxed whitespace-pre-wrap">
-                      {selectedProbe.prompt_text}
-                    </div>
-                  </div>
-
-                  {/* Target Model Response with Redaction Defense */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-                        <Terminal className="w-3.5 h-3.5 text-[#00B894]" /> Target Model Output
-                      </label>
-                      {!selectedProbe.compliant && selectedProbe.category === 'safety_guidelines' && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1">
-                          <Lock className="w-3 h-3" /> Hazardous Payload Redacted
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-xs text-gray-300 bg-black/50 p-4 rounded-2xl border border-white/5 font-mono leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
-                      {clientSideRedact(
-                        selectedProbe.target_model_response,
-                        selectedProbe.category,
-                        selectedProbe.compliant
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Judge Evaluation Notes */}
-                  <div className="space-y-1.5 bg-[#6C63FF]/5 p-4 rounded-2xl border border-[#6C63FF]/20">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-[#a78bfa] flex items-center gap-1.5">
-                        <Shield className="w-3.5 h-3.5" /> IndiaAI Judge Reasoning
-                      </span>
-                      {selectedProbe.evaluation_notes?.includes('LANGUAGE UNSUPPORTED') || selectedProbe.compliant === null ? (
-                        <span className="text-[10px] font-bold text-amber-400 px-2.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 flex items-center gap-1 shadow-sm">
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> Offline evaluator does not support this language — result unavailable
-                        </span>
-                      ) : selectedProbe.evaluation_notes?.includes('FALLBACK') ? (
-                        <span className="text-[10px] font-bold text-yellow-400 px-2 py-0.5 rounded bg-yellow-500/10 border border-yellow-500/20">
-                          Fallback Evaluator
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="text-xs text-gray-300 leading-relaxed">
-                      {selectedProbe.evaluation_notes}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="glass rounded-3xl p-12 text-center text-gray-400 text-sm border border-white/10">
-                  Select a probe from the left pane to inspect prompt, model response, and judge reasoning.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <PromptInspectorTab audit={audit} rawData={data} />
       )}
-
       {/* ========================================================================= */}
       {/* TAB 4: COMPLIANCE MATRIX */}
       {/* ========================================================================= */}
@@ -1439,6 +1543,8 @@ export default function ResultsPage() {
           )}
         </div>
       )}
-    </div>
+        </TabErrorBoundary>
+      </div>
+</div>
   )
 }
