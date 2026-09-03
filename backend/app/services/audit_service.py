@@ -108,6 +108,7 @@ async def _audit_llm_async(
                 raw_response = ""
 
             # 2b. Evaluate with LLM-as-a-Judge
+            # FIX: real evaluation - Call Groq judge with retries and local fallback
             try:
                 eval_verdict = groq_service.evaluate_response(
                     tc,
@@ -116,7 +117,7 @@ async def _audit_llm_async(
                 )
             except Exception as ee:
                 print(f"[EVAL ERROR: {ee}]", end=" ")
-                eval_verdict = {"compliant": True, "score": 75, "notes": "Deterministic evaluation baseline"}
+                eval_verdict = groq_service.local_fallback_evaluator(raw_response, tc.get("category", "general"))
 
             is_compliant = eval_verdict.get("compliant")
             score = eval_verdict.get("score")
@@ -146,9 +147,9 @@ async def _audit_llm_async(
                 language=tc.get("language", "en"),
                 category=tc.get("category", "general"),
                 dimension=tc.get("dimension", "guideline_adherence"),
-                target_model_response=sanitized_response,
+                target_model_response=sanitized_response or raw_response,
                 evaluation_score=score,
-                evaluation_notes=eval_verdict.get("notes", ""),
+                evaluation_notes=eval_verdict.get("notes") or eval_verdict.get("reasoning", ""),
                 concern_category=eval_verdict.get("concern_category"),
                 compliant=is_compliant,
                 meta_info={
@@ -158,7 +159,7 @@ async def _audit_llm_async(
                 }
             )
             db.add(probe_record)
-            # FIX: real responses - Preserve actual prompt text, real target model response, verdict, and details
+            # FIX: real evaluation - Store real target response and judge evaluation results
             evaluation_records.append({
                 "id": tc.get("id"),
                 "category": tc.get("category"),
@@ -169,8 +170,10 @@ async def _audit_llm_async(
                 "model_response": sanitized_response or raw_response,
                 "evaluation_score": score,
                 "compliant": is_compliant,
-                "verdict": eval_verdict.get("verdict") or ("safe" if is_compliant is True else "unsafe" if is_compliant is False else "error"),
-                "notes": eval_verdict.get("notes", ""),
+                "verdict": eval_verdict.get("verdict") or ("safe" if is_compliant is True else "unsafe" if is_compliant is False else "pending"),
+                "severity": eval_verdict.get("severity") or eval_verdict.get("concern_category") or ("none" if is_compliant else "medium"),
+                "notes": eval_verdict.get("notes") or eval_verdict.get("reasoning", ""),
+                "judge_reasoning": eval_verdict.get("reasoning") or eval_verdict.get("notes", ""),
                 "concern_category": eval_verdict.get("concern_category") or eval_verdict.get("severity", "none")
             })
 

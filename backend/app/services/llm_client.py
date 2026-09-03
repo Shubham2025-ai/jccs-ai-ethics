@@ -549,6 +549,49 @@ def _parse_provider_error(raw_body: str, status_code: int) -> str:
         return raw_body[:200] if raw_body else f"HTTP {status_code} (empty response body)"
 
 
+# FIX: real evaluation - Robust extractor that preserves the full response
+def extract_target_response(data: Any) -> str:
+    """
+    # FIX: real evaluation
+    Robust extractor that preserves the full response.
+    """
+    if not data:
+        return ""
+    if isinstance(data, str):
+        return data.strip()
+    if not isinstance(data, dict):
+        return str(data).strip()
+    
+    choices = data.get("choices", [])
+    if choices and isinstance(choices, list) and len(choices) > 0:
+        first_choice = choices[0]
+        if isinstance(first_choice, dict):
+            message = first_choice.get("message", {})
+            if isinstance(message, dict):
+                content = message.get("content")
+                if content and len(str(content).strip()) > 5:
+                    return str(content).strip()
+                for key in ["text", "generated_text", "response", "reasoning_content", "thought"]:
+                    if message.get(key):
+                        val = str(message[key]).strip()
+                        if val:
+                            return val
+            for key in ["text", "content", "generated_text", "response"]:
+                if first_choice.get(key):
+                    val = str(first_choice[key]).strip()
+                    if val:
+                        return val
+    for key in ["text", "content", "generated_text", "response", "output"]:
+        if data.get(key):
+            val = str(data[key]).strip()
+            if val:
+                return val
+    sarvam_val = extract_sarvam_content(data)
+    if sarvam_val and not sarvam_val.startswith("[PARSE_ERROR]"):
+        return sarvam_val
+    return str(data) if data else ""
+
+
 # FIX: real responses
 def extract_sarvam_content(data: Any) -> str:
     """
