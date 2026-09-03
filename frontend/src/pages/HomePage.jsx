@@ -469,29 +469,46 @@ const trustEntities = [
 export default function HomePage() {
   const { scrollY } = useScroll()
   const cardParallaxY = useTransform(scrollY, [0, 600], [0, 30])
+  const [bgError, setBgError] = useState(false)
+
+  const primaryBg = "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2940&auto=format&fit=crop"
+  const fallbackBg = "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2940&auto=format&fit=crop"
 
   return (
-    <div className="space-y-20 pb-20 relative overflow-hidden">
-      {/* Sovereign Blended Background Image from Unsplash */}
+    <div className="space-y-20 pb-20 relative isolate overflow-hidden">
+      {/* Sovereign High-Visibility Blended Background Image */}
       <div
-        className="absolute inset-0 w-full h-[950px] pointer-events-none -z-20 opacity-30"
+        className="absolute -top-16 -left-20 -right-20 h-[1000px] pointer-events-none z-0 opacity-60 transition-opacity duration-1000"
         style={{
-          backgroundImage: `linear-gradient(
-            180deg,
-            rgba(10, 10, 15, 0.75) 0%,
-            rgba(10, 10, 15, 0.50) 45%,
-            rgba(10, 10, 15, 0.98) 100%
-          ), url('https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2940&auto=format&fit=crop')`,
+          backgroundImage: bgError
+            ? 'radial-gradient(ellipse at top, #1e1e38 0%, #0a0a0f 75%)'
+            : `linear-gradient(
+                180deg,
+                rgba(10, 10, 15, 0.55) 0%,
+                rgba(10, 10, 15, 0.30) 45%,
+                rgba(10, 10, 15, 0.95) 100%
+              ), url('${primaryBg}')`,
           backgroundSize: 'cover',
-          backgroundPosition: 'center top',
+          backgroundPosition: 'center 25%',
           backgroundRepeat: 'no-repeat',
         }}
         aria-hidden="true"
       />
 
+      {/* Hidden preloader image to handle error fallback */}
+      <img
+        src={primaryBg}
+        alt=""
+        className="hidden"
+        onError={() => {
+          console.warn('[JCCS] Primary background image failed, switching to fallback.')
+          setBgError(true)
+        }}
+      />
+
       {/* Ambient background glows for rich depth */}
-      <div className="absolute top-[-80px] left-[15%] w-[550px] h-[550px] bg-saffron/8 rounded-full blur-[140px] pointer-events-none -z-10" />
-      <div className="absolute top-[180px] right-[5%] w-[480px] h-[480px] bg-safety-teal/6 rounded-full blur-[140px] pointer-events-none -z-10" />
+      <div className="absolute top-[-80px] left-[15%] w-[550px] h-[550px] bg-saffron/10 rounded-full blur-[140px] pointer-events-none z-0" />
+      <div className="absolute top-[180px] right-[5%] w-[480px] h-[480px] bg-safety-teal/8 rounded-full blur-[140px] pointer-events-none z-0" />
 
       {/* Topographic Background Canvas */}
       <TopographicCanvas />
