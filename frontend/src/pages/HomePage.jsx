@@ -471,7 +471,7 @@ export default function HomePage() {
   const cardParallaxY = useTransform(scrollY, [0, 600], [0, 30])
 
   return (
-    <div className="space-y-24 py-4 pb-20 relative overflow-hidden">
+    <div className="space-y-20 pb-20 relative overflow-hidden">
       {/* Ambient background glows for rich depth */}
       <div className="absolute top-[-80px] left-[15%] w-[550px] h-[550px] bg-saffron/6 rounded-full blur-[140px] pointer-events-none -z-10" />
       <div className="absolute top-[180px] right-[5%] w-[480px] h-[480px] bg-safety-teal/5 rounded-full blur-[140px] pointer-events-none -z-10" />
@@ -479,113 +479,115 @@ export default function HomePage() {
       {/* Topographic Background Canvas */}
       <TopographicCanvas />
 
-      {/* HERO SECTION */}
-      <section className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center pt-8 sm:pt-12">
-        <div className="lg:col-span-7 space-y-7">
-          {/* Sovereign Badge */}
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-mono font-medium bg-saffron/10 text-saffron border border-saffron/30 shadow-[0_0_15px_rgba(255,153,51,0.1)]"
-          >
-            <span className="w-2 h-2 rounded-full bg-saffron animate-pulse" />
-            <span>Aligned with IndiaAI Mission & MeitY GenAI Advisories</span>
-          </motion.div>
+      {/* HERO SECTION — Optically Centered in Viewport */}
+      <section className="relative z-10 min-h-[calc(100vh-7rem)] flex items-center pt-2 pb-8 sm:pb-12">
+        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
+          <div className="lg:col-span-7 space-y-6 sm:space-y-7">
+            {/* Sovereign Badge */}
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-mono font-medium bg-saffron/10 text-saffron border border-saffron/30 shadow-[0_0_15px_rgba(255,153,51,0.1)]"
+            >
+              <span className="w-2 h-2 rounded-full bg-saffron animate-pulse" />
+              <span>Aligned with IndiaAI Mission & MeitY GenAI Advisories</span>
+            </motion.div>
 
-          {/* Headline */}
-          <div className="relative">
-            <div
-              className="absolute -top-12 -left-12 w-80 h-80 rounded-full pointer-events-none opacity-[0.035] border border-saffron"
-              style={{
-                backgroundImage: 'repeating-conic-gradient(from 0deg, transparent 0deg 13deg, #ff9933 14deg 15deg)'
-              }}
-              aria-hidden="true"
-            />
+            {/* Headline */}
+            <div className="relative">
+              <div
+                className="absolute -top-12 -left-12 w-80 h-80 rounded-full pointer-events-none opacity-[0.035] border border-saffron"
+                style={{
+                  backgroundImage: 'repeating-conic-gradient(from 0deg, transparent 0deg 13deg, #ff9933 14deg 15deg)'
+                }}
+                aria-hidden="true"
+              />
 
-            <motion.h1
+              <motion.h1
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                className="text-4xl sm:text-6xl lg:text-[68px] font-heading font-black text-[#f0f0f5] leading-[1.08] tracking-tight relative z-10"
+              >
+                Safeguarding{' '}
+                <span className="shimmer-saffron-text inline-block">
+                  India’s
+                </span>
+                <br className="hidden sm:block" />
+                AI Future.
+              </motion.h1>
+            </div>
+
+            {/* Subhead */}
+            <motion.p
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
+              className="text-[#8b8b9e] text-base sm:text-lg leading-relaxed max-w-xl font-sans"
+            >
+              Automated red-teaming and cultural alignment audit for Indian language foundation models.
+            </motion.p>
+
+            {/* CTA Buttons */}
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3, ease: 'easeOut' }}
+              className="flex flex-wrap items-center gap-4 pt-1"
+            >
+              {/* Primary Button */}
+              <Link
+                to="/upload"
+                className="pulse-ring-saffron btn-shimmer-hover px-7 py-3.5 rounded-xl font-heading font-black text-sm text-[#0a0a0f] bg-gradient-to-br from-[#ff9933] to-[#e67e00] hover:scale-[1.03] active:scale-[0.98] shadow-[0_8px_25px_rgba(255,153,51,0.25)] transition-all flex items-center gap-2.5 min-h-[46px]"
+              >
+                <Play className="w-4 h-4 fill-current text-[#0a0a0f]" />
+                <span>Launch Safety Evaluation</span>
+              </Link>
+
+              {/* Secondary Button */}
+              <Link
+                to="/history"
+                className="group px-6 py-3.5 rounded-xl font-heading font-bold text-ink-white text-sm bg-[#13131f] border border-[#262638] hover:border-[#ff9933] hover:text-[#ff9933] transition-all flex items-center gap-2 min-h-[46px]"
+              >
+                <span>View Audit History</span>
+                <ChevronRight className="w-4 h-4 text-ink-dim transition-transform duration-200 group-hover:translate-x-1 group-hover:text-[#ff9933]" />
+              </Link>
+            </motion.div>
+
+            {/* Clean Stats Bar with Proportional Columns */}
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-              className="text-4xl sm:text-6xl lg:text-[68px] font-heading font-black text-[#f0f0f5] leading-[1.08] tracking-tight relative z-10"
+              transition={{ duration: 0.6, delay: 0.45, ease: 'easeOut' }}
+              className="relative pt-5 border-t border-[#1e1e2e]"
             >
-              Safeguarding{' '}
-              <span className="shimmer-saffron-text inline-block">
-                India’s
-              </span>
-              <br className="hidden sm:block" />
-              AI Future.
-            </motion.h1>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
+                {stats.map(({ value, label, color }) => (
+                  <div key={label} className="text-left">
+                    <div className="text-3xl sm:text-4xl font-heading font-black font-mono leading-none tracking-tight" style={{ color }}>
+                      <AnimatedCounter value={value} />
+                    </div>
+                    <div className="text-[11px] text-[#8b8b9e] font-sans font-medium uppercase tracking-wider mt-1.5 leading-tight">
+                      {label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
           </div>
 
-          {/* Subhead */}
-          <motion.p
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
-            className="text-[#8b8b9e] text-base sm:text-lg leading-relaxed max-w-xl font-sans"
-          >
-            Automated red-teaming and cultural alignment audit for Indian language foundation models.
-          </motion.p>
-
-          {/* CTA Buttons */}
+          {/* Live Benchmark Scorecard Column */}
           <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3, ease: 'easeOut' }}
-            className="flex flex-wrap items-center gap-4 pt-2"
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.7, delay: 0.35, ease: 'easeOut' }}
+            style={{ y: cardParallaxY }}
+            className="lg:col-span-5 flex justify-center lg:justify-end relative z-10"
           >
-            {/* Primary Button */}
-            <Link
-              to="/upload"
-              className="pulse-ring-saffron btn-shimmer-hover px-7 py-3.5 rounded-xl font-heading font-black text-sm text-[#0a0a0f] bg-gradient-to-br from-[#ff9933] to-[#e67e00] hover:scale-[1.03] active:scale-[0.98] shadow-[0_8px_25px_rgba(255,153,51,0.25)] transition-all flex items-center gap-2.5 min-h-[46px]"
-            >
-              <Play className="w-4 h-4 fill-current text-[#0a0a0f]" />
-              <span>Launch Safety Evaluation</span>
-            </Link>
-
-            {/* Secondary Button */}
-            <Link
-              to="/history"
-              className="group px-6 py-3.5 rounded-xl font-heading font-bold text-ink-white text-sm bg-[#13131f] border border-[#262638] hover:border-[#ff9933] hover:text-[#ff9933] transition-all flex items-center gap-2 min-h-[46px]"
-            >
-              <span>View Audit History</span>
-              <ChevronRight className="w-4 h-4 text-ink-dim transition-transform duration-200 group-hover:translate-x-1 group-hover:text-[#ff9933]" />
-            </Link>
-          </motion.div>
-
-          {/* Clean Stats Bar with Proportional Columns */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.45, ease: 'easeOut' }}
-            className="relative pt-6 border-t border-[#1e1e2e]"
-          >
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
-              {stats.map(({ value, label, color }) => (
-                <div key={label} className="text-left">
-                  <div className="text-3xl sm:text-4xl font-heading font-black font-mono leading-none tracking-tight" style={{ color }}>
-                    <AnimatedCounter value={value} />
-                  </div>
-                  <div className="text-[11px] text-[#8b8b9e] font-sans font-medium uppercase tracking-wider mt-2 leading-tight">
-                    {label}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <LiveScorecardCard />
           </motion.div>
         </div>
-
-        {/* Live Benchmark Scorecard Column */}
-        <motion.div
-          initial={{ opacity: 0, x: 30 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.7, delay: 0.35, ease: 'easeOut' }}
-          style={{ y: cardParallaxY }}
-          className="lg:col-span-5 flex justify-center lg:justify-end relative z-10"
-        >
-          <LiveScorecardCard />
-        </motion.div>
       </section>
 
       {/* Trust & Governance Bar */}

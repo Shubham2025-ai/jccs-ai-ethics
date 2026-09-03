@@ -83,7 +83,7 @@ export default function App() {
       />
       <Navbar />
       <BackendStatus />
-      <main className="container mx-auto px-4 py-6 max-w-7xl">
+      <main className="container mx-auto px-4 sm:px-6 max-w-7xl">
         <Routes>
           <Route path="/"            element={<HomePage />} />
           <Route path="/upload"      element={<UploadPage />} />
