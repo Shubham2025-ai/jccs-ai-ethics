@@ -7,6 +7,7 @@ import {
 import { motion, useInView, useScroll, useTransform, AnimatePresence } from 'framer-motion'
 
 // ENHANCEMENT: Ambient 2D Particle Field + Topographic Mesh (<1% CPU, respects prefers-reduced-motion)
+// FIX: background polish — mix-blend-mode: screen and opacity: 0.25 on z-index: 3
 function TopographicCanvas() {
   const canvasRef = useRef(null)
 
@@ -173,10 +174,11 @@ function TopographicCanvas() {
     }
   }, [])
 
+  // FIX: background polish — z-index: 3, mix-blend-mode: screen, opacity: 0.25
   return (
     <canvas
       ref={canvasRef}
-      className="absolute inset-0 w-full h-full pointer-events-none z-0 opacity-75"
+      className="absolute inset-0 w-full h-full pointer-events-none z-[3] opacity-25 mix-blend-screen"
       aria-hidden="true"
     />
   )
@@ -493,8 +495,18 @@ const trustEntities = [
 
 export default function HomePage() {
   const { scrollY } = useScroll()
-  // ENHANCEMENT: Parallax background at 0.5x speed
-  const bgParallaxY = useTransform(scrollY, [0, 800], [0, 60])
+  
+  // FIX: background polish — 0.3x parallax scroll speed, disabled on mobile
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
+  const rawParallax = useTransform(scrollY, [0, 800], [0, 40])
+  const bgParallaxY = isMobile ? 0 : rawParallax
   const cardParallaxY = useTransform(scrollY, [0, 600], [0, 30])
   const [bgError, setBgError] = useState(false)
 
@@ -512,10 +524,14 @@ export default function HomePage() {
 
   return (
     <div className="space-y-20 pb-20 relative isolate overflow-hidden">
-      {/* ENHANCEMENT: Parallax Background with Vignette Overlay & Error Fallback */}
+      {/* ============================================================ */}
+      {/* FIX: background polish — 6-LAYER ARCHITECTURE                */}
+      {/* ============================================================ */}
+
+      {/* LAYER 0 (z-index: 0) — Circuit Board Image with Filters & Parallax */}
       <motion.div
         style={{ y: bgParallaxY }}
-        className="absolute -top-16 -left-20 -right-20 h-[1050px] pointer-events-none z-0 opacity-60 transition-opacity duration-1000"
+        className="absolute -top-24 -left-[50vw] -right-[50vw] left-1/2 right-1/2 -translate-x-1/2 w-screen h-[1100px] pointer-events-none z-0 opacity-15 md:opacity-25 transition-opacity duration-1000"
         aria-hidden="true"
       >
         <div
@@ -523,22 +539,11 @@ export default function HomePage() {
           style={{
             backgroundImage: bgError
               ? 'radial-gradient(ellipse at top, #1e1e38 0%, #0a0a0f 75%)'
-              : `linear-gradient(
-                  180deg,
-                  rgba(10, 10, 15, 0.55) 0%,
-                  rgba(10, 10, 15, 0.30) 45%,
-                  rgba(10, 10, 15, 0.95) 100%
-                ), url('${primaryBg}')`,
+              : `url('${primaryBg}')`,
             backgroundSize: 'cover',
-            backgroundPosition: 'center 25%',
+            backgroundPosition: 'center 20%',
             backgroundRepeat: 'no-repeat',
-          }}
-        />
-        {/* Vignette overlay */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background: 'radial-gradient(ellipse at center, transparent 0%, rgba(10,10,15,0.6) 100%)'
+            filter: 'contrast(1.1) brightness(0.65) saturate(0.8) hue-rotate(170deg)',
           }}
         />
       </motion.div>
@@ -554,24 +559,72 @@ export default function HomePage() {
         }}
       />
 
-      {/* ENHANCEMENT: Fixed-position Ambient Radial Glows */}
+      {/* LAYER 1 (z-index: 1) — Vignette, Edge Fades & Bottom Solid Fade */}
       <div
-        className="absolute top-[-80px] right-[10%] w-[550px] h-[550px] pointer-events-none z-0"
+        className="absolute -top-24 -left-[50vw] -right-[50vw] left-1/2 right-1/2 -translate-x-1/2 w-screen h-[1100px] pointer-events-none z-[1]"
+        aria-hidden="true"
+      >
+        {/* Radial vignette */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: 'radial-gradient(ellipse at center, transparent 30%, rgba(10,10,15,0.85) 100%)',
+          }}
+        />
+        {/* Horizontal edge fade (left & right) */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: 'linear-gradient(90deg, rgba(10,10,15,0.95) 0%, transparent 20%, transparent 80%, rgba(10,10,15,0.95) 100%)',
+          }}
+        />
+        {/* Top edge fade */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: 'linear-gradient(180deg, rgba(10,10,15,0.95) 0%, transparent 15%)',
+          }}
+        />
+        {/* Bottom fade to pure solid #0a0a0f (200px tall) */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-[220px]"
+          style={{
+            background: 'linear-gradient(180deg, transparent 0%, rgba(10,10,15,0.85) 60%, #0a0a0f 100%)',
+          }}
+        />
+      </div>
+
+      {/* LAYER 2 (z-index: 2) — Ambient Glow Layers (Saffron + Teal) */}
+      <div
+        className="absolute top-[-80px] right-[10%] w-[600px] h-[600px] pointer-events-none z-[2]"
         style={{
-          background: 'radial-gradient(circle at 80% 20%, rgba(255,153,51,0.08) 0%, transparent 50%)'
+          background: 'radial-gradient(circle at 75% 25%, rgba(255,153,51,0.12) 0%, transparent 45%)',
         }}
+        aria-hidden="true"
       />
       <div
-        className="absolute top-[200px] left-[5%] w-[480px] h-[480px] pointer-events-none z-0"
+        className="absolute top-[200px] left-[5%] w-[550px] h-[550px] pointer-events-none z-[2]"
         style={{
-          background: 'radial-gradient(circle at 20% 80%, rgba(0,212,170,0.06) 0%, transparent 50%)'
+          background: 'radial-gradient(circle at 25% 85%, rgba(0,212,170,0.08) 0%, transparent 45%)',
         }}
+        aria-hidden="true"
       />
 
-      {/* Topographic Background Canvas with Ambient Particles */}
+      {/* LAYER 3 (z-index: 3) — Topographic Background Canvas with Screen Blend */}
       <TopographicCanvas />
 
-      {/* HERO SECTION */}
+      {/* LAYER 4 (z-index: 4) — Left-Side Text Readability Guard */}
+      <div
+        className="absolute top-0 left-0 w-full lg:w-2/3 h-[900px] pointer-events-none z-[4]"
+        style={{
+          background: 'linear-gradient(90deg, rgba(10,10,15,0.75) 0%, rgba(10,10,15,0.35) 40%, transparent 75%)',
+        }}
+        aria-hidden="true"
+      />
+
+      {/* ============================================================ */}
+      {/* LAYER 10 (z-index: 10) — Content Layer                       */}
+      {/* ============================================================ */}
       <section className="relative z-10 pt-2 sm:pt-4 lg:pt-5 pb-12 sm:pb-16">
         <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
           <div className="lg:col-span-7 space-y-6 sm:space-y-7">
