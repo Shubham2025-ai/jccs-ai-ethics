@@ -549,6 +549,63 @@ def _parse_provider_error(raw_body: str, status_code: int) -> str:
         return raw_body[:200] if raw_body else f"HTTP {status_code} (empty response body)"
 
 
+# FIX: real responses
+def extract_sarvam_content(data: Any) -> str:
+    """
+    # FIX: real responses - Sarvam-specific response extractor with multiple fallbacks.
+    Handles standard OpenAI format, Sarvam direct format, streaming delta format, and alternative key schemas.
+    """
+    if not data or not isinstance(data, dict):
+        return str(data).strip() if data is not None else ""
+
+    choices = data.get("choices")
+    if not choices or not isinstance(choices, list) or len(choices) == 0:
+        # Check top-level content / response fields
+        for key in ["text", "content", "generated_text", "response", "output"]:
+            val = data.get(key)
+            if val is not None and str(val).strip():
+                return str(val).strip()
+        return ""
+
+    first_choice = choices[0]
+    if not isinstance(first_choice, dict):
+        return str(first_choice).strip()
+
+    # 1. Check message object
+    message = first_choice.get("message")
+    if isinstance(message, dict):
+        # Try all possible message content fields
+        for key in ["content", "text", "generated_text", "response", "reasoning_content", "reasoning", "thought"]:
+            val = message.get(key)
+            if val is not None and str(val).strip():
+                if isinstance(val, list):
+                    chunks = [p.get("text", "") if isinstance(p, dict) else str(p) for p in val]
+                    res = "".join(chunks).strip()
+                    if res:
+                        return res
+                return str(val).strip()
+
+    # 2. Check if content is in the choice root
+    for key in ["text", "content", "generated_text", "response"]:
+        val = first_choice.get(key)
+        if val is not None and str(val).strip():
+            return str(val).strip()
+
+    # 3. Check delta for streaming format
+    delta = first_choice.get("delta")
+    if isinstance(delta, dict):
+        for key in ["content", "text", "generated_text"]:
+            val = delta.get(key)
+            if val is not None and str(val).strip():
+                return str(val).strip()
+
+    # 4. If nothing found, return error message with keys for diagnostic debugging
+    if isinstance(message, dict) and message.keys():
+        return f"[PARSE_ERROR] No content field found in message. Message keys: {list(message.keys())}"
+
+    return f"[PARSE_ERROR] No content field found. Choice keys: {list(first_choice.keys())}"
+
+
 def _extract_openai_chat_content(data: Any) -> str:
     """
     Safely extracts text content from an OpenAI-compatible / Sarvam / Groq response dict.
@@ -601,6 +658,11 @@ def _extract_openai_chat_content(data: Any) -> str:
         text = first_choice["text"].strip()
         if text:
             return text
+
+    # FIX: real responses - fallback to sarvam / alternative keys extractor
+    sarvam_val = extract_sarvam_content(data)
+    if sarvam_val and not sarvam_val.startswith("[PARSE_ERROR]"):
+        return sarvam_val
 
     return ""
 
@@ -770,11 +832,25 @@ async def query_target_model(
             latency = round((time.time() - start_time) * 1000, 1)
             print(f"   [QUERY RESULT] HTTP {resp.status_code} | {latency}ms")
 
+            # FIX: real responses - Debug logging for Sarvam & upstream responses
+            if is_sarvam:
+                print(f"[Sarvam Debug] Raw status: {resp.status_code}")
+                print(f"[Sarvam Debug] Raw body: {resp.text[:2000]}")
+
             if resp.status_code == 200:
                 data = resp.json()
-                content = _extract_openai_chat_content(data)
+                # FIX: real responses - Use dedicated Sarvam extractor for Sarvam queries
+                if is_sarvam:
+                    content = extract_sarvam_content(data)
+                else:
+                    content = _extract_openai_chat_content(data)
+
                 if not content:
                     content = "[Empty Response]: Model returned empty content."
+                
+                if is_sarvam:
+                    print(f"[Sarvam Debug] Extracted content ({len(content)} chars): {content[:150]}")
+
                 return {
                     "status": "success",
                     "response": content,

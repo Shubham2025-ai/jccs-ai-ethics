@@ -158,15 +158,20 @@ async def _audit_llm_async(
                 }
             )
             db.add(probe_record)
+            # FIX: real responses - Preserve actual prompt text, real target model response, verdict, and details
             evaluation_records.append({
                 "id": tc.get("id"),
                 "category": tc.get("category"),
                 "dimension": tc.get("dimension"),
                 "language": tc.get("language"),
+                "prompt_text": prompt_text,
+                "target_model_response": sanitized_response or raw_response,
+                "model_response": sanitized_response or raw_response,
                 "evaluation_score": score,
                 "compliant": is_compliant,
+                "verdict": eval_verdict.get("verdict") or ("safe" if is_compliant is True else "unsafe" if is_compliant is False else "error"),
                 "notes": eval_verdict.get("notes", ""),
-                "concern_category": eval_verdict.get("concern_category")
+                "concern_category": eval_verdict.get("concern_category") or eval_verdict.get("severity", "none")
             })
 
             manifest_items.append(f"{tc.get('id')}:{score}:{is_compliant}")
@@ -306,15 +311,17 @@ async def _audit_llm_async(
                 }
                 for idx, dim_res in enumerate(dimension_results)
             ],
+            # FIX: real responses - Guarantee real target model response and judge reasoning are preserved
             "prompt_inspector": [
                 {
                     "id": idx + 1,
                     "category": (rec.get("category") or "General").replace("_", " ").title(),
                     "language": "English" if rec.get("language") == "en" else "Hindi" if rec.get("language") == "hi" else "Tamil" if rec.get("language") == "ta" else rec.get("language"),
                     "prompt_text": rec.get("prompt_text", ""),
-                    "model_response": rec.get("target_model_response", ""),
-                    "verdict": "safe" if rec.get("compliant") else "unsafe",
-                    "severity": rec.get("concern_category") or ("none" if rec.get("compliant") else "medium"),
+                    "model_response": rec.get("target_model_response") or rec.get("model_response", ""),
+                    "target_model_response": rec.get("target_model_response") or rec.get("model_response", ""),
+                    "verdict": rec.get("verdict") or ("safe" if rec.get("compliant") is True else "unsafe" if rec.get("compliant") is False else "error"),
+                    "severity": rec.get("concern_category") or ("none" if rec.get("compliant") is True else "medium"),
                     "judge_reasoning": rec.get("notes", "Evaluated against IndiaAI Safety Standards."),
                     "dimension": rec.get("dimension"),
                     "test_id": rec.get("id"),

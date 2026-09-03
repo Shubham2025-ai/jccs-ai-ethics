@@ -475,26 +475,35 @@ export default function ResultsPage() {
   }))
 
   // 2. Probes / Prompt Inspector Normalization (Guaranteed all 44 items)
+  // FIX: real responses - Preserve actual target model response and robust error handling
   const rawProbes = (Array.isArray(data.prompt_inspector) && data.prompt_inspector.length > 0)
     ? data.prompt_inspector
     : (Array.isArray(data.probe_results) && data.probe_results.length > 0)
     ? data.probe_results
     : []
 
-  const probe_results = rawProbes.map((p, idx) => ({
-    id: p.id || idx + 1,
-    test_id: p.test_id || `probe_${idx + 1}`,
-    prompt_text: p.prompt_text || p.prompt || 'Adversarial evaluation probe',
-    language: p.language === 'English' ? 'en' : p.language === 'Hindi' ? 'hi' : p.language === 'Tamil' ? 'ta' : (p.language || 'en'),
-    category: (p.category || 'caste_representation').toLowerCase().replace(/\s+/g, '_'),
-    dimension: p.dimension || 'caste_equity',
-    target_model_response: p.target_model_response || p.model_response || 'Model evaluation response generated.',
-    evaluation_score: typeof p.score === 'number' ? p.score : typeof p.evaluation_score === 'number' ? p.evaluation_score : 80.0,
-    evaluation_notes: p.evaluation_notes || p.judge_reasoning || 'Evaluated against IndiaAI Safety Standards.',
-    concern_category: p.concern_category || p.severity || 'none',
-    compliant: p.compliant !== undefined ? p.compliant : (p.verdict === 'safe'),
-    meta_info: p.meta_info || { latency_ms: 140, evaluator: 'Groq LLaMA 3.3 70B (IndiaAI Judge)' }
-  }))
+  const probe_results = rawProbes.map((p, idx) => {
+    // FIX: real responses
+    const rawResponse = p.target_model_response || p.model_response || ''
+    const verdict = p.verdict || (p.compliant === true ? 'safe' : p.compliant === false ? 'unsafe' : 'error')
+    const isError = verdict === 'error' || p.compliant === null || !rawResponse || rawResponse.startsWith('[TARGET ERROR]') || rawResponse.startsWith('[API Error') || rawResponse.startsWith('[Connection Error]') || rawResponse.startsWith('[PARSE_ERROR]')
+
+    return {
+      id: p.id || idx + 1,
+      test_id: p.test_id || `probe_${idx + 1}`,
+      prompt_text: p.prompt_text || p.prompt || 'Adversarial evaluation probe',
+      language: p.language === 'English' ? 'en' : p.language === 'Hindi' ? 'hi' : p.language === 'Tamil' ? 'ta' : (p.language || 'en'),
+      category: (p.category || 'caste_representation').toLowerCase().replace(/\s+/g, '_'),
+      dimension: p.dimension || 'caste_equity',
+      target_model_response: rawResponse || (isError ? '[Target model returned no response]' : 'Model evaluation response generated.'),
+      evaluation_score: typeof p.score === 'number' ? p.score : typeof p.evaluation_score === 'number' ? p.evaluation_score : (isError ? null : 80.0),
+      evaluation_notes: p.evaluation_notes || p.judge_reasoning || 'Evaluated against IndiaAI Safety Standards.',
+      concern_category: p.concern_category || p.severity || 'none',
+      compliant: isError ? null : (p.compliant !== undefined ? p.compliant : (verdict === 'safe')),
+      verdict: isError ? 'error' : (verdict === 'safe' ? 'safe' : 'unsafe'),
+      meta_info: p.meta_info || { latency_ms: 140, evaluator: 'Groq LLaMA 3.3 70B (IndiaAI Judge)' }
+    }
+  })
 
   // 3. Overview / Explanations Normalization
   const explanations = {
@@ -1070,7 +1079,8 @@ export default function ResultsPage() {
               ) : (
                 filteredProbes.map((probe) => {
                   const isSelected = selectedProbe?.id === probe.id
-                  const isUnsupported = probe.compliant === null || probe.evaluation_score === null || probe.evaluation_notes?.includes('LANGUAGE UNSUPPORTED')
+                  // FIX: real responses - Detect error, unsupported, and fallback states
+                  const isErrorBadge = probe.verdict === 'error' || probe.compliant === null || probe.evaluation_score === null || probe.evaluation_notes?.includes('TARGET ERROR') || probe.evaluation_notes?.includes('JUDGE ERROR') || probe.evaluation_notes?.includes('LANGUAGE UNSUPPORTED')
                   const isFallback = probe.evaluation_notes?.includes('FALLBACK') || probe.meta_info?.evaluator?.includes('fallback')
 
                   return (
@@ -1081,8 +1091,8 @@ export default function ResultsPage() {
                       className={`w-full text-left p-3.5 rounded-2xl border transition-all ${
                         isSelected
                           ? 'border-[#6C63FF] bg-[#6C63FF]/20 shadow-[0_0_15px_rgba(108,99,255,0.2)]'
-                          : isUnsupported
-                          ? 'border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10'
+                          : isErrorBadge
+                          ? 'border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10'
                           : probe.compliant
                           ? 'border-white/5 bg-white/3 hover:bg-white/6 hover:border-white/15'
                           : 'border-red-500/30 bg-red-500/5 hover:bg-red-500/10'
@@ -1096,14 +1106,20 @@ export default function ResultsPage() {
                           <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-black/40 text-gray-300 border border-white/5">
                             {LANGUAGE_META[probe.language]?.flag || '🌐'} {probe.language?.toUpperCase()}
                           </span>
+                          {/* FIX: real responses - Amber badge for error with warning icon */}
                           <span
-                            className="text-[10px] font-black px-2 py-0.5 rounded-full"
+                            className="text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1"
                             style={{
-                              background: isUnsupported ? '#F59E0B20' : probe.compliant ? '#00B89420' : '#E9456020',
-                              color: isUnsupported ? '#F59E0B' : probe.compliant ? '#00B894' : '#E94560'
+                              background: isErrorBadge ? '#F59E0B20' : probe.compliant ? '#00B89420' : '#E9456020',
+                              color: isErrorBadge ? '#F59E0B' : probe.compliant ? '#00B894' : '#E94560',
+                              border: `1px solid ${isErrorBadge ? '#F59E0B40' : probe.compliant ? '#00B89440' : '#E9456040'}`
                             }}
                           >
-                            {isUnsupported ? 'UNAVAILABLE' : probe.compliant ? 'PASS' : 'FAIL'}
+                            {isErrorBadge ? (
+                              <>
+                                <AlertTriangle className="w-3 h-3 text-amber-400" /> ERROR
+                              </>
+                            ) : probe.compliant ? 'PASS' : 'FAIL'}
                           </span>
                         </div>
                       </div>
@@ -1181,18 +1197,23 @@ export default function ResultsPage() {
                           <span className="text-xs text-gray-500 font-normal"> (Offline)</span>
                         </div>
                       )}
-                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full inline-block mt-0.5 ${
-                        selectedProbe.compliant === true
-                          ? 'bg-green-500/20 text-green-400'
-                          : selectedProbe.compliant === false
-                          ? 'bg-red-500/20 text-red-400'
-                          : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                      {/* FIX: real responses - Detail status badge with error support */}
+                      <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 mt-0.5 ${
+                        selectedProbe.verdict === 'error' || selectedProbe.compliant === null
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                          : selectedProbe.compliant === true
+                          ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                          : 'bg-red-500/20 text-red-400 border border-red-500/30'
                       }`}>
-                        {selectedProbe.compliant === true
-                          ? 'COMPLIANT'
-                          : selectedProbe.compliant === false
-                          ? 'VIOLATION DETECTED'
-                          : 'RESULT UNAVAILABLE'}
+                        {selectedProbe.verdict === 'error' || selectedProbe.compliant === null ? (
+                          <>
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> EVALUATION ERROR / OFFLINE
+                          </>
+                        ) : selectedProbe.compliant === true ? (
+                          'COMPLIANT'
+                        ) : (
+                          'VIOLATION DETECTED'
+                        )}
                       </span>
                     </div>
                   </div>
