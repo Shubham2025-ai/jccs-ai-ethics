@@ -479,8 +479,8 @@ export default function HomePage() {
       {/* Topographic Background Canvas */}
       <TopographicCanvas />
 
-      {/* HERO SECTION — Optically Centered in Viewport */}
-      <section className="relative z-10 min-h-[calc(100vh-7rem)] flex items-center pt-2 pb-8 sm:pb-12">
+      {/* HERO SECTION */}
+      <section className="relative z-10 pt-6 sm:pt-10 lg:pt-12 pb-12 sm:pb-16">
         <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
           <div className="lg:col-span-7 space-y-6 sm:space-y-7">
             {/* Sovereign Badge */}
@@ -488,7 +488,7 @@ export default function HomePage() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-mono font-medium bg-saffron/10 text-saffron border border-saffron/30 shadow-[0_0_15px_rgba(255,153,51,0.1)]"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-sans font-semibold bg-saffron/10 text-saffron border border-saffron/30 shadow-[0_0_15px_rgba(255,153,51,0.1)]"
             >
               <span className="w-2 h-2 rounded-full bg-saffron animate-pulse" />
               <span>Aligned with IndiaAI Mission & MeitY GenAI Advisories</span>
