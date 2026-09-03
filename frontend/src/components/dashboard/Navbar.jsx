@@ -14,7 +14,7 @@ export default function Navbar() {
   // ENHANCEMENT: Scroll detection for dynamic backdrop blur & opacity
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20)
+      setIsScrolled(window.scrollY > 50)
     }
     window.addEventListener('scroll', handleScroll, { passive: true })
     handleScroll()

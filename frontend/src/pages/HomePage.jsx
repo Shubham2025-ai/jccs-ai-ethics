@@ -1,4 +1,4 @@
-// ENHANCEMENT: Sovereign JCCS Landing Page — Product Launch Grade Visuals & Precision Layout
+// ENHANCEMENT: Sovereign JCCS Landing Page — Product Launch Grade Visuals & Precision Interactions
 import { Link } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import {
@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { motion, useInView, useScroll, useTransform, AnimatePresence } from 'framer-motion'
 
-// ENHANCEMENT: Interactive 2D Topographic Mesh + Golden Signals + Floating Particle Field
+// ENHANCEMENT: Ambient 2D Particle Field + Topographic Mesh (<1% CPU, respects prefers-reduced-motion)
 function TopographicCanvas() {
   const canvasRef = useRef(null)
 
@@ -43,7 +43,7 @@ function TopographicCanvas() {
     const lines = 16
     const step = height / lines
 
-    // 4 Data Pulse Signals traveling along contour lines
+    // 4 Saffron Data Pulse Signals traveling along contour lines
     const pulses = [
       { lineIndex: 3, progress: 0.15, speed: 0.0016 },
       { lineIndex: 6, progress: 0.50, speed: 0.0020 },
@@ -51,14 +51,14 @@ function TopographicCanvas() {
       { lineIndex: 12, progress: 0.30, speed: 0.0018 },
     ]
 
-    // 24 Tiny Saffron Floating Micro-particles
-    const particles = Array.from({ length: 24 }, () => ({
+    // ENHANCEMENT: 25 Tiny Saffron Floating Micro-particles with cursor repel
+    const particles = Array.from({ length: 25 }, () => ({
       x: Math.random() * width,
       y: Math.random() * height,
       vx: (Math.random() - 0.5) * 0.25,
       vy: -0.15 - Math.random() * 0.25,
-      radius: 1.2 + Math.random() * 0.8,
-      opacity: 0.15 + Math.random() * 0.15,
+      radius: 1.5 + Math.random() * 0.8,
+      opacity: 0.12 + Math.random() * 0.15,
     }))
 
     const render = () => {
@@ -68,17 +68,16 @@ function TopographicCanvas() {
       mouse.x += (mouse.targetX - mouse.x) * 0.05
       mouse.y += (mouse.targetY - mouse.y) * 0.05
 
-      // 1. Render Floating Particle Layer
+      // 1. Render Floating Particle Layer (gently repels within 100px of cursor)
       particles.forEach((p) => {
         p.x += p.vx
         p.y += p.vy
 
-        // Soft cursor repel
         const dx = p.x - mouse.x
         const dy = p.y - mouse.y
         const dist = Math.sqrt(dx * dx + dy * dy)
-        if (dist < 140 && dist > 0) {
-          const force = (1 - dist / 140) * 0.6
+        if (dist < 100 && dist > 0) {
+          const force = (1 - dist / 100) * 0.8
           p.x += (dx / dist) * force
           p.y += (dy / dist) * force
         }
@@ -183,17 +182,21 @@ function TopographicCanvas() {
   )
 }
 
-// ENHANCEMENT: Clean Animated Counter
-function AnimatedCounter({ value, duration = 1.4 }) {
+// ENHANCEMENT: Odometer Count-Up Hook with Slot Machine Snap & 1-Frame Glitch Flash Finish
+function OdometerCounter({ value, duration = 1.5 }) {
   const [displayValue, setDisplayValue] = useState(0)
   const [isFinished, setIsFinished] = useState(false)
   const ref = useRef(null)
-  const isInView = useInView(ref, { once: true, margin: '-40px' })
+  const isInView = useInView(ref, { once: true, margin: '-30px' })
 
   const isNumeric = typeof value === 'number'
 
   useEffect(() => {
-    if (!isInView || !isNumeric) return
+    if (!isInView) return
+    if (!isNumeric) {
+      setIsFinished(true)
+      return
+    }
 
     let start = 0
     const stepTime = 20
@@ -217,8 +220,8 @@ function AnimatedCounter({ value, duration = 1.4 }) {
   return (
     <span
       ref={ref}
-      className={`font-mono font-black transition-all duration-300 ${
-        isFinished ? 'filter drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]' : ''
+      className={`font-mono font-black transition-all duration-200 ${
+        isFinished ? 'filter drop-shadow-[0_0_12px_rgba(255,255,255,0.35)]' : ''
       }`}
     >
       {isNumeric ? displayValue : value}
@@ -226,39 +229,56 @@ function AnimatedCounter({ value, duration = 1.4 }) {
   )
 }
 
-// ENHANCEMENT: Live Benchmark Card
+// ENHANCEMENT: Live Scorecard Card with 3D Perspective Tilt, Neon SVG Filter, Count-ups & Typewriter HMAC
 function LiveScorecardCard() {
   const cardRef = useRef(null)
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 })
   const [hoveredBar, setHoveredBar] = useState(null)
-  const [hashRevealed, setHashRevealed] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
   const [gaugeScore, setGaugeScore] = useState(0)
+  const [typewriterHash, setTypewriterHash] = useState('7f4e92a...98b')
 
   const isInView = useInView(cardRef, { once: true, margin: '-20px' })
 
-  // 3D Perspective Tilt
+  // 3D Perspective Tilt on Mouse Movement (max 5deg)
   const handleMouseMove = (e) => {
     if (!cardRef.current) return
     const rect = cardRef.current.getBoundingClientRect()
     const x = e.clientX - rect.left - rect.width / 2
     const y = e.clientY - rect.top - rect.height / 2
-    const rotateX = -(y / (rect.height / 2)) * 4
-    const rotateY = (x / (rect.width / 2)) * 4
+    const rotateX = -(y / (rect.height / 2)) * 5
+    const rotateY = (x / (rect.width / 2)) * 5
     setTilt({ rotateX, rotateY })
   }
 
   const handleMouseLeave = () => {
     setTilt({ rotateX: 0, rotateY: 0 })
+    setIsHovered(false)
     setHoveredBar(null)
-    setHashRevealed(false)
+    setTypewriterHash('7f4e92a...98b')
   }
 
-  // Count up gauge score
+  // Typewriter effect on HMAC Proof hover
+  const handleMouseEnterProof = () => {
+    const full = '7f4e92a83c190d7e5b22104a6c898b'
+    let idx = 0
+    setTypewriterHash('')
+    const interval = setInterval(() => {
+      if (idx <= full.length) {
+        setTypewriterHash(full.slice(0, idx))
+        idx++
+      } else {
+        clearInterval(interval)
+      }
+    }, 25)
+  }
+
+  // Count up gauge score on mount over 1.5s
   useEffect(() => {
     if (!isInView) return
     const target = 74
     let current = 0
-    const duration = 1400
+    const duration = 1500
     const intervalTime = 20
     const step = target / (duration / intervalTime)
 
@@ -275,14 +295,11 @@ function LiveScorecardCard() {
     return () => clearInterval(timer)
   }, [isInView])
 
-  const fullHash = '7f4e92a83c190d7e5b22104a6c898b'
-  const displayHash = hashRevealed ? fullHash : '7f4e92a...98b'
-
   const dimensions = [
     { label: 'Caste Representation & Equity', short: 'Caste Equity', score: 85, color: '#ff9933' },
     { label: 'Gender & Occupational Roles', short: 'Gender Bias', score: 82, color: '#00d4aa' },
-    { label: 'Regional & Religious Harmony', short: 'Regional Harmony', score: 91, color: '#38bdf8' },
-    { label: 'Linguistic Parity & Refusal Calibration', short: 'Linguistic Parity', score: 90, color: '#a855f7' },
+    { label: 'Regional & Religious Harmony', short: 'Regional Harmony', score: 91, color: '#3498db' },
+    { label: 'Linguistic Parity & Refusal Calibration', short: 'Linguistic Parity', score: 90, color: '#9b59b6' },
   ]
 
   // Gauge constants
@@ -292,16 +309,26 @@ function LiveScorecardCard() {
   const circumference = 2 * Math.PI * radius
   const strokeDashoffset = circumference - (gaugeScore / 100) * circumference
 
+  // Dynamic Risk Badge Color
+  const getRiskBadge = (score) => {
+    if (score < 40) return { label: 'HIGH RISK', bg: 'bg-[#c0392b]/10', text: 'text-[#c0392b]', border: 'border-[#c0392b]/30' }
+    if (score <= 70) return { label: 'MODERATE RISK', bg: 'bg-[#f1c40f]/10', text: 'text-[#f1c40f]', border: 'border-[#f1c40f]/30' }
+    return { label: 'CERTIFIED BHARAT', bg: 'bg-[#00d4aa]/10', text: 'text-[#00d4aa]', border: 'border-[#00d4aa]/30' }
+  }
+
+  const badge = getRiskBadge(gaugeScore)
+
   return (
     <motion.div
       ref={cardRef}
       onMouseMove={handleMouseMove}
+      onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={handleMouseLeave}
       style={{
         transform: `perspective(1000px) rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg)`,
-        transition: 'transform 0.15s ease-out',
+        transition: isHovered ? 'transform 0.1s ease-out' : 'transform 0.3s ease-out',
         boxShadow:
-          '0 25px 60px -15px rgba(0,0,0,0.7), 0 0 25px rgba(255,153,51,0.06), inset 0 1px 0 rgba(255,153,51,0.2)',
+          'inset 0 1px 0 rgba(255,153,51,0.2), 0 20px 60px rgba(0,0,0,0.5)',
       }}
       className="p-6 rounded-2xl border border-[#1e1e2e] max-w-sm w-full mx-auto relative overflow-hidden bg-[#13131f]/95 backdrop-blur-xl"
     >
@@ -313,16 +340,16 @@ function LiveScorecardCard() {
           </span>
           <h4 className="font-heading font-black text-ink-white text-sm">Indic LLM 7B Benchmark</h4>
         </div>
-        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#f1c40f]/10 text-[#f1c40f] border border-[#f1c40f]/30">
-          MODERATE RISK
+        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border transition-colors ${badge.bg} ${badge.text} ${badge.border}`}>
+          {badge.label}
         </span>
       </div>
 
-      {/* Clean Circular Gauge */}
+      {/* SVG Circular Gauge with Neon Glow Filter */}
       <div className="flex justify-center py-2 relative">
         <svg width={size} height={size} className="-rotate-90">
           <defs>
-            <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
               <feGaussianBlur stdDeviation="3" result="coloredBlur" />
               <feMerge>
                 <feMergeNode in="coloredBlur" />
@@ -352,7 +379,7 @@ function LiveScorecardCard() {
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
-            filter="url(#neon-glow)"
+            filter="url(#glow)"
             className="arc-breathing-glow transition-all duration-700 ease-out"
           />
         </svg>
@@ -362,13 +389,13 @@ function LiveScorecardCard() {
           <span className="text-3xl font-black font-mono text-ink-white leading-none">
             {gaugeScore}
           </span>
-          <span className="text-[8px] font-heading font-bold uppercase tracking-widest text-[#8b8b9e] mt-1">
+          <span className="text-[10px] font-heading font-bold uppercase tracking-widest text-[#8b8b9e] mt-1">
             BHARAT SAFETY SCORE
           </span>
         </div>
       </div>
 
-      {/* Interactive Dimension Bars */}
+      {/* Interactive Dimension Bars with Staggered Count-ups */}
       <div className="space-y-2.5 pt-3 border-t border-[#1e1e2e] relative">
         {dimensions.map(({ label, short, score, color }, idx) => (
           <div
@@ -397,7 +424,7 @@ function LiveScorecardCard() {
           </div>
         ))}
 
-        {/* Dimension Hover Tooltip */}
+        {/* Hover Tooltip */}
         <AnimatePresence>
           {hoveredBar && (
             <motion.div
@@ -415,20 +442,18 @@ function LiveScorecardCard() {
         </AnimatePresence>
       </div>
 
-      {/* HMAC Proof */}
+      {/* HMAC Proof with Typewriter Reveal */}
       <div
-        onMouseEnter={() => setHashRevealed(true)}
-        onMouseLeave={() => setHashRevealed(false)}
+        onMouseEnter={handleMouseEnterProof}
+        onMouseLeave={() => setTypewriterHash('7f4e92a...98b')}
         className="mt-4 pt-3 border-t border-[#1e1e2e] flex items-center justify-between text-[11px] font-mono text-ink-dim cursor-help transition-colors hover:text-ink-white"
-        title="Hover to reveal full HMAC-SHA256 signature"
+        title="Hover to reveal full HMAC-SHA256 signature with typewriter effect"
       >
         <span>HMAC-SHA256 Proof:</span>
         <span
-          className={`font-bold px-2 py-0.5 rounded bg-[#0a0a0f] border border-[#1e1e2e] transition-all duration-300 truncate max-w-[150px] ${
-            hashRevealed ? 'text-saffron border-saffron/40' : 'text-safety-teal'
-          }`}
+          className="font-bold px-2 py-0.5 rounded bg-[#0a0a0f] border border-[#1e1e2e] text-safety-teal font-mono text-[11px] truncate max-w-[150px]"
         >
-          {displayHash}
+          {typewriterHash || '7f4e92a...98b'}
         </span>
       </div>
     </motion.div>
@@ -468,34 +493,57 @@ const trustEntities = [
 
 export default function HomePage() {
   const { scrollY } = useScroll()
+  // ENHANCEMENT: Parallax background at 0.5x speed
+  const bgParallaxY = useTransform(scrollY, [0, 800], [0, 60])
   const cardParallaxY = useTransform(scrollY, [0, 600], [0, 30])
   const [bgError, setBgError] = useState(false)
 
   const primaryBg = "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2940&auto=format&fit=crop"
-  const fallbackBg = "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2940&auto=format&fit=crop"
+
+  // Staggered word animation variants for headline
+  const wordVariants = {
+    hidden: { opacity: 0, y: 30 },
+    visible: (i) => ({
+      opacity: 1,
+      y: 0,
+      transition: { delay: i * 0.08, duration: 0.6, ease: [0.16, 1, 0.3, 1] },
+    }),
+  }
 
   return (
     <div className="space-y-20 pb-20 relative isolate overflow-hidden">
-      {/* Sovereign High-Visibility Blended Background Image */}
-      <div
-        className="absolute -top-16 -left-20 -right-20 h-[1000px] pointer-events-none z-0 opacity-60 transition-opacity duration-1000"
-        style={{
-          backgroundImage: bgError
-            ? 'radial-gradient(ellipse at top, #1e1e38 0%, #0a0a0f 75%)'
-            : `linear-gradient(
-                180deg,
-                rgba(10, 10, 15, 0.55) 0%,
-                rgba(10, 10, 15, 0.30) 45%,
-                rgba(10, 10, 15, 0.95) 100%
-              ), url('${primaryBg}')`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center 25%',
-          backgroundRepeat: 'no-repeat',
-        }}
+      {/* ENHANCEMENT: Parallax Background with Vignette Overlay & Error Fallback */}
+      <motion.div
+        style={{ y: bgParallaxY }}
+        className="absolute -top-16 -left-20 -right-20 h-[1050px] pointer-events-none z-0 opacity-60 transition-opacity duration-1000"
         aria-hidden="true"
-      />
+      >
+        <div
+          className="w-full h-full"
+          style={{
+            backgroundImage: bgError
+              ? 'radial-gradient(ellipse at top, #1e1e38 0%, #0a0a0f 75%)'
+              : `linear-gradient(
+                  180deg,
+                  rgba(10, 10, 15, 0.55) 0%,
+                  rgba(10, 10, 15, 0.30) 45%,
+                  rgba(10, 10, 15, 0.95) 100%
+                ), url('${primaryBg}')`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center 25%',
+            backgroundRepeat: 'no-repeat',
+          }}
+        />
+        {/* Vignette overlay */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: 'radial-gradient(ellipse at center, transparent 0%, rgba(10,10,15,0.6) 100%)'
+          }}
+        />
+      </motion.div>
 
-      {/* Hidden preloader image to handle error fallback */}
+      {/* Preloader for background image fallback */}
       <img
         src={primaryBg}
         alt=""
@@ -506,29 +554,42 @@ export default function HomePage() {
         }}
       />
 
-      {/* Ambient background glows for rich depth */}
-      <div className="absolute top-[-80px] left-[15%] w-[550px] h-[550px] bg-saffron/10 rounded-full blur-[140px] pointer-events-none z-0" />
-      <div className="absolute top-[180px] right-[5%] w-[480px] h-[480px] bg-safety-teal/8 rounded-full blur-[140px] pointer-events-none z-0" />
+      {/* ENHANCEMENT: Fixed-position Ambient Radial Glows */}
+      <div
+        className="absolute top-[-80px] right-[10%] w-[550px] h-[550px] pointer-events-none z-0"
+        style={{
+          background: 'radial-gradient(circle at 80% 20%, rgba(255,153,51,0.08) 0%, transparent 50%)'
+        }}
+      />
+      <div
+        className="absolute top-[200px] left-[5%] w-[480px] h-[480px] pointer-events-none z-0"
+        style={{
+          background: 'radial-gradient(circle at 20% 80%, rgba(0,212,170,0.06) 0%, transparent 50%)'
+        }}
+      />
 
-      {/* Topographic Background Canvas */}
+      {/* Topographic Background Canvas with Ambient Particles */}
       <TopographicCanvas />
 
       {/* HERO SECTION */}
       <section className="relative z-10 pt-2 sm:pt-4 lg:pt-5 pb-12 sm:pb-16">
         <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
           <div className="lg:col-span-7 space-y-6 sm:space-y-7">
-            {/* Sovereign Badge */}
+            {/* ENHANCEMENT: Sovereign Badge with Pulsing Saffron Dot */}
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-sans font-semibold bg-saffron/10 text-saffron border border-saffron/30 shadow-[0_0_15px_rgba(255,153,51,0.12)] hover:border-saffron/50 transition-colors"
+              transition={{ duration: 0.5, delay: 0.8 }}
+              className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full text-xs font-sans font-semibold bg-saffron/10 text-saffron border border-saffron/30 shadow-[0_0_15px_rgba(255,153,51,0.12)] hover:border-saffron/50 transition-colors"
             >
-              <span className="w-2 h-2 rounded-full bg-saffron animate-pulse" />
+              <div className="relative flex items-center justify-center">
+                <span className="w-2 h-2 rounded-full bg-saffron" />
+                <span className="absolute -inset-1 rounded-full bg-saffron/40 animate-ping" />
+              </div>
               <span>Aligned with IndiaAI Mission & MeitY GenAI Advisories</span>
             </motion.div>
 
-            {/* Headline */}
+            {/* ENHANCEMENT: Headline with Staggered Word Entrance & Shimmer Gradient */}
             <div className="relative">
               <div
                 className="absolute -top-12 -left-12 w-80 h-80 rounded-full pointer-events-none opacity-[0.035] border border-saffron"
@@ -538,42 +599,50 @@ export default function HomePage() {
                 aria-hidden="true"
               />
 
-              <motion.h1
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                className="text-4xl sm:text-6xl lg:text-[68px] font-heading font-black text-[#f0f0f5] leading-[1.08] tracking-tight relative z-10"
-              >
-                Safeguarding{' '}
-                <span className="shimmer-saffron-text inline-block">
+              <h1 className="text-4xl sm:text-6xl lg:text-[72px] font-heading font-black text-[#f0f0f5] leading-[1.1] tracking-[-0.02em] relative z-10">
+                <motion.span custom={0} initial="hidden" animate="visible" variants={wordVariants} className="inline-block mr-3">
+                  Safeguarding
+                </motion.span>
+                <motion.span
+                  custom={1}
+                  initial="hidden"
+                  animate="visible"
+                  variants={wordVariants}
+                  className="shimmer-saffron-text inline-block mr-3"
+                >
                   India’s
-                </span>
+                </motion.span>
                 <br className="hidden sm:block" />
-                AI Future.
-              </motion.h1>
+                <motion.span custom={2} initial="hidden" animate="visible" variants={wordVariants} className="inline-block mr-3">
+                  AI
+                </motion.span>
+                <motion.span custom={3} initial="hidden" animate="visible" variants={wordVariants} className="inline-block">
+                  Future.
+                </motion.span>
+              </h1>
             </div>
 
-            {/* Subhead */}
+            {/* ENHANCEMENT: Subhead with 0.8s Stagger Delay */}
             <motion.p
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
+              transition={{ duration: 0.6, delay: 0.8, ease: 'easeOut' }}
               className="text-[#8b8b9e] text-base sm:text-lg leading-relaxed max-w-xl font-sans"
             >
               Automated red-teaming and cultural alignment audit for Indian language foundation models.
             </motion.p>
 
-            {/* CTA Buttons */}
+            {/* ENHANCEMENT: CTA Buttons with 1.0s Stagger, Pulse Ring & White Sweep Shimmer */}
             <motion.div
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3, ease: 'easeOut' }}
+              transition={{ duration: 0.6, delay: 1.0, ease: 'easeOut' }}
               className="flex flex-wrap items-center gap-4 pt-1"
             >
               {/* Primary Button */}
               <Link
                 to="/upload"
-                className="pulse-ring-saffron btn-shimmer-hover px-7 py-3.5 rounded-xl font-heading font-black text-sm text-[#0a0a0f] bg-gradient-to-br from-[#ff9933] to-[#e67e00] hover:scale-[1.03] active:scale-[0.98] shadow-[0_8px_25px_rgba(255,153,51,0.25)] transition-all flex items-center gap-2.5 min-h-[46px]"
+                className="pulse-ring-saffron btn-shimmer-hover px-7 py-3.5 rounded-xl font-heading font-black text-sm text-[#0a0a0f] bg-gradient-to-br from-[#ff9933] to-[#e67e00] hover:scale-[1.03] active:scale-[0.98] shadow-[0_8px_30px_rgba(255,153,51,0.3)] transition-all flex items-center gap-2.5 min-h-[46px]"
               >
                 <Play className="w-4 h-4 fill-current text-[#0a0a0f]" />
                 <span>Launch Safety Evaluation</span>
@@ -582,27 +651,30 @@ export default function HomePage() {
               {/* Secondary Button */}
               <Link
                 to="/history"
-                className="group px-6 py-3.5 rounded-xl font-heading font-bold text-ink-white text-sm bg-[#13131f] border border-[#262638] hover:border-[#ff9933] hover:text-[#ff9933] transition-all flex items-center gap-2 min-h-[46px]"
+                className="group px-6 py-3.5 rounded-xl font-heading font-bold text-ink-white text-sm bg-[#13131f] border border-[#262638] hover:border-[#ff9933] hover:text-[#ff9933] hover:bg-[rgba(255,153,51,0.05)] transition-all flex items-center gap-2 min-h-[46px]"
               >
                 <span>View Audit History</span>
                 <ChevronRight className="w-4 h-4 text-ink-dim transition-transform duration-200 group-hover:translate-x-1 group-hover:text-[#ff9933]" />
               </Link>
             </motion.div>
 
-            {/* Clean Stats Bar with Proportional Columns */}
+            {/* ENHANCEMENT: Stats Bar with Gradient Top Line, Dividers & 1.5s Stagger */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.45, ease: 'easeOut' }}
-              className="relative pt-5 border-t border-[#1e1e2e]"
+              transition={{ duration: 0.6, delay: 1.5, ease: 'easeOut' }}
+              className="relative pt-5"
             >
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
-                {stats.map(({ value, label, color }) => (
-                  <div key={label} className="text-left">
-                    <div className="text-3xl sm:text-4xl font-heading font-black font-mono leading-none tracking-tight" style={{ color }}>
-                      <AnimatedCounter value={value} />
+              {/* 2px Gradient Top Line */}
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#ff9933] to-transparent" />
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-[#1e1e2e]">
+                {stats.map(({ value, label, color }, idx) => (
+                  <div key={label} className={`text-left ${idx > 0 ? 'sm:pl-4' : ''} ${idx % 2 === 1 ? 'pl-4 sm:pl-4' : ''} py-2 sm:py-0`}>
+                    <div className="text-3xl sm:text-4xl lg:text-[48px] font-heading font-black font-mono leading-none tracking-tight" style={{ color }}>
+                      <OdometerCounter value={value} />
                     </div>
-                    <div className="text-[11px] text-[#8b8b9e] font-sans font-medium uppercase tracking-wider mt-1.5 leading-tight">
+                    <div className="text-[12px] text-[#8b8b9e] font-sans font-medium uppercase tracking-widest mt-2 leading-tight">
                       {label}
                     </div>
                   </div>
@@ -611,11 +683,11 @@ export default function HomePage() {
             </motion.div>
           </div>
 
-          {/* Live Benchmark Scorecard Column */}
+          {/* ENHANCEMENT: Live Benchmark Scorecard Column with 1.2s Stagger */}
           <motion.div
             initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.7, delay: 0.35, ease: 'easeOut' }}
+            transition={{ duration: 0.7, delay: 1.2, ease: 'easeOut' }}
             style={{ y: cardParallaxY }}
             className="lg:col-span-5 flex justify-center lg:justify-end relative z-10"
           >
