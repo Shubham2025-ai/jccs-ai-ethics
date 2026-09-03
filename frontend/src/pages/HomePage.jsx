@@ -7,7 +7,6 @@ import {
 import { motion, useInView, useScroll, useTransform, AnimatePresence } from 'framer-motion'
 
 // ENHANCEMENT: Ambient 2D Particle Field + Topographic Mesh (<1% CPU, respects prefers-reduced-motion)
-// FIX: background polish — mix-blend-mode: screen and opacity: 0.25 on z-index: 3
 function TopographicCanvas() {
   const canvasRef = useRef(null)
 
@@ -174,7 +173,7 @@ function TopographicCanvas() {
     }
   }, [])
 
-  // FIX: background polish — z-index: 3, mix-blend-mode: screen, opacity: 0.25
+  // ENHANCEMENT: Screen blend mode overlaying contour mesh
   return (
     <canvas
       ref={canvasRef}
@@ -182,6 +181,39 @@ function TopographicCanvas() {
       aria-hidden="true"
     />
   )
+}
+
+// ENHANCEMENT: Animated Dimension Score Counter for live bars
+function AnimatedDimensionScore({ targetScore, duration = 1.2, delay = 0 }) {
+  const [val, setVal] = useState(0)
+  const ref = useRef(null)
+  const isInView = useInView(ref, { once: true, margin: '-20px' })
+
+  useEffect(() => {
+    if (!isInView) return
+    const timeout = setTimeout(() => {
+      let current = 0
+      const steps = 30
+      const stepTime = (duration * 1000) / steps
+      const increment = targetScore / steps
+
+      const timer = setInterval(() => {
+        current += increment
+        if (current >= targetScore) {
+          setVal(targetScore)
+          clearInterval(timer)
+        } else {
+          setVal(Math.round(current))
+        }
+      }, stepTime)
+
+      return () => clearInterval(timer)
+    }, delay * 1000)
+
+    return () => clearTimeout(timeout)
+  }, [isInView, targetScore, duration, delay])
+
+  return <span ref={ref}>{val}%</span>
 }
 
 // ENHANCEMENT: Odometer Count-Up Hook with Slot Machine Snap & 1-Frame Glitch Flash Finish
@@ -411,7 +443,7 @@ function LiveScorecardCard() {
                 {short}
               </span>
               <span className="font-bold font-mono text-[11px]" style={{ color }}>
-                {gaugeScore > 0 ? `${score}%` : '0%'}
+                <AnimatedDimensionScore targetScore={score} delay={0.1 * idx} />
               </span>
             </div>
             <div className="h-1.5 rounded-full bg-[#0a0a0f] overflow-hidden border border-white/5">
@@ -496,7 +528,7 @@ const trustEntities = [
 export default function HomePage() {
   const { scrollY } = useScroll()
   
-  // FIX: background polish — 0.3x parallax scroll speed, disabled on mobile
+  // ENHANCEMENT: Parallax scroll effect (disabled on mobile)
   const [isMobile, setIsMobile] = useState(false)
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768)
@@ -513,7 +545,7 @@ export default function HomePage() {
   // Full-width high-definition circuit motherboard image
   const primaryBg = "https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=2940&auto=format&fit=crop"
 
-  // Staggered word animation variants for headline
+  // ENHANCEMENT: Staggered word entrance animation variants (0.08s delay between words)
   const wordVariants = {
     hidden: { opacity: 0, y: 30 },
     visible: (i) => ({
@@ -529,7 +561,7 @@ export default function HomePage() {
       {/* BACKGROUND: must span full viewport width                    */}
       {/* ============================================================ */}
 
-      {/* LAYER 0 (z-index: 0) — Full-Width (100vw) Circuit Board Image Layer */}
+      {/* ENHANCEMENT: LAYER 0 (z-index: 0) — Full-Width (100vw) Circuit Board Image with Moodier Desaturated Filter */}
       <motion.div
         style={{
           y: bgParallaxY,
@@ -542,7 +574,7 @@ export default function HomePage() {
           zIndex: 0,
           pointerEvents: 'none',
         }}
-        className="opacity-20 md:opacity-30 transition-opacity duration-1000"
+        className="transition-opacity duration-1000"
         aria-hidden="true"
       >
         <div
@@ -550,11 +582,16 @@ export default function HomePage() {
           style={{
             backgroundImage: bgError
               ? 'radial-gradient(ellipse at top, #1e1e38 0%, #0a0a0f 75%)'
-              : `url('${primaryBg}')`,
+              : `linear-gradient(
+                  180deg,
+                  rgba(10, 10, 15, 0.65) 0%,
+                  rgba(10, 10, 15, 0.40) 40%,
+                  rgba(10, 10, 15, 0.95) 100%
+                ), url('${primaryBg}')`,
             backgroundSize: 'cover',
             backgroundPosition: 'center center',
             backgroundRepeat: 'no-repeat',
-            filter: 'contrast(1.15) brightness(0.70) saturate(0.85) hue-rotate(170deg)',
+            filter: 'brightness(0.4) contrast(1.1) saturate(0.6)',
           }}
         />
       </motion.div>
@@ -570,7 +607,7 @@ export default function HomePage() {
         }}
       />
 
-      {/* LAYER 1 (z-index: 1) — Full-Width (100vw) Vignette & Soft Edge Overlays */}
+      {/* ENHANCEMENT: LAYER 1 (z-index: 1) — Full-Width (100vw) Overlays & Ambient Glows */}
       <div
         style={{
           width: '100vw',
@@ -584,60 +621,44 @@ export default function HomePage() {
         }}
         aria-hidden="true"
       >
-        {/* Balanced radial vignette */}
+        {/* Radial vignette overlay */}
         <div
           className="absolute inset-0"
           style={{
-            background: 'radial-gradient(ellipse at center, transparent 35%, rgba(10,10,15,0.85) 100%)',
+            background: 'radial-gradient(ellipse at center, transparent 30%, rgba(10,10,15,0.85) 100%)',
           }}
         />
-        {/* Soft horizontal edge fade (left & right) */}
+        {/* Top-right Saffron Ambient Glow */}
         <div
           className="absolute inset-0"
           style={{
-            background: 'linear-gradient(90deg, rgba(10,10,15,0.85) 0%, transparent 15%, transparent 85%, rgba(10,10,15,0.85) 100%)',
+            background: 'radial-gradient(circle at 80% 20%, rgba(255,153,51,0.10) 0%, transparent 50%)',
           }}
         />
-        {/* Top edge navbar fade */}
+        {/* Bottom-left Teal Ambient Glow */}
         <div
           className="absolute inset-0"
           style={{
-            background: 'linear-gradient(180deg, rgba(10,10,15,0.90) 0%, transparent 15%)',
+            background: 'radial-gradient(circle at 20% 80%, rgba(0,212,170,0.06) 0%, transparent 50%)',
           }}
         />
-        {/* Bottom fade to pure solid #0a0a0f */}
+        {/* Bottom fade to solid #0a0a0f */}
         <div
-          className="absolute bottom-0 left-0 right-0 h-[250px]"
+          className="absolute bottom-0 left-0 right-0 h-[200px]"
           style={{
-            background: 'linear-gradient(180deg, transparent 0%, rgba(10,10,15,0.85) 60%, #0a0a0f 100%)',
+            background: 'linear-gradient(180deg, transparent 60%, #0a0a0f 100%)',
           }}
         />
       </div>
 
-      {/* LAYER 2 (z-index: 2) — Ambient Glow Layers (Saffron + Teal) */}
-      <div
-        className="absolute top-[-80px] right-[10%] w-[600px] h-[600px] pointer-events-none z-[2]"
-        style={{
-          background: 'radial-gradient(circle at 75% 25%, rgba(255,153,51,0.12) 0%, transparent 45%)',
-        }}
-        aria-hidden="true"
-      />
-      <div
-        className="absolute top-[200px] left-[5%] w-[550px] h-[550px] pointer-events-none z-[2]"
-        style={{
-          background: 'radial-gradient(circle at 25% 85%, rgba(0,212,170,0.08) 0%, transparent 45%)',
-        }}
-        aria-hidden="true"
-      />
-
-      {/* LAYER 3 (z-index: 3) — Topographic Background Canvas with Screen Blend */}
+      {/* ENHANCEMENT: LAYER 3 (z-index: 3) — Topographic Background Canvas with Screen Blend */}
       <TopographicCanvas />
 
-      {/* LAYER 4 (z-index: 4) — Balanced Left Text Contrast Overlay */}
+      {/* ENHANCEMENT: LAYER 4 (z-index: 4) — Strong Left-Side Text Readability Shadow Zone */}
       <div
-        className="absolute top-0 left-0 w-full lg:w-1/2 h-[900px] pointer-events-none z-[4]"
+        className="absolute top-0 left-0 w-full lg:w-2/3 h-[900px] pointer-events-none z-[4]"
         style={{
-          background: 'linear-gradient(90deg, rgba(10,10,15,0.50) 0%, rgba(10,10,15,0.20) 40%, transparent 80%)',
+          background: 'linear-gradient(90deg, rgba(10,10,15,0.85) 0%, rgba(10,10,15,0.30) 45%, transparent 70%)',
         }}
         aria-hidden="true"
       />
@@ -648,9 +669,9 @@ export default function HomePage() {
       <section className="relative z-10 pt-2 sm:pt-4 lg:pt-5 pb-12 sm:pb-16">
         <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
           <div className="lg:col-span-7 space-y-6 sm:space-y-7">
-            {/* ENHANCEMENT: Sovereign Badge with Pulsing Saffron Dot */}
+            {/* ENHANCEMENT: Sovereign Badge with 0.8s Stagger & Pulsing Saffron Dot */}
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
+              initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.8 }}
               className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full text-xs font-sans font-semibold bg-saffron/10 text-saffron border border-saffron/30 shadow-[0_0_15px_rgba(255,153,51,0.12)] hover:border-saffron/50 transition-colors"
@@ -662,7 +683,7 @@ export default function HomePage() {
               <span>Aligned with IndiaAI Mission & MeitY GenAI Advisories</span>
             </motion.div>
 
-            {/* ENHANCEMENT: Headline with Staggered Word Entrance & Shimmer Gradient */}
+            {/* ENHANCEMENT: Headline with Staggered Word Entrance, Shimmer Gradient & Text Shadow */}
             <div className="relative">
               <div
                 className="absolute -top-12 -left-12 w-80 h-80 rounded-full pointer-events-none opacity-[0.035] border border-saffron"
@@ -672,7 +693,10 @@ export default function HomePage() {
                 aria-hidden="true"
               />
 
-              <h1 className="text-4xl sm:text-6xl lg:text-[72px] font-heading font-black text-[#f0f0f5] leading-[1.1] tracking-[-0.02em] relative z-10">
+              <h1
+                style={{ textShadow: '0 2px 20px rgba(10,10,15,0.8)' }}
+                className="text-4xl sm:text-6xl lg:text-[72px] font-heading font-black text-[#f0f0f5] leading-[1.1] tracking-[-0.02em] relative z-10"
+              >
                 <motion.span custom={0} initial="hidden" animate="visible" variants={wordVariants} className="inline-block mr-3">
                   Safeguarding
                 </motion.span>
@@ -695,11 +719,12 @@ export default function HomePage() {
               </h1>
             </div>
 
-            {/* ENHANCEMENT: Subhead with 0.8s Stagger Delay */}
+            {/* ENHANCEMENT: Subhead with 0.8s Stagger Delay & Text Shadow */}
             <motion.p
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.8, ease: 'easeOut' }}
+              style={{ textShadow: '0 2px 20px rgba(10,10,15,0.8)' }}
               className="text-[#8b8b9e] text-base sm:text-lg leading-relaxed max-w-xl font-sans"
             >
               Automated red-teaming and cultural alignment audit for Indian language foundation models.
@@ -756,11 +781,11 @@ export default function HomePage() {
             </motion.div>
           </div>
 
-          {/* ENHANCEMENT: Live Benchmark Scorecard Column with 1.2s Stagger */}
+          {/* ENHANCEMENT: Live Benchmark Scorecard Column with 1.2s Slide-in Stagger (x: 60) */}
           <motion.div
-            initial={{ opacity: 0, x: 30 }}
+            initial={{ opacity: 0, x: 60 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.7, delay: 1.2, ease: 'easeOut' }}
+            transition={{ duration: 0.8, delay: 1.2, ease: 'easeOut' }}
             style={{ y: cardParallaxY }}
             className="lg:col-span-5 flex justify-center lg:justify-end relative z-10"
           >
