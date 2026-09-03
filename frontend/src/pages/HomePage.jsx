@@ -510,7 +510,8 @@ export default function HomePage() {
   const cardParallaxY = useTransform(scrollY, [0, 600], [0, 30])
   const [bgError, setBgError] = useState(false)
 
-  const primaryBg = "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2940&auto=format&fit=crop"
+  // Full-width high-definition circuit motherboard image
+  const primaryBg = "https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=2940&auto=format&fit=crop"
 
   // Staggered word animation variants for headline
   const wordVariants = {
@@ -525,13 +526,23 @@ export default function HomePage() {
   return (
     <div className="space-y-20 pb-20 relative isolate overflow-hidden">
       {/* ============================================================ */}
-      {/* FIX: background polish — 6-LAYER ARCHITECTURE                */}
+      {/* BACKGROUND: must span full viewport width                    */}
       {/* ============================================================ */}
 
-      {/* LAYER 0 (z-index: 0) — Circuit Board Image with Filters & Parallax */}
+      {/* LAYER 0 (z-index: 0) — Full-Width (100vw) Circuit Board Image Layer */}
       <motion.div
-        style={{ y: bgParallaxY }}
-        className="absolute -top-24 -left-[50vw] -right-[50vw] left-1/2 right-1/2 -translate-x-1/2 w-screen h-[1100px] pointer-events-none z-0 opacity-15 md:opacity-25 transition-opacity duration-1000"
+        style={{
+          y: bgParallaxY,
+          width: '100vw',
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '100vh',
+          zIndex: 0,
+          pointerEvents: 'none',
+        }}
+        className="opacity-20 md:opacity-30 transition-opacity duration-1000"
         aria-hidden="true"
       >
         <div
@@ -541,9 +552,9 @@ export default function HomePage() {
               ? 'radial-gradient(ellipse at top, #1e1e38 0%, #0a0a0f 75%)'
               : `url('${primaryBg}')`,
             backgroundSize: 'cover',
-            backgroundPosition: 'center 20%',
+            backgroundPosition: 'center center',
             backgroundRepeat: 'no-repeat',
-            filter: 'contrast(1.1) brightness(0.65) saturate(0.8) hue-rotate(170deg)',
+            filter: 'contrast(1.15) brightness(0.70) saturate(0.85) hue-rotate(170deg)',
           }}
         />
       </motion.div>
@@ -559,35 +570,44 @@ export default function HomePage() {
         }}
       />
 
-      {/* LAYER 1 (z-index: 1) — Vignette, Edge Fades & Bottom Solid Fade */}
+      {/* LAYER 1 (z-index: 1) — Full-Width (100vw) Vignette & Soft Edge Overlays */}
       <div
-        className="absolute -top-24 -left-[50vw] -right-[50vw] left-1/2 right-1/2 -translate-x-1/2 w-screen h-[1100px] pointer-events-none z-[1]"
+        style={{
+          width: '100vw',
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '100vh',
+          zIndex: 1,
+          pointerEvents: 'none',
+        }}
         aria-hidden="true"
       >
-        {/* Radial vignette */}
+        {/* Balanced radial vignette */}
         <div
           className="absolute inset-0"
           style={{
-            background: 'radial-gradient(ellipse at center, transparent 30%, rgba(10,10,15,0.85) 100%)',
+            background: 'radial-gradient(ellipse at center, transparent 35%, rgba(10,10,15,0.85) 100%)',
           }}
         />
-        {/* Horizontal edge fade (left & right) */}
+        {/* Soft horizontal edge fade (left & right) */}
         <div
           className="absolute inset-0"
           style={{
-            background: 'linear-gradient(90deg, rgba(10,10,15,0.95) 0%, transparent 20%, transparent 80%, rgba(10,10,15,0.95) 100%)',
+            background: 'linear-gradient(90deg, rgba(10,10,15,0.85) 0%, transparent 15%, transparent 85%, rgba(10,10,15,0.85) 100%)',
           }}
         />
-        {/* Top edge fade */}
+        {/* Top edge navbar fade */}
         <div
           className="absolute inset-0"
           style={{
-            background: 'linear-gradient(180deg, rgba(10,10,15,0.95) 0%, transparent 15%)',
+            background: 'linear-gradient(180deg, rgba(10,10,15,0.90) 0%, transparent 15%)',
           }}
         />
-        {/* Bottom fade to pure solid #0a0a0f (200px tall) */}
+        {/* Bottom fade to pure solid #0a0a0f */}
         <div
-          className="absolute bottom-0 left-0 right-0 h-[220px]"
+          className="absolute bottom-0 left-0 right-0 h-[250px]"
           style={{
             background: 'linear-gradient(180deg, transparent 0%, rgba(10,10,15,0.85) 60%, #0a0a0f 100%)',
           }}
@@ -613,17 +633,17 @@ export default function HomePage() {
       {/* LAYER 3 (z-index: 3) — Topographic Background Canvas with Screen Blend */}
       <TopographicCanvas />
 
-      {/* LAYER 4 (z-index: 4) — Left-Side Text Readability Guard */}
+      {/* LAYER 4 (z-index: 4) — Balanced Left Text Contrast Overlay */}
       <div
-        className="absolute top-0 left-0 w-full lg:w-2/3 h-[900px] pointer-events-none z-[4]"
+        className="absolute top-0 left-0 w-full lg:w-1/2 h-[900px] pointer-events-none z-[4]"
         style={{
-          background: 'linear-gradient(90deg, rgba(10,10,15,0.75) 0%, rgba(10,10,15,0.35) 40%, transparent 75%)',
+          background: 'linear-gradient(90deg, rgba(10,10,15,0.50) 0%, rgba(10,10,15,0.20) 40%, transparent 80%)',
         }}
         aria-hidden="true"
       />
 
       {/* ============================================================ */}
-      {/* LAYER 10 (z-index: 10) — Content Layer                       */}
+      {/* LAYER 10 (z-index: 10) — Centered Content Layer (max-w-7xl)  */}
       {/* ============================================================ */}
       <section className="relative z-10 pt-2 sm:pt-4 lg:pt-5 pb-12 sm:pb-16">
         <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
