@@ -531,6 +531,13 @@ export default function ResultsPage() {
 
   const digital_signature = data.digital_signature || { valid: true }
 
+  // FIX: Frontend console logging
+  console.log(`[Frontend] Results data: ${JSON.stringify({
+    hasOverview: Boolean(explanations.summary || data.overview?.executive_summary),
+    dimensionsCount: fairness_results.length,
+    promptsCount: probe_results.length
+  })}`)
+
   const radarData = (fairness_results || []).map(r => {
     const isTested = r.score !== null && r.score !== undefined
     const label = r.dimension_label || r.name || r.dimension || 'Dimension'

@@ -36,6 +36,14 @@ def migrate():
             ("target_model_name", "VARCHAR(255) NULL"),
             ("target_model_provider", "VARCHAR(100) NULL"),
             ("target_model_url", "VARCHAR(500) NULL"),
+            # FIX: New audit persistence columns
+            ("model_name", "VARCHAR(255) NULL"),
+            ("provider", "VARCHAR(100) NULL"),
+            ("total_probes", "INT DEFAULT 44"),
+            ("probes_passed", "INT DEFAULT 0"),
+            ("probes_failed", "INT DEFAULT 0"),
+            ("results_json", "LONGTEXT NULL"),
+            ("anchor_status", "VARCHAR(50) DEFAULT 'local'"),
         ]
 
         for col_name, col_type in columns_to_add:

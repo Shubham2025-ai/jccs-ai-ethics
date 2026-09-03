@@ -34,6 +34,15 @@ class AuditRun(Base):
     target_model_provider = Column(String(100), nullable=True)     # e.g., groq, openai, ollama, custom
     target_model_url = Column(String(255), nullable=True)          # base url endpoint
     
+    # FIX: Audit persistence fields for JSON storage and instant history lookups
+    model_name = Column(String(255), nullable=True)
+    provider = Column(String(100), nullable=True)
+    total_probes = Column(Integer, default=44)
+    probes_passed = Column(Integer, default=0)
+    probes_failed = Column(Integer, default=0)
+    results_json = Column(Text, nullable=True)
+    anchor_status = Column(String(50), default="local")
+    
     organization = relationship("Organization", back_populates="audits")
     fairness_results = relationship("FairnessResult", back_populates="audit", cascade="all, delete")
     evaluation_results = relationship("PromptEvaluationResult", back_populates="audit", cascade="all, delete")

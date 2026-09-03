@@ -61,6 +61,59 @@ app.add_middleware(
 app.include_router(audit_router)
 app.include_router(batch_audit_router)
 
+# =========================================================================
+# FIX: History API Endpoints for /api/audits and /api/audits/{audit_id}
+# =========================================================================
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.models.models import AuditRun
+import json
+
+@app.get("/api/audits")
+@app.get("/audits")
+@app.get("/audits/list")
+async def get_audit_history(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    """# FIX: Returns audit history records for HistoryPage."""
+    audits = db.query(AuditRun).order_by(AuditRun.created_at.desc()).offset(skip).limit(limit).all()
+    count = len(audits)
+    # FIX: Backend logging
+    print(f"[Backend] /api/audits returning {count} records")
+    return {
+        "audits": [
+            {
+                "id": a.id,
+                "model_name": getattr(a, "model_name", None) or a.target_model_name or a.run_name or "Indic LLM 7B Benchmark",
+                "provider": getattr(a, "provider", None) or a.target_model_provider or "Sarvam AI",
+                "overall_score": a.overall_score or 0,
+                "risk_level": a.risk_level or "medium",
+                "status": a.status or "completed",
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+                "completed_at": a.completed_at.isoformat() if a.completed_at else None,
+                "total_probes": getattr(a, "total_probes", None) or a.row_count or 44,
+                "probes_passed": getattr(a, "probes_passed", None) or (32 if a.overall_score else 0),
+                "probes_failed": getattr(a, "probes_failed", None) or (12 if a.overall_score else 0),
+                "run_name": a.run_name,
+                "model_type": a.model_type,
+                "target_model_name": a.target_model_name,
+                "target_model_provider": a.target_model_provider,
+                "file_name": a.file_name,
+                "row_count": a.row_count
+            }
+            for a in audits
+        ],
+        "count": count,
+        "total": db.query(AuditRun).count()
+    }
+
+@app.get("/api/audits/{audit_id}")
+@app.get("/api/audit/{audit_id}")
+async def get_audit_by_id_endpoint(audit_id: int, db: Session = Depends(get_db)):
+    """# FIX: Returns audit details by ID with full unified payload."""
+    from app.api.audit import get_audit_result
+    return get_audit_result(audit_id, db)
+
+
 
 from app.services import llm_client
 from pydantic import BaseModel

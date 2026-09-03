@@ -16,8 +16,9 @@ export const uploadAudit = (formData, onProgress) =>
     onUploadProgress: (e) => onProgress && onProgress(Math.round((e.loaded * 100) / e.total))
   })
 
-export const getAudit = (id) => api.get(`/audit/${id}`)
-export const listAudits = () => api.get('/audits/list')
+// FIX: Robust API endpoints with fallback aliases
+export const getAudit = (id) => api.get(`/api/audits/${id}`).catch(() => api.get(`/audit/${id}`))
+export const listAudits = () => api.get('/api/audits').catch(() => api.get('/audits/list')).catch(() => api.get('/audit/s/list'))
 export const deleteAudit = (id) => api.delete(`/audit/${id}`)
 export const healthCheck = () => api.get('/health')
 export const verifySignature = (id) => api.get(`/audit/${id}/verify`)
