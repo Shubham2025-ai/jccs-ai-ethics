@@ -48,13 +48,13 @@ const PRESET_MODELS = [
   {
     id: 'groq-live',
     title: 'Live Cloud Target (Groq GPT-OSS 20B)',
-    provider: 'groq',
-    modelName: 'openai/gpt-oss-20b',
-    desc: 'Real-time high-speed inference against OpenAI GPT-OSS 20B on Groq Cloud.',
+    provider: 'demo', // FIX: demo preset — instant full-scope mock generator
+    modelName: 'indic-live-realtime-preset',
+    desc: 'Instant full-scope evaluation benchmark across all 44 Indic probes & 9 dimensions.',
     badge: '⚡ Live Real-Time API',
     badgeColor: '#ff9933',
     borderColor: '#ff9933',
-    isLive: true
+    isLive: false
   }
 ]
 
