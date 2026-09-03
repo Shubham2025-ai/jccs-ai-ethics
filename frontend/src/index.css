@@ -160,11 +160,113 @@ body::after {
   animation: scanline 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
-/* Saffron Gradient Text */
+/* ENHANCEMENT: Saffron Shimmer Gradient Text */
 .gradient-saffron {
   background: linear-gradient(135deg, #ff9933 0%, #e67e00 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+/* ENHANCEMENT: Animated Saffron Copper Shimmer (sweeps every 4s) */
+@keyframes saffronShimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.shimmer-saffron-text {
+  background: linear-gradient(
+    90deg,
+    #ff9933 0%,
+    #ff7733 25%,
+    #ffc285 50%,
+    #ff7733 75%,
+    #e67e00 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: saffronShimmer 4s ease infinite;
+  text-shadow: 0 0 40px rgba(255, 153, 51, 0.15);
+}
+
+/* ENHANCEMENT: Pulse Ring Animation for Primary CTA */
+@keyframes pulseRing {
+  0% {
+    transform: scale(0.98);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.08);
+    opacity: 0;
+  }
+}
+
+.pulse-ring-saffron {
+  position: relative;
+}
+
+.pulse-ring-saffron::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 2px solid #ff9933;
+  pointer-events: none;
+  animation: pulseRing 3s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
+/* ENHANCEMENT: Shimmer White Overlay on Button Hover */
+.btn-shimmer-hover {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-shimmer-hover::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.35),
+    transparent
+  );
+  transform: skewX(-20deg);
+  transition: none;
+  pointer-events: none;
+}
+
+.btn-shimmer-hover:hover::before {
+  left: 140%;
+  transition: left 0.75s ease-in-out;
+}
+
+/* ENHANCEMENT: Breathing Glow on Safety Arc */
+@keyframes breathingGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px rgba(0, 212, 170, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 16px rgba(0, 212, 170, 0.8));
+  }
+}
+
+.arc-breathing-glow {
+  animation: breathingGlow 2.5s ease-in-out infinite;
 }
 
 .gradient-teal {

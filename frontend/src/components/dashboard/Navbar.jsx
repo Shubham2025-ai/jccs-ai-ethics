@@ -1,4 +1,4 @@
-// FIX: Sovereign JCCS Navbar with Framer Motion active tab and mobile drawer
+// ENHANCEMENT: Sovereign JCCS Navbar with scroll-aware backdrop, sliding active tab & pulse indicator
 import { Link, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -9,8 +9,19 @@ export default function Navbar() {
   const { pathname } = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isBackendHealthy, setIsBackendHealthy] = useState(true)
+  const [isScrolled, setIsScrolled] = useState(false)
 
-  // FIX: Active background health monitoring
+  // ENHANCEMENT: Scroll detection for dynamic backdrop blur & opacity
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20)
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    handleScroll()
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  // ENHANCEMENT: Active background health monitoring
   useEffect(() => {
     let isMounted = true
     const checkStatus = async () => {
@@ -39,14 +50,18 @@ export default function Navbar() {
 
   return (
     <nav
-      className="sticky top-0 z-50 border-b border-fortress-border bg-fortress-base/95 backdrop-blur-md"
+      className={`sticky top-0 z-50 transition-all duration-300 border-b border-fortress-border ${
+        isScrolled
+          ? 'bg-[#0a0a0f]/90 backdrop-blur-xl shadow-lg shadow-black/40'
+          : 'bg-[#0a0a0f]/60 backdrop-blur-md'
+      }`}
       aria-label="Main navigation"
     >
       <div className="container mx-auto px-4 max-w-7xl flex items-center justify-between h-16">
-        {/* FIX: Sovereign Logo & BHARAT Pill */}
+        {/* ENHANCEMENT: Sovereign Logo & BHARAT Pill */}
         <Link to="/" className="flex items-center gap-3 group select-none" aria-label="JCCS Home">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center transition-all group-hover:scale-105 bg-gradient-to-br from-saffron to-saffron-deep shadow-saffron-glow">
-            <Shield className="w-4 h-4 text-fortress-base fill-fortress-base" aria-hidden="true" />
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:scale-105 bg-gradient-to-br from-[#ff9933] to-[#e67e00] shadow-saffron-glow">
+            <Shield className="w-4 h-4 text-[#0a0a0f] fill-[#0a0a0f]" aria-hidden="true" />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -61,7 +76,7 @@ export default function Navbar() {
           </div>
         </Link>
 
-        {/* FIX: Desktop Navigation Links with Framer Motion Sliding Indicator */}
+        {/* ENHANCEMENT: Desktop Navigation Links with Framer Motion Sliding 2px Saffron Indicator */}
         <div className="hidden md:flex items-center gap-1 sm:gap-2" role="list">
           {nav.map(({ to, label, icon: Icon }) => {
             const isActive = pathname === to
@@ -83,7 +98,7 @@ export default function Navbar() {
                 {isActive && (
                   <motion.div
                     layoutId="navbar-active-tab"
-                    className="absolute bottom-0 left-2 right-2 h-0.5 bg-gradient-to-r from-saffron to-saffron-deep rounded-full"
+                    className="absolute bottom-0 left-2 right-2 h-0.5 bg-gradient-to-r from-[#ff9933] via-[#ff7733] to-[#e67e00] rounded-full shadow-[0_0_12px_rgba(255,153,51,0.5)]"
                     transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                   />
                 )}
@@ -92,26 +107,32 @@ export default function Navbar() {
           })}
         </div>
 
-        {/* FIX: Right Status Indicator & Mobile Hamburger Toggle */}
+        {/* ENHANCEMENT: Right Status Indicator & Mobile Hamburger Toggle */}
         <div className="flex items-center gap-3">
           <div
-            className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border text-[11px] font-mono ${
+            className={`hidden sm:flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border text-[11px] font-mono transition-all ${
               isBackendHealthy
-                ? 'bg-fortress-surface border-fortress-border text-ink-white'
+                ? 'bg-fortress-surface/90 border-fortress-border text-ink-white shadow-inner'
                 : 'bg-safety-crimson/10 border-safety-crimson/30 text-safety-crimson'
             }`}
           >
-            <span
-              className={`w-2 h-2 rounded-full ${
-                isBackendHealthy ? 'bg-safety-teal animate-pulse' : 'bg-safety-crimson animate-ping'
-              }`}
-            />
+            {/* ENHANCEMENT: Pulse Ring on Green Status Dot */}
+            <div className="relative flex items-center justify-center">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  isBackendHealthy ? 'bg-safety-teal' : 'bg-safety-crimson'
+                }`}
+              />
+              {isBackendHealthy && (
+                <span className="absolute -inset-1 rounded-full bg-safety-teal/30 animate-ping" />
+              )}
+            </div>
             <span className="font-semibold">
               {isBackendHealthy ? 'Systems Operational' : 'Engine Offline'}
             </span>
           </div>
 
-          {/* FIX: Mobile Hamburger Button with 44px touch target */}
+          {/* ENHANCEMENT: Mobile Hamburger Button with 44px touch target */}
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -124,14 +145,14 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* FIX: Mobile Collapsible Drawer */}
+      {/* ENHANCEMENT: Mobile Collapsible Drawer */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="md:hidden border-t border-fortress-border bg-fortress-surface/98 px-4 py-3 space-y-1 shadow-fortress-card"
+            className="md:hidden border-t border-fortress-border bg-fortress-surface/98 backdrop-blur-xl px-4 py-3 space-y-1 shadow-fortress-card"
           >
             {nav.map(({ to, label, icon: Icon }) => {
               const isActive = pathname === to
