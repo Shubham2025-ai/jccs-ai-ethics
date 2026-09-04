@@ -130,21 +130,6 @@ const PROVIDER_TILES = [
     rotationLink: 'https://openrouter.ai/models?max_price=0',
     serverKeyStatus: 'ⓘ Enter personal OpenRouter key.',
     isServerKeyAvailable: false,
-  },
-  {
-    id: 'custom',
-    name: 'Custom BYO',
-    tagline: 'vLLM / Ollama / Krutrim',
-    badge: '⚙️ Self-Hosted',
-    accentColor: '#f1c40f',
-    urlDefault: 'https://api.sarvam.ai/v1',
-    modelDefault: 'sarvam-105b',
-    keyLink: 'https://api.sarvam.ai',
-    keyLinkText: 'Custom Endpoint',
-    keyDesc: 'Requires endpoint base URL supporting OpenAI-compatible /v1/chat/completions.',
-    modelHint: 'Enter provider model ID (e.g. mistral-7b-instruct, qwen-2.5-7b).',
-    serverKeyStatus: 'ⓘ Enter custom endpoint URL and authorization key.',
-    isServerKeyAvailable: false,
   }
 ]
 
@@ -593,7 +578,7 @@ export default function LaunchEvaluationPage() {
                 <label className="block text-xs font-heading font-bold text-ink-white uppercase tracking-wider mb-2">
                   Select Provider Gateway
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                   {PROVIDER_TILES.map((p) => {
                     const isSelected = provider === p.id
                     return (
@@ -699,7 +684,7 @@ export default function LaunchEvaluationPage() {
                       </span>
                     </div>
                   ) : (
-                    // FIX: Standard text input for other providers (Sarvam, Gemini, Groq, Custom)
+                    // FIX: Standard text input for other providers (Sarvam, Gemini, Groq)
                     <div>
                       <input
                         type="text"
