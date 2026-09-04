@@ -316,8 +316,8 @@ jccs-ai-ethics/
 |---|---|
 | **Team Name** | BELIVER |
 | **Problem Statement** | Jedi Code Compliance System |
-| **Hackathon** | HackVenture 2K26 |
-| **Round** | Round 2 HackVenture |
+| **Hackathon** | IDEATHON 2K26 |
+| **Round** | Final Round IDEATHON |
 | **Track** | Artifical Intelligence |
 
 ---
