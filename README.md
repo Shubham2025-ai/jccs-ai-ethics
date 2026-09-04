@@ -1,10 +1,10 @@
 # 🛡️ JCCS — Jedi Code Compliance System
 
-**Comprehensive AI Ethics, Fairness & IndiaAI LLM Safety Auditing Platform — HackVenture 2026**
+**Comprehensive AI Ethics, Fairness & IndiaAI LLM Safety Auditing Platform — IDEATHON 2026**
 
 > *"The Force will be with you, always — but your AI model? That needs an audit."*
 
-🌐 **Live Platform:** [jccs-ai-ethics.vercel.app](https://jccs-ai-ethics.vercel.app) &nbsp;|&nbsp; 🔗 **Backend API:** [jccs-ai-ethics.onrender.com](https://jccs-ai-ethics.onrender.com/docs) &nbsp;|&nbsp; 🎬 **Demo:** [youtu.be/-OjU0iuaYBY](https://youtu.be/-OjU0iuaYBY)
+🌐 **Live Platform:** [jccs-ai-ethics.vercel.app](https://jccs-ai-ethics.vercel.app) &nbsp;|&nbsp; 🔗 **Backend API:** [jccs-ai-ethics.onrender.com](https://jccs-ai-ethics.onrender.com/docs) &nbsp;|&nbsp; 
 
 ---
 
