@@ -328,7 +328,7 @@ MIT — see [LICENSE](LICENSE)
 
 ---
 
-*Built with ⚡ during HackVenture 2K26*
+*Built with ⚡ during IDEATHON 2K26*
 
 > *"Other tools are libraries for data scientists. JCCS is a compliance platform for business leaders — upload a CSV, get a court-ready audit report in 60 seconds."*
 
