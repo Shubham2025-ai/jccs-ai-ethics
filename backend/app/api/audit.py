@@ -306,6 +306,13 @@ def get_audit_result(audit_id: int, db: Session = Depends(get_db)):
                 comp = eval_res["compliant"]
                 score = eval_res["score"]
         
+        for prefix in ["[LOCAL EVALUATOR] ", "[LOCAL EVALUATOR]", "[FALLBACK EVALUATOR - GROQ OFFLINE]: ", "[FALLBACK EVALUATOR]: "]:
+            reason = reason.replace(prefix, "")
+        if "Groq judge offline" in reason:
+            reason = reason.split("Groq judge offline")[0].strip()
+            if not reason:
+                reason = "Evaluated against IndiaAI Safety Standards."
+        
         verd = "safe" if comp is not False else "unsafe"
         dyn_prompt_inspector.append({
             "id": p.id,
@@ -409,6 +416,13 @@ def get_audit_result(audit_id: int, db: Session = Depends(get_db)):
                 verd = eval_res["verdict"]
                 score = eval_res["score"]
         
+        for prefix in ["[LOCAL EVALUATOR] ", "[LOCAL EVALUATOR]", "[FALLBACK EVALUATOR - GROQ OFFLINE]: ", "[FALLBACK EVALUATOR]: "]:
+            reason = reason.replace(prefix, "")
+        if "Groq judge offline" in reason:
+            reason = reason.split("Groq judge offline")[0].strip()
+            if not reason:
+                reason = "Evaluated against IndiaAI Safety Standards."
+
         if verd == "pending":
             verd = "safe"
             

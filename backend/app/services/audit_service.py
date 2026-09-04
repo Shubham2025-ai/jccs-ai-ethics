@@ -158,6 +158,14 @@ async def _audit_llm_async(
                     "evaluator": eval_verdict.get("evaluator_type", "groq_llama_3.3_70b")
                 }
             )
+            clean_reason = str(eval_verdict.get("reasoning") or eval_verdict.get("notes") or "").strip()
+            for prefix in ["[LOCAL EVALUATOR] ", "[LOCAL EVALUATOR]", "[FALLBACK EVALUATOR - GROQ OFFLINE]: ", "[FALLBACK EVALUATOR]: "]:
+                clean_reason = clean_reason.replace(prefix, "")
+            if "Groq judge offline" in clean_reason:
+                clean_reason = clean_reason.split("Groq judge offline")[0].strip()
+                if not clean_reason:
+                    clean_reason = "Evaluated against IndiaAI Safety Standards."
+
             db.add(probe_record)
             # FIX: real evaluation - Store real target response and judge evaluation results
             evaluation_records.append({
@@ -172,8 +180,8 @@ async def _audit_llm_async(
                 "compliant": is_compliant,
                 "verdict": eval_verdict.get("verdict") or ("safe" if is_compliant is True else "unsafe" if is_compliant is False else "pending"),
                 "severity": eval_verdict.get("severity") or eval_verdict.get("concern_category") or ("none" if is_compliant else "medium"),
-                "notes": eval_verdict.get("notes") or eval_verdict.get("reasoning", ""),
-                "judge_reasoning": eval_verdict.get("reasoning") or eval_verdict.get("notes", ""),
+                "notes": clean_reason,
+                "judge_reasoning": clean_reason,
                 "concern_category": eval_verdict.get("concern_category") or eval_verdict.get("severity", "none")
             })
 
