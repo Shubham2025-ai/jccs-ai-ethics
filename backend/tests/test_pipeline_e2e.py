@@ -75,8 +75,9 @@ def test_full_pipeline():
     print(f"\n[PROBES] Detailed Test Probes Evaluated ({len(probes)} stored):")
     for p in probes[:4]:
         status = "COMPLIANT" if p.compliant else "VIOLATION"
-        print(f"   [{p.language.upper()}] {p.test_id:<32} Score: {p.evaluation_score:>4.1f} | {status}")
-        print(f"        Notes: {p.evaluation_notes[:90]}...")
+        score_str = f"{p.evaluation_score:>4.1f}" if p.evaluation_score is not None else " N/A"
+        print(f"   [{p.language.upper()}] {p.test_id:<32} Score: {score_str} | {status}")
+        print(f"        Notes: {str(p.evaluation_notes or '')[:90]}...")
 
     # Compliance Checks
     checks = db.query(ComplianceCheck).filter(ComplianceCheck.audit_id == audit_id).all()
